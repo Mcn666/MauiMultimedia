@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using MauiMultimedia.Shell.Services;
 
 namespace MauiMultimedia.Shell
 {
@@ -15,6 +16,7 @@ namespace MauiMultimedia.Shell
                 });
 
             builder.Services.AddMauiBlazorWebView();
+            builder.Services.AddSingleton<IFileSystemService, FileSystemService>();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();
