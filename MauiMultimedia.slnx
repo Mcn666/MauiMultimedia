@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Solution>
   <Project Path="Core\MauiMultimedia.Core.csproj" />
+  <Project Path="TextViewer\MauiMultimedia.TextViewer.csproj" />
   <Project Path="MauiMultimedia.Shell\MauiMultimedia.Shell.csproj" />
 </Solution>

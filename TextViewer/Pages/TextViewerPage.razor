@@ -1,0 +1,156 @@
+@page "/textviewer"
+@using MauiMultimedia.Core.Abstractions
+@inject NavigationManager Navigation
+@inject IFileNavigationState NavState
+
+<div class="viewer-page">
+    <div class="viewer-toolbar">
+        <button class="btn btn-back" @onclick="GoBack">⬅ 返回</button>
+        <button class="btn btn-nav" disabled="@(hasPrev ? null : true)" @onclick="GoPrev">⬅ 上一个</button>
+        <span class="viewer-title" title="@filePath">@fileName</span>
+        <button class="btn btn-nav" disabled="@(hasNext ? null : true)" @onclick="GoNext">下一个 ➡</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="viewer-loading">
+            <div class="spinner"></div>
+            <span>正在加载...</span>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="viewer-error">⚠️ @errorMessage</div>
+    }
+    else
+    {
+        <pre class="viewer-content"><code>@fileContent</code></pre>
+    }
+</div>
+
+@code {
+    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".txt", ".log", ".md", ".csv", ".xml", ".json", ".yaml", ".yml",
+        ".cs", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".less",
+        ".html", ".htm", ".php", ".py", ".java", ".cpp", ".c", ".h",
+        ".sql", ".sh", ".bat", ".ps1", ".rb", ".go", ".rs", ".swift",
+        ".ini", ".cfg", ".conf", ".env", ".gitignore", ".dockerfile",
+        ".csproj", ".sln", ".slnx", ".props", ".targets"
+    };
+
+    private string filePath = "";
+    private string fileName = "";
+    private string fileContent = "";
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    private List<string> fileList = new();
+    private int currentIndex = -1;
+    private bool hasPrev => currentIndex > 0;
+    private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 只取当前支持库支持的文件
+        fileList = NavState.CurrentDirectoryFiles?
+            .Where(f => SupportedExtensions.Contains(Path.GetExtension(f)))
+            .ToList() ?? new();
+
+        await LoadCurrentFileAsync();
+    }
+
+    private async Task LoadCurrentFileAsync()
+    {
+        // 从 URL 解析当前文件路径
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = uri.Query.TrimStart('?');
+        filePath = "";
+        foreach (var part in query.Split('&'))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length == 2 && kv[0] == "path")
+            {
+                filePath = Uri.UnescapeDataString(kv[1]);
+                break;
+            }
+        }
+
+        fileName = Path.GetFileName(filePath);
+        currentIndex = -1;
+        for (int i = 0; i < fileList.Count; i++)
+        {
+            if (string.Equals(fileList[i], filePath, StringComparison.OrdinalIgnoreCase))
+            {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        if (string.IsNullOrEmpty(filePath))
+        {
+            errorMessage = "未指定文件路径";
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            fileContent = await Task.Run(() => File.ReadAllText(filePath));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"读取文件失败：{ex.Message}";
+            fileContent = "";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private void GoPrev()
+    {
+        if (!hasPrev) return;
+        currentIndex--;
+        filePath = fileList[currentIndex];
+        fileName = Path.GetFileName(filePath);
+        _ = LoadFileContentAsync();
+    }
+
+    private void GoNext()
+    {
+        if (!hasNext) return;
+        currentIndex++;
+        filePath = fileList[currentIndex];
+        fileName = Path.GetFileName(filePath);
+        _ = LoadFileContentAsync();
+    }
+
+    private async Task LoadFileContentAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            fileContent = await Task.Run(() => File.ReadAllText(filePath));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"读取文件失败：{ex.Message}";
+            fileContent = "";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

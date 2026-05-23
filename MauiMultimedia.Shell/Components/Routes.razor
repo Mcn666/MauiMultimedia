@@ -1,4 +1,9 @@
-﻿<Router AppAssembly="typeof(MauiProgram).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+@using MauiMultimedia.Core.Abstractions
+@inject IEnumerable<IFileViewer> Viewers
+
+<Router AppAssembly="typeof(MauiProgram).Assembly"
+        AdditionalAssemblies="Viewers.Select(v => v.GetType().Assembly).Distinct().ToArray()"
+        NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
         <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
         <FocusOnNavigate RouteData="routeData" Selector="h1" />

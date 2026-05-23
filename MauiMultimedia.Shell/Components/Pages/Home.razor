@@ -1,8 +1,13 @@
 @page "/"
 @using MauiMultimedia.Core.Models
 @using MauiMultimedia.Core.Abstractions
+@using MauiMultimedia.Shell.Services
 @inject IFileSystemService FileSystemService
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject IEnumerable<IViewProvider> ViewProviders
+@inject IEnumerable<IFileViewer> FileViewers
+@inject FileBrowserStateService BrowserState
 
 <div class="file-browser">
     <div class="browser-header">
@@ -66,13 +71,13 @@
         <div class="browser-grid">
             @foreach (var item in items)
             {
-                <div class="grid-item @(item.IsFolder ? "folder" : "file")"
+                <div class="grid-item @GetItemRowClass(item)"
                      @onclick="() => OnItemClick(item)"
                      @onkeydown="() => {}"
                      role="button"
                      tabindex="0"
                      title="@item.FullPath">
-                    <span class="grid-icon">@item.Icon</span>
+                    <span class="grid-icon">@GetItemIcon(item)</span>
                     <span class="grid-name">@item.Name</span>
                     <span class="grid-count">@item.ChildCountDisplay</span>
                 </div>
@@ -96,13 +101,13 @@
             </div>
             @foreach (var item in items)
             {
-                <div class="item-row @(item.IsFolder ? "folder" : "file")"
+                <div class="item-row @GetItemRowClass(item)"
                      @onclick="() => OnItemClick(item)"
                      @onkeydown="() => {}"
                      role="button"
                      tabindex="0"
                      title="@item.FullPath">
-                    <span class="col-icon item-icon">@item.Icon</span>
+                    <span class="col-icon item-icon">@GetItemIcon(item)</span>
                     <span class="col-name item-name">@item.Name</span>
                     <span class="col-count item-count">@item.ChildCountDisplay</span>
                     <span class="col-date item-date">@item.LastModifiedDisplay</span>
@@ -111,6 +116,31 @@
         </div>
     }
 </div>
+
+@* 多查看器选择模态框 *@
+@if (showViewerPicker && pendingItem != null)
+{
+    <div class="picker-overlay" @onclick="CloseViewerPicker" @onkeydown="() => {}">
+        <div class="picker-modal" @onclick:stopPropagation="true">
+            <div class="picker-header">
+                <span class="picker-title">📄 打开方式</span>
+                <button class="picker-close" @onclick="CloseViewerPicker">✕</button>
+            </div>
+            <div class="picker-body">
+                <div class="picker-file">@pendingItem.Name</div>
+                <div class="picker-list">
+                    @foreach (var v in availableViewers)
+                    {
+                        <button class="picker-item" @onclick="() => OpenWithViewer(v)">
+                            <span class="picker-item-icon">🔗</span>
+                            <span class="picker-item-name">@GetViewerDisplayName(v)</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private string currentPath = "";
@@ -124,9 +154,42 @@
     private string sortColumn = "name";
     private string sortDirection = "asc";
 
+    // 多查看器选择状态
+    private bool showViewerPicker = false;
+    private FileSystemItem? pendingItem;
+    private List<IFileViewer> availableViewers = new();
+
+    private string GetItemIcon(FileSystemItem item)
+    {
+        if (item.IsFolder) return "\U0001F4C1";
+        foreach (var p in ViewProviders)
+            if (p.CanHandle(item)) { var i = p.GetIcon(item); if (i != null) return i; }
+        return "\U0001F4C4";
+    }
+
+    private string GetItemRowClass(FileSystemItem item)
+    {
+        var cls = item.IsFolder ? "folder" : "file";
+        foreach (var p in ViewProviders)
+            if (p.CanHandle(item)) { var e = p.GetItemCssClass(item); if (e != null) cls += " " + e; }
+        return cls;
+    }
+
     protected override async Task OnInitializedAsync()
     {
-        currentPath = FileSystemService.GetDefaultPath();
+        // 从状态服务恢复上次浏览位置
+        if (BrowserState.CurrentPath != null)
+        {
+            currentPath = BrowserState.CurrentPath;
+            if (BrowserState.SortColumn != null) sortColumn = BrowserState.SortColumn;
+            if (BrowserState.SortDirection != null) sortDirection = BrowserState.SortDirection;
+            if (BrowserState.ViewMode != null) viewMode = BrowserState.ViewMode;
+            BrowserState.Clear();
+        }
+        else
+        {
+            currentPath = FileSystemService.GetDefaultPath();
+        }
         await LoadItemsAsync();
     }
 
@@ -306,7 +369,64 @@
         {
             currentPath = item.FullPath;
             _ = LoadItemsAsync();
+            return;
         }
+
+        // 收集所有支持的查看器
+        var viewers = FileViewers.Where(v => v.CanHandle(item)).ToList();
+
+        if (viewers.Count == 1)
+        {
+            SaveBrowserState();
+            Navigation.NavigateTo(viewers[0].GetViewerRoute(item));
+        }
+        else if (viewers.Count > 1)
+        {
+            pendingItem = item;
+            availableViewers = viewers;
+            showViewerPicker = true;
+        }
+        // 0 个查看器 → 无操作
+    }
+
+    private void CloseViewerPicker()
+    {
+        showViewerPicker = false;
+        pendingItem = null;
+        availableViewers = new();
+    }
+
+    private void OpenWithViewer(IFileViewer viewer)
+    {
+        if (pendingItem != null)
+        {
+            var route = viewer.GetViewerRoute(pendingItem);
+            CloseViewerPicker();
+            SaveBrowserState();
+            Navigation.NavigateTo(route);
+        }
+    }
+
+    private void SaveBrowserState()
+    {
+        BrowserState.CurrentPath = currentPath;
+        BrowserState.SortColumn = sortColumn;
+        BrowserState.SortDirection = sortDirection;
+        BrowserState.ViewMode = viewMode;
+        // 保存当前目录的文件列表（仅文件，按当前排序顺序），供查看器前后导航
+        BrowserState.CurrentDirectoryFiles = items
+            .Where(i => !i.IsFolder)
+            .Select(i => i.FullPath)
+            .ToList();
+    }
+
+    private static string GetViewerDisplayName(IFileViewer viewer)
+    {
+        return viewer.GetType().Name switch
+        {
+            "TextViewer" => "文本查看器",
+            _ => viewer.GetType().Name
+        };
     }
 
     private async Task GoBack()
