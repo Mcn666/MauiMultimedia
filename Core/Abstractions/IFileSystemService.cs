@@ -1,6 +1,6 @@
-using MauiMultimedia.Shell.Models;
+using MauiMultimedia.Core.Models;
 
-namespace MauiMultimedia.Shell.Services;
+namespace MauiMultimedia.Core.Abstractions;
 
 /// <summary>
 /// 文件系统服务接口

@@ -1,4 +1,4 @@
-namespace MauiMultimedia.Shell.Models;
+namespace MauiMultimedia.Core.Models;
 
 /// <summary>
 /// 文件系统条目模型

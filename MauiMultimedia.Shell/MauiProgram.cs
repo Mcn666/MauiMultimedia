@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Shell.Services;
 
 namespace MauiMultimedia.Shell

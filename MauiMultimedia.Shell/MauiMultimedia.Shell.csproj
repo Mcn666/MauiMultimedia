@@ -72,4 +72,8 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.8" />
     </ItemGroup>
 
+    <ItemGroup>
+        <ProjectReference Include="..\Core\MauiMultimedia.Core.csproj" />
+    </ItemGroup>
+
 </Project>

@@ -1,6 +1,6 @@
 @page "/"
-@using MauiMultimedia.Shell.Models
-@using MauiMultimedia.Shell.Services
+@using MauiMultimedia.Core.Models
+@using MauiMultimedia.Core.Abstractions
 @inject IFileSystemService FileSystemService
 @inject IJSRuntime JS
 
@@ -21,6 +21,25 @@
                 ⬆ 返回上级
             </button>
         </div>
+    </div>
+
+    @* 排序栏：列表和网格视图共用 *@
+    <div class="sort-bar">
+        <button class="btn-sort @GetSortClass("name")" @onclick="OnSortByName" title="按名称排序">
+            名称 @GetSortArrow("name")
+        </button>
+        <span class="sort-sep"></span>
+        <button class="btn-sort @GetSortClass("type")" @onclick="OnSortByType" title="按类型排序">
+            类型 @GetSortArrow("type")
+        </button>
+        <span class="sort-sep"></span>
+        <button class="btn-sort @GetSortClass("count")" @onclick="OnSortByCount" title="按项目数排序">
+            项目数 @GetSortArrow("count")
+        </button>
+        <span class="sort-sep"></span>
+        <button class="btn-sort @GetSortClass("date")" @onclick="OnSortByDate" title="按修改时间排序">
+            修改时间 @GetSortArrow("date")
+        </button>
     </div>
 
     @if (isLoading)
@@ -65,9 +84,15 @@
         <div class="browser-items">
             <div class="items-header">
                 <span class="col-icon"></span>
-                <span class="col-name">名称</span>
-                <span class="col-count">项目数</span>
-                <span class="col-date">修改时间</span>
+                <span class="col-name sortable" @onclick="OnSortByName">
+                    名称 @GetSortArrow("name")
+                </span>
+                <span class="col-count sortable" @onclick="OnSortByCount">
+                    项目数 @GetSortArrow("count")
+                </span>
+                <span class="col-date sortable" @onclick="OnSortByDate">
+                    修改时间 @GetSortArrow("date")
+                </span>
             </div>
             @foreach (var item in items)
             {
@@ -96,6 +121,9 @@
     private bool isDarkTheme = false;
     private string viewMode = "list"; // "list" | "grid"
 
+    private string sortColumn = "name";
+    private string sortDirection = "asc";
+
     protected override async Task OnInitializedAsync()
     {
         currentPath = FileSystemService.GetDefaultPath();
@@ -108,13 +136,98 @@
         {
             await RestoreThemeAsync();
             await RestoreViewModeAsync();
+            await RestoreSortAsync();
             StateHasChanged();
         }
     }
 
+    private string GetSortArrow(string col)
+    {
+        if (sortColumn != col) return "";
+        return sortDirection == "asc" ? "▲" : "▼";
+    }
+
+    private string GetSortClass(string col)
+    {
+        return sortColumn == col ? "active" : "";
+    }
+
+    private Task OnSortByName() => OnSortClick("name");
+    private Task OnSortByType() => OnSortClick("type");
+    private Task OnSortByCount() => OnSortClick("count");
+    private Task OnSortByDate() => OnSortClick("date");
+
+    private async Task OnSortClick(string col)
+    {
+        if (sortColumn == col)
+        {
+            // 同一列：切换方向
+            sortDirection = (sortDirection == "asc") ? "desc" : "asc";
+        }
+        else
+        {
+            sortColumn = col;
+            sortDirection = "asc";
+        }
+        ApplySort();
+        await SaveSortAsync();
+    }
+
+    private void ApplySort()
+    {
+        switch (sortColumn)
+        {
+            case "name":
+                items = (sortDirection == "asc")
+                    ? items.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList()
+                    : items.OrderByDescending(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                break;
+            case "type":
+                items = (sortDirection == "asc")
+                    ? items.OrderBy(i => i.IsFolder ? 0 : 1)
+                        .ThenBy(i => i.IsFolder ? "" : Path.GetExtension(i.Name), StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                    : items.OrderBy(i => i.IsFolder ? 1 : 0)
+                        .ThenBy(i => Path.GetExtension(i.Name), StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                break;
+            case "count":
+                items = (sortDirection == "asc")
+                    ? items.OrderBy(i => i.IsFolder ? (i.ChildCount ?? 0) : int.MaxValue).ToList()
+                    : items.OrderByDescending(i => i.IsFolder ? (i.ChildCount ?? 0) : int.MinValue).ToList();
+                break;
+            case "date":
+                items = (sortDirection == "asc")
+                    ? items.OrderBy(i => i.LastModified ?? DateTime.MinValue).ToList()
+                    : items.OrderByDescending(i => i.LastModified ?? DateTime.MinValue).ToList();
+                break;
+        }
+    }
+
+    private async Task RestoreSortAsync()
+    {
+        var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-sort')");
+        if (!string.IsNullOrEmpty(saved))
+        {
+            var parts = saved.Split('|');
+            if (parts.Length == 2)
+            {
+                sortColumn = parts[0];
+                sortDirection = parts[1];
+                ApplySort();
+            }
+        }
+    }
+
+    private async Task SaveSortAsync()
+    {
+        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-sort','{sortColumn}|{sortDirection}')");
+    }
+
     private async Task RestoreThemeAsync()
     {
-        // 从 localStorage 读取用户之前保存的主题偏好
         var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-theme')");
 
         if (saved == "dark")
@@ -129,7 +242,6 @@
         }
         else
         {
-            // 无手动设置 → 跟随系统主题
             var auto = await JS.InvokeAsync<bool>("eval", "window.matchMedia('(prefers-color-scheme: dark)').matches");
             isDarkTheme = auto;
         }
@@ -144,7 +256,7 @@
         try
         {
             items = await FileSystemService.ListItemsAsync(currentPath);
-            // 在后台异步加载每个文件夹的子项目数量
+            ApplySort();
             _ = LoadChildCountsAsync(items);
         }
         catch (Exception ex)
@@ -161,7 +273,6 @@
     private async Task LoadChildCountsAsync(List<FileSystemItem> folderItems)
     {
         var folders = folderItems.Where(i => i.IsFolder).ToList();
-        // 限制并发数，避免大量文件夹时开销过大
         var semaphore = new SemaphoreSlim(4);
         var tasks = folders.Select(async item =>
         {
@@ -179,7 +290,12 @@
             {
                 semaphore.Release();
             }
-            await InvokeAsync(StateHasChanged);
+            // 每次计数加载完成后重排（如果当前是按项目数排序）
+            await InvokeAsync(() =>
+            {
+                if (sortColumn == "count") ApplySort();
+                StateHasChanged();
+            });
         });
         await Task.WhenAll(tasks);
     }
@@ -222,14 +338,12 @@
     {
         if (isDarkTheme)
         {
-            // 当前暗色 → 切到亮色
             await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','light')");
             await JS.InvokeVoidAsync("eval", "localStorage.setItem('filebrowser-theme','light')");
             isDarkTheme = false;
         }
         else
         {
-            // 当前亮色 → 切到暗色
             await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','dark')");
             await JS.InvokeVoidAsync("eval", "localStorage.setItem('filebrowser-theme','dark')");
             isDarkTheme = true;

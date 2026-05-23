@@ -1,4 +1,5 @@
-using MauiMultimedia.Shell.Models;
+using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.Models;
 
 namespace MauiMultimedia.Shell.Services;
 
