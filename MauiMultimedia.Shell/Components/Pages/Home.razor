@@ -10,44 +10,61 @@
 @inject FileBrowserStateService BrowserState
 
 <div class="file-browser">
-    <div class="browser-header">
-        <div class="path-bar">
-            <span class="path-label">📂 当前位置：</span>
-            <span class="path-text" title="@currentPath">@currentPath</span>
-        </div>
-        <div class="browser-actions">
-            <button class="btn btn-theme" @onclick="ToggleTheme" title="切换主题">
-                @(isDarkTheme ? "☀️" : "🌙")
-            </button>
-            <button class="btn btn-view" @onclick="ToggleViewMode" title="@(viewMode == "list" ? "切换网格视图" : "切换列表视图")">
-                @(viewMode == "list" ? "▦" : "☰")
-            </button>
-            <button class="btn btn-back" disabled="@isRoot" @onclick="GoBack">
-                ⬆ 返回上级
-            </button>
-        </div>
-    </div>
+    <div class="browser-layout">
+        @* 侧边栏：Windows 快捷访问 *@
+        @if (OperatingSystem.IsWindows())
+        {
+            <aside class="browser-sidebar">
+                <div class="sidebar-header">📌 快速访问</div>
+                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Desktop)">🖥️ 桌面</button>
+                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Downloads)">📥 下载</button>
+                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Documents)">📄 文档</button>
+                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Pictures)">🖼️ 图片</button>
+                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Music)">🎵 音乐</button>
+                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Videos)">🎬 视频</button>
+            </aside>
+        }
 
-    @* 排序栏：列表和网格视图共用 *@
-    <div class="sort-bar">
-        <button class="btn-sort @GetSortClass("name")" @onclick="OnSortByName" title="按名称排序">
-            名称 @GetSortArrow("name")
-        </button>
-        <span class="sort-sep"></span>
-        <button class="btn-sort @GetSortClass("type")" @onclick="OnSortByType" title="按类型排序">
-            类型 @GetSortArrow("type")
-        </button>
-        <span class="sort-sep"></span>
-        <button class="btn-sort @GetSortClass("count")" @onclick="OnSortByCount" title="按项目数排序">
-            项目数 @GetSortArrow("count")
-        </button>
-        <span class="sort-sep"></span>
-        <button class="btn-sort @GetSortClass("date")" @onclick="OnSortByDate" title="按修改时间排序">
-            修改时间 @GetSortArrow("date")
-        </button>
-    </div>
+        @* 主内容区 *@
+        <main class="browser-main">
+            <div class="browser-header">
+                <div class="path-bar">
+                    <span class="path-label">📂 当前位置：</span>
+                    <span class="path-text" title="@currentPath">@currentPath</span>
+                </div>
+                <div class="browser-actions">
+                    <button class="btn btn-theme" @onclick="ToggleTheme" title="切换主题">
+                        @(isDarkTheme ? "☀️" : "🌙")
+                    </button>
+                    <button class="btn btn-view" @onclick="ToggleViewMode" title="@(viewMode == "list" ? "切换网格视图" : "切换列表视图")">
+                        @(viewMode == "list" ? "▦" : "☰")
+                    </button>
+                    <button class="btn btn-back" disabled="@isRoot" @onclick="GoBack">
+                        ⬆ 返回上级
+                    </button>
+                </div>
+            </div>
 
-    @if (isLoading)
+            @* 排序栏 *@
+            <div class="sort-bar">
+                <button class="btn-sort @GetSortClass("name")" @onclick="OnSortByName" title="按名称排序">
+                    名称 @GetSortArrow("name")
+                </button>
+                <span class="sort-sep"></span>
+                <button class="btn-sort @GetSortClass("type")" @onclick="OnSortByType" title="按类型排序">
+                    类型 @GetSortArrow("type")
+                </button>
+                <span class="sort-sep"></span>
+                <button class="btn-sort @GetSortClass("count")" @onclick="OnSortByCount" title="按项目数排序">
+                    项目数 @GetSortArrow("count")
+                </button>
+                <span class="sort-sep"></span>
+                <button class="btn-sort @GetSortClass("date")" @onclick="OnSortByDate" title="按修改时间排序">
+                    修改时间 @GetSortArrow("date")
+                </button>
+            </div>
+
+            @if (isLoading)
     {
         <div class="browser-loading">
             <div class="spinner"></div>
@@ -115,6 +132,8 @@
             }
         </div>
     }
+    </main>
+</div>
 </div>
 
 @* 多查看器选择模态框 *@
@@ -158,6 +177,28 @@
     private bool showViewerPicker = false;
     private FileSystemItem? pendingItem;
     private List<IFileViewer> availableViewers = new();
+
+    // Windows 快捷访问目录
+    private enum WindowsQuickAccess
+    {
+        Desktop, Downloads, Documents, Pictures, Music, Videos
+    }
+
+    private void NavigateToQuickAccess(WindowsQuickAccess qa)
+    {
+        var folder = qa switch
+        {
+            WindowsQuickAccess.Desktop => Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            WindowsQuickAccess.Downloads => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads",
+            WindowsQuickAccess.Documents => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            WindowsQuickAccess.Pictures => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+            WindowsQuickAccess.Music => Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
+            WindowsQuickAccess.Videos => Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
+            _ => Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        };
+        currentPath = folder;
+        _ = LoadItemsAsync();
+    }
 
     private string GetItemIcon(FileSystemItem item)
     {

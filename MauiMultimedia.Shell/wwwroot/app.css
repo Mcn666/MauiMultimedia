@@ -388,6 +388,61 @@ h1:focus {
     white-space: nowrap;
 }
 
+/* --- Sidebar (Quick Access) --- */
+
+.browser-layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.browser-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.browser-sidebar {
+    width: 170px;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 10px;
+    padding: 10px 0;
+    position: sticky;
+    top: 16px;
+}
+
+.sidebar-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 14px 10px;
+    border-bottom: 1px solid var(--border-secondary);
+    margin-bottom: 4px;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 14px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    text-align: left;
+    transition: background 0.1s;
+}
+
+.sidebar-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-link);
+}
+
 /* Theme toggle button */
 .btn-theme {
     width: 34px;
