@@ -15,6 +15,8 @@ public class TextViewer : IFileViewer
         ".csproj", ".sln", ".slnx", ".props", ".targets"
     };
 
+    public string DisplayName => "文本查看器";
+
     public bool CanHandle(FileSystemItem item) =>
         !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
 

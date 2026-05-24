@@ -1,0 +1,60 @@
+@page "/imageviewer"
+
+<div class="viewer-page">
+    <div class="v-toolbar">
+        <button class="v-btn" @onclick="GoBack" title="返回 (Esc)">← 返回</button>
+        <button class="v-btn" disabled="@(hasPrev ? null : true)" @onclick="GoPrev" title="上一个 (←)">←</button>
+
+        <span class="v-title" title="@filePath">@fileName</span>
+        <span class="v-pos">@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")</span>
+
+        <button class="v-btn" disabled="@(hasNext ? null : true)" @onclick="GoNext" title="下一个 (→)">→</button>
+
+        <span class="v-sep"></span>
+
+        <span class="v-zoom">@((displayZoom * 100).ToString("F0"))%</span>
+        <button class="v-btn v-btn-icon" @onclick="ZoomOut" disabled="@(displayZoom <= MinZoom ? true : null)" title="缩小 (-)">−</button>
+        <button class="v-btn v-btn-icon" @onclick="ZoomIn" disabled="@(displayZoom >= MaxZoom ? true : null)" title="放大 (+)">+</button>
+        <button class="v-btn v-btn-sm" @onclick="ZoomFit">适应</button>
+        <button class="v-btn v-btn-sm" @onclick="ZoomActual">原大</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="v-status"><div class="v-spinner"></div><span>正在加载...</span></div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="v-status v-status--err">⚠️ @errorMessage</div>
+    }
+    else
+    {
+        <div class="image-viewport @(zoomFitMode ? "fit" : "free")"
+             tabindex="0"
+             @onwheel="OnWheel"
+             @onkeydown="OnKeyDown"
+             @ondblclick="OnDoubleClick"
+             @onpointerdown="OnPointerDown"
+             @onpointermove="OnPointerMove"
+             @onpointerup="OnPointerUp"
+             @onpointercancel="OnPointerUp"
+             @onpointerleave="OnPointerUp"
+             @ontouchstart:preventDefault="true"
+             @ontouchstart="OnTouchStart"
+             @ontouchmove="OnTouchMove"
+             @ontouchend="OnTouchEnd">
+
+            <div class="img-wrap" style="@GetZoomStyle()">
+                <img src="@imageSource" alt="@fileName" class="img-display" />
+            </div>
+
+            <div class="img-info">
+                <span>@(imageWidth > 0 ? $"{imageWidth}×{imageHeight}" : "")</span>
+                <span class="i-sep">|</span>
+                <span>@fileSizeDisplay</span>
+                <span class="i-sep">|</span>
+                <span>@imageFormat</span>
+            </div>
+        </div>
+    }
+</div>

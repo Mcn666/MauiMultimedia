@@ -5,4 +5,5 @@
     <Deploy Solution="Debug|*" />
   </Project>
   <Project Path="Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
+  <Project Path="Viewers\Image\MauiMultimedia.Viewers.Image.csproj" />
 </Solution>

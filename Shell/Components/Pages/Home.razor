@@ -500,11 +500,7 @@
 
     private static string GetViewerDisplayName(IFileViewer viewer)
     {
-        return viewer.GetType().Name switch
-        {
-            "TextViewer" => "文本查看器",
-            _ => viewer.GetType().Name
-        };
+        return viewer.DisplayName;
     }
 
     private async Task GoBack()
