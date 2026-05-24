@@ -76,6 +76,7 @@
         <ProjectReference Include="..\Core\MauiMultimedia.Core.csproj" />
         <ProjectReference Include="..\Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
         <ProjectReference Include="..\Viewers\Image\MauiMultimedia.Viewers.Image.csproj" />
+        <ProjectReference Include="..\Viewers\Html\MauiMultimedia.Viewers.Html.csproj" />
     </ItemGroup>
 
 </Project>

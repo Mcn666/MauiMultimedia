@@ -36,4 +36,10 @@ public interface IFileSystemService
     /// 获取指定目录下的直接子项目数量（不递归）
     /// </summary>
     int? TryGetChildCount(string path);
+
+    /// <summary>
+    /// 获取应用数据目录路径（MAUI 的 FileSystem.AppDataDirectory），
+    /// 各支持库可在此目录下创建自己的子目录存放缓存/临时文件。
+    /// </summary>
+    string GetAppDataDirectory();
 }

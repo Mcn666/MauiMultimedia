@@ -1,0 +1,155 @@
+@page "/htmlviewer"
+@using Microsoft.JSInterop
+@using MauiMultimedia.Core.Abstractions
+@using MauiMultimedia.Viewers.Html.Services
+@inject NavigationManager Navigation
+@inject IFileNavigationState NavState
+@inject IJSRuntime JS
+
+<div class="v-page">
+    <div class="v-toolbar">
+        <button class="v-btn" @onclick="GoBack">← 返回</button>
+        <button class="v-btn" disabled="@(hasPrev ? null : true)" @onclick="GoPrev">← 上一个</button>
+        <span class="v-title" title="@filePath">@fileName</span>
+        <span class="v-pos">@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")</span>
+        <button class="v-btn" disabled="@(hasNext ? null : true)" @onclick="GoNext">下一个 →</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="v-status"><div class="v-spinner"></div><span>正在加载...</span></div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="v-status v-status--err">⚠️ @errorMessage</div>
+    }
+    else
+    {
+        <div class="v-frame-wrap">
+            <iframe srcdoc="@htmlContent" class="v-frame"></iframe>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".html", ".htm", ".mht", ".mhtml"
+    };
+
+    private string filePath = "";
+    private string fileName = "";
+    private string? htmlContent;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private List<string> fileList = new();
+    private int currentIndex = -1;
+
+    private bool hasPrev => currentIndex > 0;
+    private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await JS.InvokeVoidAsync("eval",
+            "document.documentElement.style.overflowY = 'hidden'");
+
+        fileList = NavState.CurrentDirectoryFiles?
+            .Where(f => Exts.Contains(Path.GetExtension(f))).ToList() ?? new();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var qs = uri.Query.TrimStart('?');
+        var path = "";
+        foreach (var p in qs.Split('&'))
+        {
+            var kv = p.Split('=', 2);
+            if (kv.Length == 2 && kv[0] == "path")
+                path = Uri.UnescapeDataString(kv[1]);
+        }
+
+        if (string.IsNullOrEmpty(path))
+        {
+            errorMessage = "未指定文件路径";
+            isLoading = false;
+            return;
+        }
+
+        filePath = path;
+        fileName = Path.GetFileName(filePath);
+        currentIndex = fileList.FindIndex(f =>
+            string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
+
+        await LoadContentAsync();
+    }
+
+    private async Task LoadContentAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        htmlContent = null;
+
+        try
+        {
+            var fileInfo = new FileInfo(filePath);
+            if (!fileInfo.Exists)
+            {
+                errorMessage = "文件不存在";
+                return;
+            }
+
+            var ext = Path.GetExtension(filePath);
+            var isMhtml = string.Equals(ext, ".mht", StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(ext, ".mhtml", StringComparison.OrdinalIgnoreCase);
+
+            htmlContent = await Task.Run(() =>
+            {
+                string content;
+                if (isMhtml)
+                    content = MhtmlParser.Parse(filePath);
+                else
+                {
+                    content = File.ReadAllText(filePath);
+                    var dir = Path.GetDirectoryName(filePath);
+                    if (dir != null)
+                        content = ResourceInliner.Inline(content, dir);
+                }
+                return "<style>html,body{background:var(--bg-viewport,#1a1a1a);margin:0;padding:0}</style>\n" + content;
+            });
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"加载失败：{ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void GoBack()
+    {
+        _ = JS.InvokeVoidAsync("eval",
+            "document.documentElement.style.overflowY = ''");
+        Navigation.NavigateTo("/");
+    }
+
+    private void GoPrev()
+    {
+        if (!hasPrev) return;
+        currentIndex--; filePath = fileList[currentIndex];
+        fileName = Path.GetFileName(filePath);
+        _ = LoadContentAsync();
+    }
+
+    private void GoNext()
+    {
+        if (!hasNext) return;
+        currentIndex++; filePath = fileList[currentIndex];
+        fileName = Path.GetFileName(filePath);
+        _ = LoadContentAsync();
+    }
+}

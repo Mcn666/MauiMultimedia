@@ -123,4 +123,16 @@ public class FileSystemService : IFileSystemService
             return null;
         }
     }
+
+    public string GetAppDataDirectory()
+    {
+        try
+        {
+            return FileSystem.AppDataDirectory;
+        }
+        catch
+        {
+            return Path.Combine(Path.GetTempPath(), "MauiMultimedia");
+        }
+    }
 }

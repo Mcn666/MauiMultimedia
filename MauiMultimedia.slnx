@@ -6,4 +6,5 @@
   </Project>
   <Project Path="Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
   <Project Path="Viewers\Image\MauiMultimedia.Viewers.Image.csproj" />
+  <Project Path="Viewers\Html\MauiMultimedia.Viewers.Html.csproj" />
 </Solution>
