@@ -1,7 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Shell.Services;
-using MauiMultimedia.TextViewer;
+using MauiMultimedia.Viewers.Text;
+//using MauiMultimedia.Viewers.Image;
 
 namespace MauiMultimedia.Shell
 {
@@ -22,9 +23,10 @@ namespace MauiMultimedia.Shell
             builder.Services.AddSingleton<FileBrowserStateService>();
             builder.Services.AddSingleton<IFileNavigationState>(sp => sp.GetRequiredService<FileBrowserStateService>());
             builder.Services.AddTextViewer();
+            //builder.Services.AddImageViewer();
 
 #if DEBUG
-    		builder.Services.AddBlazorWebViewDeveloperTools();
+            builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
 #endif
 

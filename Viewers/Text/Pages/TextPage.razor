@@ -13,10 +13,7 @@
 
     @if (isLoading)
     {
-        <div class="viewer-loading">
-            <div class="spinner"></div>
-            <span>正在加载...</span>
-        </div>
+        <div class="viewer-loading"><div class="spinner"></div><span>正在加载...</span></div>
     }
     else if (!string.IsNullOrEmpty(errorMessage))
     {
@@ -29,7 +26,7 @@
 </div>
 
 @code {
-    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".txt", ".log", ".md", ".csv", ".xml", ".json", ".yaml", ".yml",
         ".cs", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".less",
@@ -44,7 +41,6 @@
     private string fileContent = "";
     private bool isLoading = true;
     private string? errorMessage;
-
     private List<string> fileList = new();
     private int currentIndex = -1;
     private bool hasPrev => currentIndex > 0;
@@ -52,40 +48,24 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // 只取当前支持库支持的文件
         fileList = NavState.CurrentDirectoryFiles?
-            .Where(f => SupportedExtensions.Contains(Path.GetExtension(f)))
-            .ToList() ?? new();
-
-        await LoadCurrentFileAsync();
+            .Where(f => Exts.Contains(Path.GetExtension(f))).ToList() ?? new();
+        await LoadAsync();
     }
 
-    private async Task LoadCurrentFileAsync()
+    private async Task LoadAsync()
     {
-        // 从 URL 解析当前文件路径
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        var query = uri.Query.TrimStart('?');
+        var qs = uri.Query.TrimStart('?');
         filePath = "";
-        foreach (var part in query.Split('&'))
+        foreach (var p in qs.Split('&'))
         {
-            var kv = part.Split('=', 2);
+            var kv = p.Split('=', 2);
             if (kv.Length == 2 && kv[0] == "path")
-            {
                 filePath = Uri.UnescapeDataString(kv[1]);
-                break;
-            }
         }
-
         fileName = Path.GetFileName(filePath);
-        currentIndex = -1;
-        for (int i = 0; i < fileList.Count; i++)
-        {
-            if (string.Equals(fileList[i], filePath, StringComparison.OrdinalIgnoreCase))
-            {
-                currentIndex = i;
-                break;
-            }
-        }
+        currentIndex = fileList.FindIndex(f => string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
 
         if (string.IsNullOrEmpty(filePath))
         {
@@ -105,39 +85,25 @@
             errorMessage = $"读取文件失败：{ex.Message}";
             fileContent = "";
         }
-        finally
-        {
-            isLoading = false;
-        }
+        finally { isLoading = false; StateHasChanged(); }
     }
 
-    private void GoBack()
-    {
-        Navigation.NavigateTo("/");
-    }
-
+    private void GoBack() => Navigation.NavigateTo("/");
     private void GoPrev()
     {
         if (!hasPrev) return;
-        currentIndex--;
-        filePath = fileList[currentIndex];
-        fileName = Path.GetFileName(filePath);
+        currentIndex--; filePath = fileList[currentIndex]; fileName = Path.GetFileName(filePath);
         _ = LoadFileContentAsync();
     }
-
     private void GoNext()
     {
         if (!hasNext) return;
-        currentIndex++;
-        filePath = fileList[currentIndex];
-        fileName = Path.GetFileName(filePath);
+        currentIndex++; filePath = fileList[currentIndex]; fileName = Path.GetFileName(filePath);
         _ = LoadFileContentAsync();
     }
-
     private async Task LoadFileContentAsync()
     {
-        isLoading = true;
-        errorMessage = null;
+        isLoading = true; errorMessage = null;
         try
         {
             fileContent = await Task.Run(() => File.ReadAllText(filePath));
@@ -147,10 +113,6 @@
             errorMessage = $"读取文件失败：{ex.Message}";
             fileContent = "";
         }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+        finally { isLoading = false; StateHasChanged(); }
     }
 }

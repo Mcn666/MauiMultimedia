@@ -1,6 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+
 <Solution>
   <Project Path="Core\MauiMultimedia.Core.csproj" />
-  <Project Path="TextViewer\MauiMultimedia.TextViewer.csproj" />
-  <Project Path="MauiMultimedia.Shell\MauiMultimedia.Shell.csproj" />
+  <Project Path="Shell\MauiMultimedia.Shell.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
+  <Project Path="Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
 </Solution>

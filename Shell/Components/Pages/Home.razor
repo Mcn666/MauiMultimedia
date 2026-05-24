@@ -94,9 +94,29 @@
                      role="button"
                      tabindex="0"
                      title="@item.FullPath">
-                    <span class="grid-icon">@GetItemIcon(item)</span>
-                    <span class="grid-name">@item.Name</span>
-                    <span class="grid-count">@item.ChildCountDisplay</span>
+                    @{
+                        var snap = GetItemSnapshot(item);
+                    }
+                    @if (snap != null)
+                    {
+                        <div class="grid-thumb">
+                            <img src="@snap" class="grid-thumb-img" alt="" loading="lazy" />
+                            <div class="grid-thumb-label">@item.Name</div>
+                        </div>
+                    }
+                    else if (CanProvideSnapshot(item))
+                    {
+                        <div class="grid-thumb" data-thumb-path="@item.FullPath">
+                            <div class="grid-thumb-placeholder-icon">@GetItemIcon(item)</div>
+                            <div class="grid-thumb-label">@item.Name</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="grid-icon">@GetItemIcon(item)</span>
+                        <span class="grid-name">@item.Name</span>
+                        <span class="grid-count">@item.ChildCountDisplay</span>
+                    }
                 </div>
             }
         </div>
@@ -208,6 +228,20 @@
         return "\U0001F4C4";
     }
 
+    private string? GetItemSnapshot(FileSystemItem item)
+    {
+        foreach (var p in ViewProviders)
+            if (p.CanHandle(item)) return p.GetItemSnapshot(item);
+        return null;
+    }
+
+    private bool CanProvideSnapshot(FileSystemItem item)
+    {
+        foreach (var p in ViewProviders)
+            if (p.CanHandle(item) && p.CanProvideSnapshot(item)) return true;
+        return false;
+    }
+
     private string GetItemRowClass(FileSystemItem item)
     {
         var cls = item.IsFolder ? "folder" : "file";
@@ -245,6 +279,9 @@
         }
     }
 
+    /// <summary>
+    /// JS IntersectionObserver 回调：某个文件进入可视区
+    /// </summary>
     private string GetSortArrow(string col)
     {
         if (sortColumn != col) return "";

@@ -1,11 +1,11 @@
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Core.Models;
 
-namespace MauiMultimedia.TextViewer;
+namespace MauiMultimedia.Viewers.Text;
 
-public class TextViewerProvider : IViewProvider
+public class TextProvider : IViewProvider
 {
-    private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".txt", ".log", ".md", ".csv", ".xml", ".json", ".yaml", ".yml",
         ".cs", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".less",
@@ -16,9 +16,12 @@ public class TextViewerProvider : IViewProvider
     };
 
     public bool CanHandle(FileSystemItem item) =>
-        !item.IsFolder && Extensions.Contains(Path.GetExtension(item.Name));
+        !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
 
     public string? GetItemCssClass(FileSystemItem item) => "is-text-file";
-
-    public string? GetIcon(FileSystemItem item) => "\U0001F4DD"; // 📝
+    public string? GetIcon(FileSystemItem item) => "\U0001F4DD";
+    public string? GetItemSnapshot(FileSystemItem item) => null;
+    public bool CanProvideSnapshot(FileSystemItem item) => false;
+    public void RequestItemSnapshot(FileSystemItem item) { }
+    public event Action? SnapshotsUpdated { add { } remove { } }
 }

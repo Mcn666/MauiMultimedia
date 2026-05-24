@@ -1,11 +1,11 @@
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Core.Models;
 
-namespace MauiMultimedia.TextViewer;
+namespace MauiMultimedia.Viewers.Text;
 
 public class TextViewer : IFileViewer
 {
-    private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".txt", ".log", ".md", ".csv", ".xml", ".json", ".yaml", ".yml",
         ".cs", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".less",
@@ -16,7 +16,7 @@ public class TextViewer : IFileViewer
     };
 
     public bool CanHandle(FileSystemItem item) =>
-        !item.IsFolder && Extensions.Contains(Path.GetExtension(item.Name));
+        !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
 
     public string GetViewerRoute(FileSystemItem item) =>
         $"/textviewer?path={Uri.EscapeDataString(item.FullPath)}";
