@@ -24,4 +24,5 @@ public class ArchiveProvider : IViewProvider
     public bool CanProvideSnapshot(FileSystemItem item) => false;
     public void RequestItemSnapshot(FileSystemItem item) { }
     public event Action? SnapshotsUpdated { add { } remove { } }
+    public FileScanCategory? ScanCategory => new("压缩包", Exts.ToArray(), "\U0001F4E6");
 }

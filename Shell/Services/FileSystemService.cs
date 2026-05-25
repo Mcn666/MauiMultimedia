@@ -8,6 +8,21 @@ namespace MauiMultimedia.Shell.Services;
 /// </summary>
 public class FileSystemService : IFileSystemService
 {
+    private string? _userRoot;
+
+    /// <summary>
+    /// 获取用户级根目录（不允许返回更上层）。Android 上为外部存储根目录。
+    /// </summary>
+    private string GetUserRoot()
+    {
+        if (_userRoot != null) return _userRoot;
+#if ANDROID
+        _userRoot = Android.OS.Environment.ExternalStorageDirectory?.AbsolutePath ?? "/storage/emulated/0";
+#else
+        _userRoot = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+#endif
+        return _userRoot;
+    }
     public Task<List<FileSystemItem>> ListItemsAsync(string path)
     {
         var items = new List<FileSystemItem>();
@@ -84,6 +99,10 @@ public class FileSystemService : IFileSystemService
     {
         try
         {
+#if ANDROID
+            if (string.Equals(path, GetUserRoot(), StringComparison.OrdinalIgnoreCase))
+                return null;
+#endif
             var parent = Directory.GetParent(path);
             return parent?.FullName;
         }
@@ -97,6 +116,10 @@ public class FileSystemService : IFileSystemService
     {
         try
         {
+#if ANDROID
+            if (string.Equals(path, GetUserRoot(), StringComparison.OrdinalIgnoreCase))
+                return true;
+#endif
             var root = Path.GetPathRoot(path);
             return !string.IsNullOrEmpty(root) &&
                    string.Equals(path, root, StringComparison.OrdinalIgnoreCase);
@@ -109,7 +132,7 @@ public class FileSystemService : IFileSystemService
 
     public string GetDefaultPath()
     {
-        return Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        return GetUserRoot();
     }
 
     public int? TryGetChildCount(string path)
@@ -133,6 +156,93 @@ public class FileSystemService : IFileSystemService
         catch
         {
             return Path.Combine(Path.GetTempPath(), "MauiMultimedia");
+        }
+    }
+
+    public Task<bool> CheckStoragePermissionAsync()
+    {
+#if ANDROID
+        if (OperatingSystem.IsAndroidVersionAtLeast(30))
+            return Task.FromResult(Android.OS.Environment.IsExternalStorageManager);
+        return Task.FromResult(true); // 低版本安装时已授权
+#else
+        return Task.FromResult(true);
+#endif
+    }
+
+    public void RequestStoragePermission()
+    {
+#if ANDROID
+        if (OperatingSystem.IsAndroidVersionAtLeast(30))
+        {
+            var ctx = Android.App.Application.Context;
+            var intent = new Android.Content.Intent(
+                Android.Provider.Settings.ActionManageAppAllFilesAccessPermission);
+            intent.SetData(Android.Net.Uri.Parse("package:" + ctx.PackageName));
+            intent.AddFlags(Android.Content.ActivityFlags.NewTask);
+            ctx.StartActivity(intent);
+        }
+#endif
+    }
+
+    public Task<List<FileSystemItem>> ScanFilesByTypeAsync(string rootPath, string[] extensions, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            var results = new List<FileSystemItem>();
+            ScanDir(rootPath, extensions, results, ct);
+            return results;
+        }, ct);
+    }
+
+    private static void ScanDir(string dir, string[] extensions, List<FileSystemItem> results, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        string[] files;
+        try
+        {
+            files = Directory.GetFiles(dir);
+        }
+        catch { return; }
+
+        foreach (var f in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            var ext = Path.GetExtension(f);
+            if (extensions.Length == 0 || extensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var fi = new FileInfo(f);
+                    results.Add(new FileSystemItem
+                    {
+                        Name = fi.Name,
+                        FullPath = fi.FullName,
+                        IsFolder = false,
+                        LastModified = fi.LastWriteTime
+                    });
+                }
+                catch { }
+            }
+        }
+
+        string[] subDirs;
+        try
+        {
+            subDirs = Directory.GetDirectories(dir);
+        }
+        catch { return; }
+
+        foreach (var d in subDirs)
+        {
+            var name = Path.GetFileName(d);
+            if (name.StartsWith(".") ||
+                string.Equals(name, "Android", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "data", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            ScanDir(d, extensions, results, ct);
         }
     }
 }

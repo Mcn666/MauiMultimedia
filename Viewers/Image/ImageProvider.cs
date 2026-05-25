@@ -34,4 +34,5 @@ public class ImageProvider : IViewProvider
 
     public void RequestItemSnapshot(FileSystemItem item) { }
     public event Action? SnapshotsUpdated { add { } remove { } }
+    public FileScanCategory? ScanCategory => new("图片", Exts.ToArray(), "\U0001F5BC");
 }

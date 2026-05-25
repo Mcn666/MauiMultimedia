@@ -1,5 +1,5 @@
 @page "/"
-@using MauiMultimedia.Core.Models
+@using System.IO
 @using MauiMultimedia.Core.Abstractions
 @using MauiMultimedia.Shell.Services
 @inject IFileSystemService FileSystemService
@@ -31,19 +31,34 @@
                 <div class="path-bar">
                     <span class="path-label">📂 当前位置：</span>
                     <span class="path-text" title="@currentPath">@currentPath</span>
+                    <span class="path-short" title="@currentPath">@Path.GetFileName(currentPath.TrimEnd('\\'))</span>
                 </div>
                 <div class="browser-actions">
-                    <button class="btn btn-theme" @onclick="ToggleTheme" title="切换主题">
-                        @(isDarkTheme ? "☀️" : "🌙")
-                    </button>
-                    <button class="btn btn-view" @onclick="ToggleViewMode" title="@(viewMode == "list" ? "切换网格视图" : "切换列表视图")">
-                        @(viewMode == "list" ? "▦" : "☰")
-                    </button>
                     <button class="btn btn-back" disabled="@isRoot" @onclick="GoBack">
                         ⬆ 返回上级
                     </button>
+                    <button class="btn btn-scan-panel" @onclick="ToggleScanPanel" title="文件筛选">⋮</button>
                 </div>
             </div>
+
+            @* 扫描类型筛选面板 *@
+            <div class="scan-panel @(showScanPanel ? "open" : "")">
+                <div class="scan-panel-header">
+                    <span>📂 文件筛选</span>
+                    <button class="scan-panel-close" @onclick="CloseScanPanel">✕</button>
+                </div>
+                <div class="scan-panel-body">
+                    @foreach (var cat in scanCategories)
+                    {
+                        var idx = scanCategories.IndexOf(cat) + 1;
+                        <button class="scan-type-btn" @onclick="() => StartScan(idx)">@cat.Icon @cat.Label</button>
+                    }
+                </div>
+            </div>
+            @if (showScanPanel)
+            {
+                <div class="scan-overlay" @onclick="CloseScanPanel"></div>
+            }
 
             @* 排序栏 *@
             <div class="sort-bar">
@@ -62,14 +77,31 @@
                 <button class="btn-sort @GetSortClass("date")" @onclick="OnSortByDate" title="按修改时间排序">
                     修改时间 @GetSortArrow("date")
                 </button>
+                <span class="sort-bar-spacer"></span>
+                <button class="btn-sort-icon" @onclick="ToggleTheme" title="切换主题">
+                    @(isDarkTheme ? "☀️" : "🌙")
+                </button>
+                <button class="btn-sort-icon" @onclick="ToggleViewMode" title="@(viewMode == "list" ? "切换网格视图" : "切换列表视图")">
+                    @(viewMode == "list" ? "▦" : "☰")
+                </button>
             </div>
 
             @if (isLoading)
     {
-        <div class="browser-loading">
-            <div class="spinner"></div>
-            <span>正在加载...</span>
-        </div>
+        if (isScanning)
+        {
+            <div class="browser-loading">
+                <div class="spinner"></div>
+                <span>正在扫描 @scanTypeLabel...</span>
+            </div>
+        }
+        else
+        {
+            <div class="browser-loading">
+                <div class="spinner"></div>
+                <span>正在加载...</span>
+            </div>
+        }
     }
     else if (!string.IsNullOrEmpty(errorMessage))
     {
@@ -80,10 +112,19 @@
     else if (items.Count == 0)
     {
         <div class="browser-empty">
-            📭 此文件夹为空
+            @(isScanned ? $"未找到{scanTypeLabel ?? ""}文件" : "📭 此文件夹为空")
         </div>
     }
-    else if (viewMode == "grid")
+    else
+    {
+        @if (isScanned)
+        {
+            <div class="scan-header">
+                <button class="btn btn-back" style="font-size:13px;padding:4px 10px;" @onclick="ExitScan">← 返回浏览</button>
+                <span style="font-size:13px;color:var(--text-secondary);">@scanTypeLabel (@items.Count 个文件)</span>
+            </div>
+        }
+        @if (viewMode == "grid")
     {
         <div class="browser-grid">
             @foreach (var item in items)
@@ -152,12 +193,32 @@
             }
         </div>
     }
+    }
     </main>
 </div>
 </div>
 
 @* 多查看器选择模态框 *@
-@if (showViewerPicker && pendingItem != null)
+@if (permissionDenied)
+{
+    <div class="picker-overlay" @onclick:stopPropagation="true">
+        <div class="picker-modal" @onclick:stopPropagation="true">
+            <div class="picker-header">
+                <span class="picker-title">🔒 需要存储权限</span>
+            </div>
+            <div class="picker-body" style="padding:20px 24px;gap:12px;">
+                <div style="font-size:14px;color:var(--text-secondary);line-height:1.6;">
+                    此应用需要访问设备存储来浏览文件。请点击下方按钮前往系统设置开启权限。
+                </div>
+                <button class="btn btn-back" style="width:100%;justify-content:center;padding:10px;"
+                        @onclick="RequestStorageAccess">
+                    前往设置
+                </button>
+            </div>
+        </div>
+    </div>
+}
+else if (showViewerPicker && pendingItem != null)
 {
     <div class="picker-overlay" @onclick="CloseViewerPicker" @onkeydown="() => {}">
         <div class="picker-modal" @onclick:stopPropagation="true">
@@ -181,370 +242,3 @@
     </div>
 }
 
-@code {
-    private string currentPath = "";
-    private List<FileSystemItem> items = new();
-    private bool isLoading = true;
-    private bool isRoot = false;
-    private string? errorMessage;
-    private bool isDarkTheme = false;
-    private string viewMode = "list"; // "list" | "grid"
-
-    private string sortColumn = "name";
-    private string sortDirection = "asc";
-
-    // 多查看器选择状态
-    private bool showViewerPicker = false;
-    private FileSystemItem? pendingItem;
-    private List<IFileViewer> availableViewers = new();
-
-    // Windows 快捷访问目录
-    private enum WindowsQuickAccess
-    {
-        Desktop, Downloads, Documents, Pictures, Music, Videos
-    }
-
-    private void NavigateToQuickAccess(WindowsQuickAccess qa)
-    {
-        var folder = qa switch
-        {
-            WindowsQuickAccess.Desktop => Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            WindowsQuickAccess.Downloads => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads",
-            WindowsQuickAccess.Documents => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            WindowsQuickAccess.Pictures => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-            WindowsQuickAccess.Music => Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
-            WindowsQuickAccess.Videos => Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
-            _ => Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-        };
-        currentPath = folder;
-        _ = LoadItemsAsync();
-    }
-
-    private string GetItemIcon(FileSystemItem item)
-    {
-        if (item.IsFolder) return "\U0001F4C1";
-        foreach (var p in ViewProviders)
-            if (p.CanHandle(item)) { var i = p.GetIcon(item); if (i != null) return i; }
-        return "\U0001F4C4";
-    }
-
-    private string? GetItemSnapshot(FileSystemItem item)
-    {
-        foreach (var p in ViewProviders)
-            if (p.CanHandle(item)) return p.GetItemSnapshot(item);
-        return null;
-    }
-
-    private bool CanProvideSnapshot(FileSystemItem item)
-    {
-        foreach (var p in ViewProviders)
-            if (p.CanHandle(item) && p.CanProvideSnapshot(item)) return true;
-        return false;
-    }
-
-    private string GetItemRowClass(FileSystemItem item)
-    {
-        var cls = item.IsFolder ? "folder" : "file";
-        foreach (var p in ViewProviders)
-            if (p.CanHandle(item)) { var e = p.GetItemCssClass(item); if (e != null) cls += " " + e; }
-        return cls;
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        // 确保页面滚动条始终可见（被查看器隐藏后恢复）
-        await JS.InvokeVoidAsync("eval",
-            "document.documentElement.style.overflowY='scroll'");
-
-        // 从状态服务恢复上次浏览位置
-        if (BrowserState.CurrentPath != null)
-        {
-            currentPath = BrowserState.CurrentPath;
-            if (BrowserState.SortColumn != null) sortColumn = BrowserState.SortColumn;
-            if (BrowserState.SortDirection != null) sortDirection = BrowserState.SortDirection;
-            if (BrowserState.ViewMode != null) viewMode = BrowserState.ViewMode;
-            BrowserState.Clear();
-        }
-        else
-        {
-            currentPath = FileSystemService.GetDefaultPath();
-        }
-        await LoadItemsAsync();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await RestoreThemeAsync();
-            await RestoreViewModeAsync();
-            await RestoreSortAsync();
-            StateHasChanged();
-        }
-    }
-
-    /// <summary>
-    /// JS IntersectionObserver 回调：某个文件进入可视区
-    /// </summary>
-    private string GetSortArrow(string col)
-    {
-        if (sortColumn != col) return "";
-        return sortDirection == "asc" ? "▲" : "▼";
-    }
-
-    private string GetSortClass(string col)
-    {
-        return sortColumn == col ? "active" : "";
-    }
-
-    private Task OnSortByName() => OnSortClick("name");
-    private Task OnSortByType() => OnSortClick("type");
-    private Task OnSortByCount() => OnSortClick("count");
-    private Task OnSortByDate() => OnSortClick("date");
-
-    private async Task OnSortClick(string col)
-    {
-        if (sortColumn == col)
-        {
-            // 同一列：切换方向
-            sortDirection = (sortDirection == "asc") ? "desc" : "asc";
-        }
-        else
-        {
-            sortColumn = col;
-            sortDirection = "asc";
-        }
-        ApplySort();
-        await SaveSortAsync();
-    }
-
-    private void ApplySort()
-    {
-        switch (sortColumn)
-        {
-            case "name":
-                items = (sortDirection == "asc")
-                    ? items.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList()
-                    : items.OrderByDescending(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
-                break;
-            case "type":
-                items = (sortDirection == "asc")
-                    ? items.OrderBy(i => i.IsFolder ? 0 : 1)
-                        .ThenBy(i => i.IsFolder ? "" : Path.GetExtension(i.Name), StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
-                        .ToList()
-                    : items.OrderBy(i => i.IsFolder ? 1 : 0)
-                        .ThenBy(i => Path.GetExtension(i.Name), StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-                break;
-            case "count":
-                items = (sortDirection == "asc")
-                    ? items.OrderBy(i => i.IsFolder ? (i.ChildCount ?? 0) : int.MaxValue).ToList()
-                    : items.OrderByDescending(i => i.IsFolder ? (i.ChildCount ?? 0) : int.MinValue).ToList();
-                break;
-            case "date":
-                items = (sortDirection == "asc")
-                    ? items.OrderBy(i => i.LastModified ?? DateTime.MinValue).ToList()
-                    : items.OrderByDescending(i => i.LastModified ?? DateTime.MinValue).ToList();
-                break;
-        }
-    }
-
-    private async Task RestoreSortAsync()
-    {
-        var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-sort')");
-        if (!string.IsNullOrEmpty(saved))
-        {
-            var parts = saved.Split('|');
-            if (parts.Length == 2)
-            {
-                sortColumn = parts[0];
-                sortDirection = parts[1];
-                ApplySort();
-            }
-        }
-    }
-
-    private async Task SaveSortAsync()
-    {
-        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-sort','{sortColumn}|{sortDirection}')");
-    }
-
-    private async Task RestoreThemeAsync()
-    {
-        var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-theme')");
-
-        if (saved == "dark")
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','dark')");
-            isDarkTheme = true;
-        }
-        else if (saved == "light")
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','light')");
-            isDarkTheme = false;
-        }
-        else
-        {
-            var auto = await JS.InvokeAsync<bool>("eval", "window.matchMedia('(prefers-color-scheme: dark)').matches");
-            isDarkTheme = auto;
-        }
-    }
-
-    private async Task LoadItemsAsync()
-    {
-        isLoading = true;
-        errorMessage = null;
-        isRoot = FileSystemService.IsRootPath(currentPath);
-
-        try
-        {
-            items = await FileSystemService.ListItemsAsync(currentPath);
-            ApplySort();
-            _ = LoadChildCountsAsync(items);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"加载目录失败：{ex.Message}";
-            items = new List<FileSystemItem>();
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
-
-    private async Task LoadChildCountsAsync(List<FileSystemItem> folderItems)
-    {
-        var folders = folderItems.Where(i => i.IsFolder).ToList();
-        var semaphore = new SemaphoreSlim(4);
-        var tasks = folders.Select(async item =>
-        {
-            await semaphore.WaitAsync();
-            try
-            {
-                var count = await Task.Run(() => FileSystemService.TryGetChildCount(item.FullPath));
-                item.ChildCount = count;
-            }
-            catch
-            {
-                item.ChildCount = -1;
-            }
-            finally
-            {
-                semaphore.Release();
-            }
-            // 每次计数加载完成后重排（如果当前是按项目数排序）
-            await InvokeAsync(() =>
-            {
-                if (sortColumn == "count") ApplySort();
-                StateHasChanged();
-            });
-        });
-        await Task.WhenAll(tasks);
-    }
-
-    private void OnItemClick(FileSystemItem item)
-    {
-        if (item.IsFolder)
-        {
-            currentPath = item.FullPath;
-            _ = LoadItemsAsync();
-            return;
-        }
-
-        // 收集所有支持的查看器
-        var viewers = FileViewers.Where(v => v.CanHandle(item)).ToList();
-
-        if (viewers.Count == 1)
-        {
-            SaveBrowserState();
-            Navigation.NavigateTo(viewers[0].GetViewerRoute(item));
-        }
-        else if (viewers.Count > 1)
-        {
-            pendingItem = item;
-            availableViewers = viewers;
-            showViewerPicker = true;
-        }
-        // 0 个查看器 → 无操作
-    }
-
-    private void CloseViewerPicker()
-    {
-        showViewerPicker = false;
-        pendingItem = null;
-        availableViewers = new();
-    }
-
-    private void OpenWithViewer(IFileViewer viewer)
-    {
-        if (pendingItem != null)
-        {
-            var route = viewer.GetViewerRoute(pendingItem);
-            CloseViewerPicker();
-            SaveBrowserState();
-            Navigation.NavigateTo(route);
-        }
-    }
-
-    private void SaveBrowserState()
-    {
-        BrowserState.CurrentPath = currentPath;
-        BrowserState.SortColumn = sortColumn;
-        BrowserState.SortDirection = sortDirection;
-        BrowserState.ViewMode = viewMode;
-        // 保存当前目录的文件列表（仅文件，按当前排序顺序），供查看器前后导航
-        BrowserState.CurrentDirectoryFiles = items
-            .Where(i => !i.IsFolder)
-            .Select(i => i.FullPath)
-            .ToList();
-    }
-
-    private static string GetViewerDisplayName(IFileViewer viewer)
-    {
-        return viewer.DisplayName;
-    }
-
-    private async Task GoBack()
-    {
-        var parent = FileSystemService.GetParentPath(currentPath);
-        if (parent != null)
-        {
-            currentPath = parent;
-            await LoadItemsAsync();
-        }
-    }
-
-    private async Task RestoreViewModeAsync()
-    {
-        var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-view')");
-        if (saved == "grid" || saved == "list")
-        {
-            viewMode = saved;
-        }
-    }
-
-    private async Task ToggleViewMode()
-    {
-        viewMode = (viewMode == "list") ? "grid" : "list";
-        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-view','{viewMode}')");
-    }
-
-    private async Task ToggleTheme()
-    {
-        if (isDarkTheme)
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','light')");
-            await JS.InvokeVoidAsync("eval", "localStorage.setItem('filebrowser-theme','light')");
-            isDarkTheme = false;
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','dark')");
-            await JS.InvokeVoidAsync("eval", "localStorage.setItem('filebrowser-theme','dark')");
-            isDarkTheme = true;
-        }
-    }
-}

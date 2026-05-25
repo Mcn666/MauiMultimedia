@@ -19,4 +19,5 @@ public class HtmlProvider : IViewProvider
     public bool CanProvideSnapshot(FileSystemItem item) => false;
     public void RequestItemSnapshot(FileSystemItem item) { }
     public event Action? SnapshotsUpdated { add { } remove { } }
+    public FileScanCategory? ScanCategory => new("文档", Exts.ToArray(), "\U0001F310");
 }

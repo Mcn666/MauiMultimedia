@@ -42,4 +42,19 @@ public interface IFileSystemService
     /// 各支持库可在此目录下创建自己的子目录存放缓存/临时文件。
     /// </summary>
     string GetAppDataDirectory();
+
+    /// <summary>
+    /// 检查存储权限是否已授予（Android 需要访问外部存储）
+    /// </summary>
+    Task<bool> CheckStoragePermissionAsync();
+
+    /// <summary>
+    /// 请求存储权限（Android 上引导用户至系统设置）
+    /// </summary>
+    void RequestStoragePermission();
+
+    /// <summary>
+    /// 递归扫描目录树，按扩展名过滤文件
+    /// </summary>
+    Task<List<FileSystemItem>> ScanFilesByTypeAsync(string rootPath, string[] extensions, CancellationToken ct = default);
 }

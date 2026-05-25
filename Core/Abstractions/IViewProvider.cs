@@ -41,4 +41,9 @@ public interface IViewProvider
     /// 新快照生成完成时触发（用于通知 Shell 刷新网格）
     /// </summary>
     event Action? SnapshotsUpdated;
+
+    /// <summary>
+    /// 文件扫描分类（可选），Shell 用此构建类型筛选面板。返回 null 表示不参与。
+    /// </summary>
+    FileScanCategory? ScanCategory { get; }
 }
