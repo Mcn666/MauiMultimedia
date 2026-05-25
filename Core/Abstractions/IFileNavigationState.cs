@@ -9,4 +9,10 @@ public interface IFileNavigationState
     /// 当前目录中的文件路径列表（按浏览器排序顺序），供查看器前后导航使用
     /// </summary>
     IReadOnlyList<string>? CurrentDirectoryFiles { get; set; }
+
+    /// <summary>
+    /// 返回 URL。查看器页面调用 GoBack 时跳转至此地址而非首页。
+    /// 由 ArchivePage 等中间页面设置，用完后清空。
+    /// </summary>
+    string? ReturnUrl { get; set; }
 }

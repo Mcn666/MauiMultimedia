@@ -1,0 +1,450 @@
+@page "/archiveviewer"
+@implements IDisposable
+@using Microsoft.JSInterop
+@using SharpCompress.Archives
+@using SharpCompress.Common
+@using SharpCompress.Readers
+@using MauiMultimedia.Core.Abstractions
+@using MauiMultimedia.Core.Models
+@inject NavigationManager Navigation
+@inject IFileNavigationState NavState
+@inject IJSRuntime JS
+@inject IEnumerable<IFileViewer> Viewers
+@inject IFileSystemService FileSystem
+
+<div class="browser-items" style="margin:0;border-radius:0;border:none;height:100vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border-primary);flex-shrink:0;">
+        <button style="width:30px;height:30px;border-radius:6px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;" @onclick="GoBack">←</button>
+        <span style="font-size:22px;flex-shrink:0;">📦</span>
+        <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@fileName</div>
+            <div style="font-size:11px;color:var(--text-tertiary);">@(items.Count > 0 ? $"{items.Count} 项" : "")</div>
+        </div>
+    </div>
+    <div class="items-header">
+        <span class="col-icon"></span>
+        <span class="col-name sortable">名称</span>
+        <span class="col-count sortable">大小</span>
+        <span class="col-date sortable">修改时间</span>
+    </div>
+
+    @if (isLoading)
+    {
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text-secondary);font-size:13px;">
+            <div style="width:28px;height:28px;border:3px solid var(--spinner-border);border-top-color:var(--spinner-active);border-radius:50%;animation:s .7s linear infinite;">@* spinner *@</div>
+            <span>正在读取...</span>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--error-text);font-size:14px;">@errorMessage</div>
+    }
+    else if (items.Count == 0)
+    {
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);">压缩文件为空</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(toast))
+        {
+            <div style="padding:6px 16px;font-size:13px;color:var(--text-secondary);background:var(--bg-secondary);border-bottom:1px solid var(--border-primary);flex-shrink:0;">@toast</div>
+        }
+        <div style="flex:1;overflow-y:auto;">
+            @RenderTree(nodes)
+        </div>
+    }
+</div>
+
+@if (showPasswordPrompt)
+{
+    <div style="position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;z-index:1000;">
+        <div style="background:var(--bg-primary);border-radius:10px;padding:20px 24px;min-width:300px;box-shadow:0 8px 32px #0000004d;">
+            <div style="font-weight:600;font-size:15px;margin-bottom:12px;">🔒 此压缩文件需要密码</div>
+            <input type="password" id="_pw" style="width:100%;padding:8px 12px;border:1px solid var(--border-primary);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-size:14px;box-sizing:border-box;" placeholder="请输入密码" />
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+                <button style="padding:6px 16px;border:1px solid var(--btn-border);border-radius:6px;background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;" @onclick="CancelPassword">取消</button>
+                <button style="padding:6px 16px;border:none;border-radius:6px;background:#4488cc;color:#fff;cursor:pointer;font-size:13px;" @onclick="DoPassword">确定</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly HashSet<string> Img = new(StringComparer.OrdinalIgnoreCase)
+    { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".ico", ".svg" };
+    private static readonly HashSet<string> Doc = new(StringComparer.OrdinalIgnoreCase)
+    { ".txt", ".log", ".md", ".csv", ".xml", ".json", ".yaml", ".yml",
+      ".cs", ".js", ".ts", ".html", ".htm", ".css", ".jsx", ".tsx",
+      ".py", ".java", ".cpp", ".c", ".h", ".sql", ".sh", ".bat", ".ps1",
+      ".ini", ".cfg", ".conf", ".csproj", ".sln", ".slnx" };
+    private static readonly HashSet<string> Arc = new(StringComparer.OrdinalIgnoreCase)
+    { ".zip", ".tar", ".gz", ".tgz", ".rar", ".7z", ".zst", ".xz", ".bz2" };
+
+    private string filePath = "", fileName = "";
+    private static string? archivePassword;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? toast;
+    private bool showPasswordPrompt;
+    private List<TreeItem> nodes = new();
+    private List<Entry> items = new();
+    private HashSet<string> open = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> loaded = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool IsArchive(string name)
+    {
+        var e = Path.GetExtension(name);
+        return Arc.Contains(e) || name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private record Entry(string Full, string Name, long Size, DateTime Modified);
+    private class TreeItem
+    {
+        public string Label { get; set; }
+        public string Full { get; set; }
+        public bool Dir { get; set; }
+        public long Size { get; set; }
+        public DateTime Modified { get; set; }
+        public int Level { get; set; }
+        public List<TreeItem> Kids { get; set; } = new();
+        public string? Source { get; set; }
+
+        public TreeItem(string label, string full, bool dir, long size, DateTime modified, int level, List<TreeItem> kids, string? source = null)
+        {
+            Label = label; Full = full; Dir = dir; Size = size; Modified = modified; Level = level; Kids = kids; Source = source;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await JS.InvokeVoidAsync("eval", "document.documentElement.style.overflowY='hidden'");
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        var q = Navigation.ToAbsoluteUri(Navigation.Uri).Query.TrimStart('?');
+        var p = "";
+        foreach (var s in q.Split('&'))
+        { var kv = s.Split('=', 2); if (kv.Length == 2 && kv[0] == "path") p = Uri.UnescapeDataString(kv[1]); }
+        if (string.IsNullOrEmpty(p)) { errorMessage = "无路径"; isLoading = false; return; }
+        filePath = p; fileName = Path.GetFileName(p);
+        try
+        {
+            if (!File.Exists(p)) { errorMessage = "文件不存在"; return; }
+            items = await Task.Run(() => Scan(p, archivePassword));
+            nodes = Build(items);
+        }
+        catch (Exception ex)
+        {
+            if (IsPasswordError(ex))
+            {
+                showPasswordPrompt = true;
+                archivePassword = null;
+                errorMessage = null;
+            }
+            else
+                errorMessage = $"读取失败：{ex.Message}";
+        }
+        finally { isLoading = false; StateHasChanged(); }
+    }
+
+    private static List<Entry> Scan(string path, string? password = null)
+    {
+        using var stream = File.OpenRead(path);
+        var options = password != null ? new ReaderOptions { Password = password } : null;
+        using var archive = ArchiveFactory.OpenArchive(stream, options);
+        var result = new List<Entry>();
+        foreach (var entry in archive.Entries)
+        {
+            if (entry.IsDirectory) continue;
+            result.Add(new Entry(
+                entry.Key ?? "",
+                Path.GetFileName(entry.Key ?? ""),
+                entry.Size,
+                entry.LastModifiedTime ?? DateTime.MinValue));
+        }
+        result.Sort((x, y) => string.Compare(x.Full, y.Full, StringComparison.Ordinal));
+        return result;
+    }
+
+    private static List<TreeItem> Build(List<Entry> entries)
+    {
+        var root = new List<TreeItem>();
+        var map = new Dictionary<string, List<TreeItem>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in entries)
+        {
+            var parts = r.Full.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) continue;
+            var cur = "";
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                cur = string.IsNullOrEmpty(cur) ? parts[i] : cur + "/" + parts[i];
+                if (map.ContainsKey(cur)) continue;
+                var n = new TreeItem(parts[i], cur, true, 0, DateTime.MinValue, i, new());
+                map[cur] = n.Kids;
+                (i == 0 ? root : map[cur[..^(parts[i].Length + 1)]]).Add(n);
+            }
+            var f = new TreeItem(r.Name, r.Full, false, r.Size, r.Modified, parts.Length - 1, new());
+            (parts.Length == 1 ? root : map[string.Join("/", parts[..^1])]).Add(f);
+        }
+        Sort(root);
+        return root;
+    }
+
+    private static void Sort(List<TreeItem> items)
+    {
+        items.Sort((a, b) => a.Dir != b.Dir ? (a.Dir ? -1 : 1) : string.Compare(a.Label, b.Label, StringComparison.Ordinal));
+        foreach (var n in items) Sort(n.Kids);
+    }
+
+    /// <summary>重建树节点层级，统一增加偏移量</summary>
+    private static void RemapLevels(List<TreeItem> items, int add)
+    {
+        foreach (var n in items)
+        {
+            n.Level = n.Level + add;
+            RemapLevels(n.Kids, add);
+        }
+    }
+
+    /// <summary>标记来自内层压缩包的文件来源路径</summary>
+    private static void MarkSource(List<TreeItem> items, string archivePath)
+    {
+        foreach (var n in items)
+        {
+            if (!n.Dir) n.Source = archivePath;
+            MarkSource(n.Kids, archivePath);
+        }
+    }
+
+    private RenderFragment RenderTree(List<TreeItem> nodes) => b =>
+    {
+        foreach (var n in nodes)
+        {
+            var ok = open.Contains(n.Full);
+            var pad = 36 + n.Level * 20;
+            var isArc = !n.Dir && IsArchive(n.Label);
+
+            b.OpenElement(0, "div");
+            b.AddAttribute(1, "class", "item-row" + (isArc || n.Dir ? " folder" : " file"));
+            b.AddAttribute(2, "style", $"padding-left:{pad}px");
+
+            // 压缩文件或文件夹 → 可展开
+            if (n.Dir || isArc)
+            {
+                b.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => Tog(n)));
+                b.OpenElement(4, "span"); b.AddAttribute(5, "class", "col-icon item-icon");
+                b.AddContent(6, $"{(ok ? "▾" : "▸")}");
+                b.CloseElement();
+                b.OpenElement(7, "span"); b.AddAttribute(8, "class", "col-name item-name");
+                b.AddContent(9, isArc ? $"📦 {n.Label}" : $"\uD83D\uDCC1 {n.Label}");
+                b.CloseElement();
+                b.OpenElement(10, "span"); b.AddAttribute(11, "class", "col-count item-count"); b.CloseElement();
+                b.OpenElement(12, "span"); b.AddAttribute(13, "class", "col-date item-date"); b.CloseElement();
+            }
+            else
+            {
+                b.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => Open(n)));
+                b.OpenElement(4, "span"); b.AddAttribute(5, "class", "col-icon item-icon");
+                b.AddContent(6, Icn(n.Label));
+                b.CloseElement();
+                b.OpenElement(7, "span"); b.AddAttribute(8, "class", "col-name item-name");
+                b.AddContent(9, n.Label);
+                b.CloseElement();
+                b.OpenElement(10, "span"); b.AddAttribute(11, "class", "col-count item-count");
+                b.AddContent(12, Sz(n.Size));
+                b.CloseElement();
+                b.OpenElement(13, "span"); b.AddAttribute(14, "class", "col-date item-date");
+                b.AddContent(15, Dt(n.Modified));
+                b.CloseElement();
+            }
+            b.CloseElement();
+
+            if (ok) b.AddContent(16, RenderTree(n.Kids));
+        }
+    };
+
+    // ═══ 展开/折叠（支持嵌套压缩包） ═══
+
+    private async Task Tog(TreeItem n)
+    {
+        if (open.Contains(n.Full)) { open.Remove(n.Full); return; }
+
+        // 压缩文件首次展开：提取并读取内部内容
+        if (!n.Dir && IsArchive(n.Label) && !loaded.Contains(n.Full))
+        {
+            try
+            {
+                loaded.Add(n.Full);
+                var tmp = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
+                    Path.GetFileNameWithoutExtension(fileName));
+                var outPath = Path.Combine(tmp, n.Full);
+                var dir = Path.GetDirectoryName(outPath);
+                if (dir != null) Directory.CreateDirectory(dir);
+
+                ExtractEntry(filePath, n.Full, outPath);
+
+                var inner = ReadArchiveEntries(outPath);
+                var rawKids = Build(inner);
+                RemapLevels(rawKids, n.Level + 1);
+                MarkSource(rawKids, outPath);
+                n.Kids = rawKids;
+                // 标记来源档案路径，供 Open 提取时使用
+                MarkSource(n.Kids, outPath);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"内部压缩文件读取失败：{ex.Message}";
+                StateHasChanged();
+                return;
+            }
+        }
+        open.Add(n.Full);
+    }
+
+    /// <summary>读取压缩文件的条目列表</summary>
+    private static List<Entry> ReadArchiveEntries(string path) => Scan(path, archivePassword);
+
+    private async Task Open(TreeItem n)
+    {
+        try
+        {
+            var fi = new FileSystemItem { Name = n.Label, FullPath = "", IsFolder = false, LastModified = DateTime.Now };
+            var v = Viewers.FirstOrDefault(v => v.CanHandle(fi));
+            if (v == null)
+            {
+                toast = "⚠️ 此文件类型无查看器支持";
+                StateHasChanged();
+                return;
+            }
+
+            var srcPath = n.Source ?? filePath;
+            var tmp = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
+                Path.GetFileNameWithoutExtension(fileName));
+            var outPath = Path.Combine(tmp, n.Full);
+            var dir = Path.GetDirectoryName(outPath);
+            if (dir != null) Directory.CreateDirectory(dir);
+            ExtractEntry(srcPath, n.Full, outPath);
+
+            // 收集同级文件列表用于前后导航
+            List<string> fileList;
+            if (n.Source != null)
+            {
+                // 内层压缩包：提取所有文件
+                var all = ReadArchiveEntries(n.Source);
+                fileList = new List<string>(all.Count);
+                foreach (var e in all)
+                {
+                    var p = Path.Combine(tmp, e.Full);
+                    var d = Path.GetDirectoryName(p);
+                    if (d != null) Directory.CreateDirectory(d);
+                    ExtractEntry(n.Source, e.Full, p);
+                    fileList.Add(p);
+                }
+            }
+            else
+            {
+                // 外层压缩包：只取同一目录
+                var parent = GetParent(n.Full);
+                fileList = new List<string>();
+                foreach (var e in items)
+                {
+                    if (GetParent(e.Full) != parent) continue;
+                    var p = Path.Combine(tmp, e.Full);
+                    var d = Path.GetDirectoryName(p);
+                    if (d != null) Directory.CreateDirectory(d);
+                    ExtractEntry(srcPath, e.Full, p);
+                    fileList.Add(p);
+                }
+            }
+            fileList.Sort(StringComparer.OrdinalIgnoreCase);
+            NavState.CurrentDirectoryFiles = fileList;
+
+            fi.FullPath = outPath;
+            if (NavState != null)
+                NavState.ReturnUrl = Navigation.ToAbsoluteUri(Navigation.Uri).PathAndQuery;
+            var route = v.GetViewerRoute(fi);
+            _ = InvokeAsync(() => Navigation.NavigateTo(route));
+        }
+        catch (Exception ex)
+        {
+            if (IsPasswordError(ex))
+            {
+                showPasswordPrompt = true;
+                archivePassword = null;
+                toast = null;
+                errorMessage = null;
+            }
+            else
+                toast = $"提取失败：{ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>从指定档案中提取一个条目到目标路径</summary>
+    private static void ExtractEntry(string archivePath, string entryName, string outPath)
+    {
+        using var stream = File.OpenRead(archivePath);
+        var opts = archivePassword != null ? new ReaderOptions { Password = archivePassword } : null;
+        using var archive = ArchiveFactory.OpenArchive(stream, opts);
+        foreach (var entry in archive.Entries)
+        {
+            if (entry.IsDirectory) continue;
+            if (entry.Key == entryName)
+            {
+                entry.WriteToFile(outPath, new ExtractionOptions { Overwrite = true });
+                return;
+            }
+        }
+    }
+
+    /// <summary>获取条目所在父目录路径（无尾部斜杠，根目录返回 ""）</summary>
+    private static string GetParent(string full)
+    {
+        var idx = full.LastIndexOf('/');
+        return idx > 0 ? full[..idx] : "";
+    }
+
+    private void CancelPassword()
+    {
+        showPasswordPrompt = false;
+        if (items.Count == 0) errorMessage = "已取消密码输入";
+    }
+
+    private async Task DoPassword()
+    {
+        archivePassword = await JS.InvokeAsync<string>("eval",
+            "document.getElementById('_pw').value");
+        showPasswordPrompt = false;
+        isLoading = true;
+        StateHasChanged();
+        await Load();
+    }
+
+    private void GoBack()
+    {
+        _ = JS.InvokeVoidAsync("eval", "document.documentElement.style.overflowY='scroll'");
+        try
+        {
+            var cacheDir = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive");
+            if (Directory.Exists(cacheDir))
+                Directory.Delete(cacheDir, true);
+        }
+        catch { }
+        Navigation.NavigateTo("/");
+    }
+
+    private static bool IsPasswordError(Exception ex)
+    {
+        var msg = ex.Message;
+        return msg.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+               msg.Contains("encrypted", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose() { }
+
+    private static string Sz(long b) { double d = b; if (d < 1024) return $"{d:F0} B"; d /= 1024; if (d < 1024) return $"{d:F1} KB"; return $"{d / 1024:F1} MB"; }
+    private static string Dt(DateTime d) => d == DateTime.MinValue ? "" : d.ToString("yyyy/MM/dd HH:mm");
+    private static string Icn(string n) { var e = Path.GetExtension(n); if (Img.Contains(e)) return "🖼️"; if (Doc.Contains(e)) return "📄"; if (Arc.Contains(e) || n.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)) return "📦"; return "📎"; }
+}

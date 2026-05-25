@@ -4,6 +4,7 @@ using MauiMultimedia.Shell.Services;
 using MauiMultimedia.Viewers.Text;
 using MauiMultimedia.Viewers.Image;
 using MauiMultimedia.Viewers.Html;
+using MauiMultimedia.Viewers.Archive;
 
 namespace MauiMultimedia.Shell
 {
@@ -26,6 +27,7 @@ namespace MauiMultimedia.Shell
             builder.Services.AddTextViewer();
             builder.Services.AddImageViewer();
             builder.Services.AddHtmlViewer();
+            builder.Services.AddArchiveViewer();
 
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();

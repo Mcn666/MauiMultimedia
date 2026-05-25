@@ -428,7 +428,9 @@ public partial class ImagePage : ComponentBase
     {
         _ = JS.InvokeVoidAsync("eval",
             "document.documentElement.style.overflowY = ''");
-        Navigation.NavigateTo("/");
+        var ret = NavState.ReturnUrl;
+        if (ret != null) { NavState.ReturnUrl = null; Navigation.NavigateTo(ret); }
+        else Navigation.NavigateTo("/");
     }
 
     private void GoPrev()

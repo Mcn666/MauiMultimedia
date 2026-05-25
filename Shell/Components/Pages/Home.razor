@@ -252,6 +252,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // 确保页面滚动条始终可见（被查看器隐藏后恢复）
+        await JS.InvokeVoidAsync("eval",
+            "document.documentElement.style.overflowY='scroll'");
+
         // 从状态服务恢复上次浏览位置
         if (BrowserState.CurrentPath != null)
         {

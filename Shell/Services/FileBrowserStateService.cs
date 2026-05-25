@@ -13,6 +13,7 @@ public class FileBrowserStateService : IFileNavigationState
     public string? SortDirection { get; set; }
     public string? ViewMode { get; set; }
     public IReadOnlyList<string>? CurrentDirectoryFiles { get; set; }
+    public string? ReturnUrl { get; set; }
 
     public void Clear()
     {
@@ -21,5 +22,6 @@ public class FileBrowserStateService : IFileNavigationState
         SortDirection = null;
         ViewMode = null;
         CurrentDirectoryFiles = null;
+        ReturnUrl = null;
     }
 }
