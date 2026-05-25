@@ -80,4 +80,8 @@
         <ProjectReference Include="..\Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="wwwroot\scripts\" />
+    </ItemGroup>
+
 </Project>

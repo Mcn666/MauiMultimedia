@@ -159,14 +159,17 @@ public class FileSystemService : IFileSystemService
         }
     }
 
-    public Task<bool> CheckStoragePermissionAsync()
+    public async Task<bool> CheckStoragePermissionAsync()
     {
 #if ANDROID
         if (OperatingSystem.IsAndroidVersionAtLeast(30))
-            return Task.FromResult(Android.OS.Environment.IsExternalStorageManager);
-        return Task.FromResult(true); // 低版本安装时已授权
+            return Android.OS.Environment.IsExternalStorageManager;
+
+        // Android 10 (API 29)：需要运行时请求 READ_EXTERNAL_STORAGE
+        var readStatus = await Permissions.RequestAsync<Permissions.StorageRead>();
+        return readStatus == PermissionStatus.Granted;
 #else
-        return Task.FromResult(true);
+        return true;
 #endif
     }
 
@@ -181,6 +184,11 @@ public class FileSystemService : IFileSystemService
             intent.SetData(Android.Net.Uri.Parse("package:" + ctx.PackageName));
             intent.AddFlags(Android.Content.ActivityFlags.NewTask);
             ctx.StartActivity(intent);
+        }
+        else
+        {
+            // Android 10：通过 MAUI Permissions API 请求
+            _ = Permissions.RequestAsync<Permissions.StorageRead>();
         }
 #endif
     }

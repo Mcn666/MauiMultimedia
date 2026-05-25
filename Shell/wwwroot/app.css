@@ -981,9 +981,7 @@ h1:focus {
     .btn-sort { padding: 4px 6px; font-size: 11px; }
 
     .items-header .col-date,
-    .item-row .col-date,
-    .items-header .col-count,
-    .item-row .col-count { display: none; }
+    .item-row .col-date { display: none; }
     .items-header { padding: 8px 10px; font-size: 11px; }
     .item-row { padding: 8px 10px; }
     .col-icon { width: 28px; }
