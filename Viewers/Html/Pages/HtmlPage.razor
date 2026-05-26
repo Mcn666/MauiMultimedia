@@ -104,20 +104,28 @@
             var isMhtml = string.Equals(ext, ".mht", StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(ext, ".mhtml", StringComparison.OrdinalIgnoreCase);
 
-            htmlContent = await Task.Run(() =>
+            var styleTag = "<style>html,body{background:var(--bg-viewport,#1a1a1a);margin:0;padding:0}</style>\n";
+
+            if (isMhtml)
             {
-                string content;
-                if (isMhtml)
-                    content = MhtmlParser.Parse(filePath);
-                else
+                MhtmlParser.ParseResult result = null!;
+                await Task.Run(() => { result = MhtmlParser.Parse(filePath); });
+
+                // 通过 JS 创建 Blob URL 并替换占位符
+                htmlContent = await InjectBlobUrls(result);
+                htmlContent = styleTag + htmlContent;
+            }
+            else
+            {
+                htmlContent = await Task.Run(() =>
                 {
-                    content = File.ReadAllText(filePath);
+                    var content = File.ReadAllText(filePath);
                     var dir = Path.GetDirectoryName(filePath);
                     if (dir != null)
                         content = ResourceInliner.Inline(content, dir);
-                }
-                return "<style>html,body{background:var(--bg-viewport,#1a1a1a);margin:0;padding:0}</style>\n" + content;
-            });
+                    return styleTag + content;
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -128,6 +136,41 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    private async Task<string> InjectBlobUrls(MhtmlParser.ParseResult result)
+    {
+        if (result.Resources.Count == 0) return result.HtmlBody;
+
+        // 将资源批量传给 JS，JS 创建 Blob URL 并返回 token→url 映射
+        var entries = result.Resources.Select(r => new
+        {
+            token = $"__BLOB_{Array.IndexOf(result.Resources.ToArray(), r)}__",
+            base64 = Convert.ToBase64String(r.Data),
+            mime = r.MimeType
+        }).ToArray();
+
+        var json = System.Text.Json.JsonSerializer.Serialize(entries);
+        var urlMap = await JS.InvokeAsync<Dictionary<string, string>>("eval", $@"
+            (function() {{
+                var map = {{}};
+                var list = {json};
+                for (var i = 0; i < list.length; i++) {{
+                    var e = list[i];
+                    var bin = atob(e.base64);
+                    var arr = new Uint8Array(bin.length);
+                    for (var j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+                    map[e.token] = URL.createObjectURL(new Blob([arr], {{type: e.mime}}));
+                }}
+                return map;
+            }})()
+        ");
+
+        // 在 C# 中完成所有占位符替换（避免 JS eval 大字符串的坑）
+        var html = result.HtmlBody;
+        foreach (var (token, url) in urlMap)
+            html = html.Replace(token, url);
+        return html;
     }
 
     private void GoBack()

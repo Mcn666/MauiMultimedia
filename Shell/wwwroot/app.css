@@ -277,7 +277,7 @@ h1:focus {
 .path-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     min-width: 0;
     flex: 1;
 }
@@ -300,18 +300,24 @@ h1:focus {
 .browser-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    flex-shrink: 0;
 }
 
 .btn-back {
-    padding: 6px 16px;
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 16px;
+    margin-right: 8px;
     background: var(--btn-bg);
     border: 1px solid var(--btn-border);
     border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
+    line-height: 1;
     color: var(--btn-text);
     white-space: nowrap;
+    flex-shrink: 0;
     transition: background 0.15s;
 }
 
@@ -629,15 +635,26 @@ h1:focus {
     min-width: 0;
 }
 
+@media (min-width: 769px) {
+    .browser-main {
+        margin-left: 186px;
+    }
+}
+
 .browser-sidebar {
     width: 170px;
-    flex-shrink: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-radius: 10px;
     padding: 10px 0;
-    position: sticky;
-    top: 16px;
+}
+
+@media (min-width: 769px) {
+    .browser-sidebar {
+        position: fixed;
+        top: 36px;
+        z-index: 1;
+    }
 }
 
 .sidebar-header {
@@ -672,6 +689,48 @@ h1:focus {
 }
 
 /* Theme toggle button */
+
+/* --- Theme dropdown --- */
+.theme-dropdown {
+    position: relative;
+}
+.theme-menu {
+    position: absolute;
+    top: calc(100% - 4px);
+    right: 0;
+    min-width: 130px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    z-index: 100;
+    overflow: hidden;
+    display: none;
+}
+.theme-dropdown:hover .theme-menu,
+.theme-menu.open {
+    display: block;
+}
+.theme-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+}
+.theme-option:hover {
+    background: var(--hover-bg);
+}
+.theme-option.active {
+    background: var(--btn-hover-bg);
+    font-weight: 600;
+}
 .btn-theme {
     width: 34px;
     height: 34px;
@@ -860,8 +919,8 @@ h1:focus {
 
 .browser-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
     background: var(--bg-primary);
 }
 
@@ -878,9 +937,11 @@ h1:focus {
     transition: background 0.12s, border-color 0.12s, transform 0.12s;
     text-align: center;
     min-width: 0;
+    aspect-ratio: 1;
+    min-height: 100px;
     position: relative;
     overflow: hidden;
-    aspect-ratio: 1;
+    box-sizing: border-box;
 }
 
 /* 图片文件：缩略图填充整个网格项 */
@@ -889,10 +950,6 @@ h1:focus {
 }
 
 .grid-item.is-image-file:hover {
-    transform: translateY(-2px);
-}
-
-.grid-item:hover {
     background: var(--bg-hover);
     border-color: var(--text-link);
     transform: translateY(-2px);
@@ -910,7 +967,7 @@ h1:focus {
 
 .grid-thumb {
     position: absolute;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     overflow: hidden;
 }
 
@@ -982,8 +1039,8 @@ h1:focus {
 
     .items-header .col-date,
     .item-row .col-date { display: none; }
-    .items-header { padding: 8px 10px; font-size: 11px; }
-    .item-row { padding: 8px 10px; }
+    .items-header { padding: 12px 10px; font-size: 11px; }
+    .item-row { padding: 12px 10px; }
     .col-icon { width: 28px; }
     .item-icon { font-size: 16px; }
 
@@ -1012,8 +1069,8 @@ h1:focus {
     .sort-sep { margin: 0 2px; }
 
     .browser-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
     }
     .grid-icon { font-size: 20px; }
 }

@@ -14,7 +14,8 @@ public partial class Home
     private bool isLoading = true;
     private bool isRoot = false;
     private string? errorMessage;
-    private bool isDarkTheme = false;
+    private string themeMode = "system"; // "light" | "dark" | "system"
+    private bool showThemeMenu;
     private string viewMode = "list";
 
     private string sortColumn = "name";
@@ -126,6 +127,10 @@ public partial class Home
             .Select(c => c!)
             .ToList();
 
+        // 在加载前恢复排序和视图模式（JS interop 在 MAUI 中 OnInitializedAsync 可用）
+        await RestoreSortAsync();
+        await RestoreViewModeAsync();
+
         await LoadItemsAsync();
     }
 
@@ -134,8 +139,6 @@ public partial class Home
         if (firstRender)
         {
             await RestoreThemeAsync();
-            await RestoreViewModeAsync();
-            await RestoreSortAsync();
             StateHasChanged();
         }
     }
@@ -227,22 +230,31 @@ public partial class Home
     private async Task RestoreThemeAsync()
     {
         var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-theme')");
-        if (saved == "dark")
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','dark')");
-            isDarkTheme = true;
-        }
-        else if (saved == "light")
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','light')");
-            isDarkTheme = false;
-        }
-        else
-        {
-            var auto = await JS.InvokeAsync<bool>("eval", "window.matchMedia('(prefers-color-scheme: dark)').matches");
-            isDarkTheme = auto;
-        }
+        themeMode = (saved == "light" || saved == "dark" || saved == "system") ? saved : "system";
+        await ApplyThemeAsync(themeMode);
     }
+
+    private async Task ApplyThemeAsync(string mode)
+    {
+        bool dark;
+        if (mode == "system")
+            dark = await JS.InvokeAsync<bool>("eval", "window.matchMedia('(prefers-color-scheme: dark)').matches");
+        else
+            dark = mode == "dark";
+        await JS.InvokeVoidAsync("eval", $"document.documentElement.setAttribute('data-theme','{(dark ? "dark" : "light")}')");
+    }
+
+    private async Task SetTheme(string mode)
+    {
+        themeMode = mode;
+        showThemeMenu = false;
+        await ApplyThemeAsync(mode);
+        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-theme','{mode}')");
+    }
+
+    private Task SetThemeLight() => SetTheme("light");
+    private Task SetThemeDark() => SetTheme("dark");
+    private Task SetThemeSystem() => SetTheme("system");
 
     private async Task LoadItemsAsync()
     {
@@ -438,21 +450,5 @@ public partial class Home
     {
         viewMode = (viewMode == "list") ? "grid" : "list";
         await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-view','{viewMode}')");
-    }
-
-    private async Task ToggleTheme()
-    {
-        if (isDarkTheme)
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','light')");
-            await JS.InvokeVoidAsync("eval", "localStorage.setItem('filebrowser-theme','light')");
-            isDarkTheme = false;
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("eval", "document.documentElement.setAttribute('data-theme','dark')");
-            await JS.InvokeVoidAsync("eval", "localStorage.setItem('filebrowser-theme','dark')");
-            isDarkTheme = true;
-        }
     }
 }

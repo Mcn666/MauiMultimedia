@@ -78,9 +78,18 @@
                     修改时间 @GetSortArrow("date")
                 </button>
                 <span class="sort-bar-spacer"></span>
-                <button class="btn-sort-icon" @onclick="ToggleTheme" title="切换主题">
-                    @(isDarkTheme ? "☀️" : "🌙")
-                </button>
+                <div class="theme-dropdown"
+                     @onmouseenter="() => showThemeMenu = true"
+                     @onmouseleave="() => showThemeMenu = false">
+                    <button class="btn-sort-icon" @onclick="() => showThemeMenu = !showThemeMenu" title="切换主题">
+                        @(themeMode == "light" ? "☀️" : themeMode == "dark" ? "🌙" : "🖥️")
+                    </button>
+                    <div class="theme-menu @(showThemeMenu ? "open" : "")">
+                        <button class="theme-option @(themeMode == "light" ? "active" : "")" @onclick="SetThemeLight">☀️ 浅色</button>
+                        <button class="theme-option @(themeMode == "dark" ? "active" : "")" @onclick="SetThemeDark">🌙 深色</button>
+                        <button class="theme-option @(themeMode == "system" ? "active" : "")" @onclick="SetThemeSystem">🖥️ 跟随系统</button>
+                    </div>
+                </div>
                 <button class="btn-sort-icon" @onclick="ToggleViewMode" title="@(viewMode == "list" ? "切换网格视图" : "切换列表视图")">
                     @(viewMode == "list" ? "▦" : "☰")
                 </button>

@@ -5,14 +5,14 @@ namespace MauiMultimedia.Viewers.Html.Services;
 
 /// <summary>
 /// MHTML (MIME HTML) 解析器。
-/// 小资源 data:URI 内联，大资源返回给调用方创建 Blob URL。
+/// 返回 htmlBody + 资源列表，由调用方创建 Blob URL。
 /// </summary>
 public static partial class MhtmlParser
 {
-    private const int MaxPartBytes = 2_000_000;
-    private const int MaxResources = 50;
+    private const int MaxPartBytes = 20_000_000;
+    private const int MaxResources = 500;
 
-    public static string Parse(string filePath)
+    public static ParseResult Parse(string filePath)
     {
         var text = File.ReadAllText(filePath, Encoding.UTF8);
         var boundary = DetectBoundary(text);
@@ -99,9 +99,9 @@ public static partial class MhtmlParser
         if (htmlBody == null)
             throw new InvalidDataException("未找到 HTML 内容");
 
-        // 收集资源 — 所有 body 内的资源都用 data:URI（≤500KB 的图片完整内联）
-        var resources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var htmlSig = htmlBody.Length > 200 ? htmlBody[..200] : htmlBody;
+        // 收集资源 — 返回原始字节数组，由调用方创建 Blob URL
+        var resources = new List<ResourceBlob>();
+        var resourceMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         int count = 0;
 
         foreach (var p in parts)
@@ -110,40 +110,21 @@ public static partial class MhtmlParser
             if (count >= MaxResources) break;
 
             var mime = ExtractMime(p.ContentType);
-            var isText = mime.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
-            var isB64 = p.ContentTransferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase);
+            var bytes = DecodePartBytes(p);
+            if (bytes == null) continue;
 
-            string dataUri;
-
-            if (isText)
-            {
-                var decoded = DecodePart(p);
-                if (decoded == null || decoded.Contains(htmlSig)) continue;
-                dataUri = $"data:{mime};base64,{Convert.ToBase64String(Encoding.UTF8.GetBytes(decoded))}";
-            }
-            else if (isB64)
-            {
-                if (p.Body == null) continue;
-                var clean = p.Body.Replace("\n", "").Replace("\r", "").Replace(" ", "");
-                dataUri = $"data:{mime};base64,{clean}";
-            }
-            else
-            {
-                var decoded = DecodePart(p);
-                if (decoded == null || decoded.Contains(htmlSig)) continue;
-                dataUri = $"data:{mime};base64,{Convert.ToBase64String(Encoding.UTF8.GetBytes(decoded))}";
-            }
-
-            resources[p.ContentLocation] = dataUri;
+            var token = $"__BLOB_{count}__";
+            resources.Add(new ResourceBlob(p.ContentLocation, bytes, mime));
+            resourceMap[p.ContentLocation] = token;
             var fn = Path.GetFileName(p.ContentLocation);
-            if (!string.IsNullOrEmpty(fn)) resources[fn] = dataUri;
+            if (!string.IsNullOrEmpty(fn)) resourceMap[fn] = token;
             count++;
         }
 
-        if (resources.Count > 0)
-            htmlBody = RewriteReferences(htmlBody, resources);
+        if (resourceMap.Count > 0)
+            htmlBody = RewriteReferences(htmlBody, resourceMap);
 
-        return htmlBody;
+        return new ParseResult(htmlBody, resources);
     }
 
     // ── 辅助方法 ──────────────────────────────────────
@@ -297,7 +278,37 @@ public static partial class MhtmlParser
         return html;
     }
 
+    /// <summary>
+    /// 解析 MIME part 的原始字节数据（用于创建 Blob）
+    /// </summary>
+    private static byte[]? DecodePartBytes(RawPart p)
+    {
+        if (p.Body == null) return null;
+        if (p.ContentTransferEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase))
+        {
+            var clean = p.Body.Replace("\n", "").Replace("\r", "").Replace(" ", "");
+            try { return Convert.FromBase64String(clean); }
+            catch { return null; }
+        }
+        if (p.ContentTransferEncoding.Equals("quoted-printable", StringComparison.OrdinalIgnoreCase))
+        {
+            var decoded = DecodeQp(p.Body, GetEncoding(p.ContentType));
+            return Encoding.UTF8.GetBytes(decoded);
+        }
+        return Encoding.UTF8.GetBytes(p.Body);
+    }
+
     private record RawPart(string ContentType, string ContentLocation, string ContentTransferEncoding, string? Body);
+
+    /// <summary>
+    /// MHTML 解析结果：HTML 正文 + 资源引用列表
+    /// </summary>
+    public record ParseResult(string HtmlBody, List<ResourceBlob> Resources);
+
+    /// <summary>
+    /// 单个资源的原始数据
+    /// </summary>
+    public record ResourceBlob(string Location, byte[] Data, string MimeType);
 
     [GeneratedRegex(@"boundary\s*=\s*""?([^\s"";]+)""?", RegexOptions.IgnoreCase)]
     private static partial Regex BoundaryRegex();

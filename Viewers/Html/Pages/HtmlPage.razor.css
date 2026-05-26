@@ -83,6 +83,7 @@
     flex: 1;
     overflow: hidden;
     background: transparent;
+    position: relative;
 }
 
 .v-frame {
