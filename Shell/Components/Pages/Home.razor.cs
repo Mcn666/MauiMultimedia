@@ -247,6 +247,12 @@ public partial class Home
         else
             dark = mode == "dark";
         await JS.InvokeVoidAsync("eval", $"document.documentElement.setAttribute('data-theme','{(dark ? "dark" : "light")}')");
+
+        // 同步 Android 状态栏
+#if ANDROID
+        if (Microsoft.Maui.ApplicationModel.Platform.CurrentActivity is MauiMultimedia.Shell.MainActivity ma)
+            ma.SetStatusBarStyle(dark);
+#endif
     }
 
     private async Task SetTheme(string mode)
