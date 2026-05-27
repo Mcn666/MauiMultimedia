@@ -8,13 +8,30 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MauiMultimedia.Shell.styles.css" />
     <link rel="icon" href="data:,">
+    <style>
+        /* 默认背景色（在 JS 执行前使用） */
+        :root { background: #ffffff; }
+    </style>
+    <script>
+        (function() {
+            var saved = localStorage.getItem('filebrowser-theme');
+            var dark;
+            if (saved === 'dark') dark = true;
+            else if (saved === 'light') dark = false;
+            else dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            var bg = dark ? '#1a1a1a' : '#ffffff';
+            document.documentElement.style.background = bg;
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
 </head>
 
 <body>
 
     <div class="status-bar-safe-area"></div>
 
-    <div id="app"></div>
+    <div id="app" style="opacity:0;transition:opacity .2s ease"></div>
 
     <div id="blazor-error-ui" data-nosnippet>
         An unhandled error has occurred.
@@ -53,6 +70,7 @@
     </script>
     <!--<script src="_framework/blazor.webview.js" autostart="false"></script>-->
     <script src="scripts/blazor.webview.es2019.js" autostart="false"></script>
+
 
 </body>
 

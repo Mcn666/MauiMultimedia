@@ -140,6 +140,10 @@ public partial class Home
         {
             await RestoreThemeAsync();
             StateHasChanged();
+
+            // 首次渲染完成后淡入显示页面内容
+            await JS.InvokeVoidAsync("eval",
+                "document.getElementById('app').style.opacity = '1'");
         }
     }
 
@@ -232,6 +236,7 @@ public partial class Home
         var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-theme')");
         themeMode = (saved == "light" || saved == "dark" || saved == "system") ? saved : "system";
         await ApplyThemeAsync(themeMode);
+        Preferences.Set("filebrowser-theme", themeMode);
     }
 
     private async Task ApplyThemeAsync(string mode)
@@ -247,9 +252,9 @@ public partial class Home
     private async Task SetTheme(string mode)
     {
         themeMode = mode;
-        showThemeMenu = false;
         await ApplyThemeAsync(mode);
         await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-theme','{mode}')");
+        Preferences.Set("filebrowser-theme", mode);
     }
 
     private Task SetThemeLight() => SetTheme("light");
