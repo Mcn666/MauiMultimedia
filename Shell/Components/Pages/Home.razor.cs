@@ -410,6 +410,8 @@ public partial class Home
     private async Task StartScan(int typeIndex)
     {
         showScanPanel = false;
+        await JS.InvokeVoidAsync("eval",
+            "document.querySelector('.browser-main').classList.remove('panel-open')");
         scanCts?.Cancel();
         scanCts = new CancellationTokenSource();
         var ct = scanCts.Token;

@@ -27,17 +27,54 @@
 
         @* 主内容区 *@
         <main class="browser-main">
-            <div class="browser-header">
-                <div class="path-bar">
-                    <span class="path-label">📂 当前位置：</span>
-                    <span class="path-text" title="@currentPath">@currentPath</span>
-                    <span class="path-short" title="@currentPath">@Path.GetFileName(currentPath.TrimEnd('\\'))</span>
+            <div class="browser-sticky">
+                <div class="browser-header">
+                    <div class="path-bar">
+                        <span class="path-label">📂 当前位置：</span>
+                        <span class="path-text" title="@currentPath">@currentPath</span>
+                        <span class="path-short" title="@currentPath">@Path.GetFileName(currentPath.TrimEnd('\\'))</span>
+                    </div>
+                    <div class="browser-actions">
+                        <button class="btn btn-back" disabled="@isRoot" @onclick="GoBack">
+                            ⬆ 返回上级
+                        </button>
+                        <button class="btn btn-scan-panel" @onclick="ToggleScanPanel" title="文件筛选">⋮</button>
+                    </div>
                 </div>
-                <div class="browser-actions">
-                    <button class="btn btn-back" disabled="@isRoot" @onclick="GoBack">
-                        ⬆ 返回上级
+
+                @* 排序栏 *@
+                <div class="sort-bar">
+                    <button class="btn-sort @GetSortClass("name")" @onclick="OnSortByName" title="按名称排序">
+                        名称 @GetSortArrow("name")
                     </button>
-                    <button class="btn btn-scan-panel" @onclick="ToggleScanPanel" title="文件筛选">⋮</button>
+                    <span class="sort-sep"></span>
+                    <button class="btn-sort @GetSortClass("type")" @onclick="OnSortByType" title="按类型排序">
+                        类型 @GetSortArrow("type")
+                    </button>
+                    <span class="sort-sep"></span>
+                    <button class="btn-sort @GetSortClass("count")" @onclick="OnSortByCount" title="按项目数排序">
+                        项目数 @GetSortArrow("count")
+                    </button>
+                    <span class="sort-sep"></span>
+                    <button class="btn-sort @GetSortClass("date")" @onclick="OnSortByDate" title="按修改时间排序">
+                        修改时间 @GetSortArrow("date")
+                    </button>
+                    <span class="sort-bar-spacer"></span>
+                    <div class="theme-dropdown"
+                         @onmouseenter="() => showThemeMenu = true"
+                         @onmouseleave="() => showThemeMenu = false">
+                        <button class="btn-sort-icon" @onclick="() => showThemeMenu = !showThemeMenu" title="切换主题">
+                            @(themeMode == "light" ? "☀️" : themeMode == "dark" ? "🌙" : "🖥️")
+                        </button>
+                        <div class="theme-menu @(showThemeMenu ? "open" : "")">
+                            <button class="theme-option @(themeMode == "light" ? "active" : "")" @onclick="SetThemeLight">☀️ 浅色</button>
+                            <button class="theme-option @(themeMode == "dark" ? "active" : "")" @onclick="SetThemeDark">🌙 深色</button>
+                            <button class="theme-option @(themeMode == "system" ? "active" : "")" @onclick="SetThemeSystem">🖥️ 跟随系统</button>
+                        </div>
+                    </div>
+                    <button class="btn-sort-icon" @onclick="ToggleViewMode" title="@(viewMode == "list" ? "切换网格视图" : "切换列表视图")">
+                        @(viewMode == "list" ? "▦" : "☰")
+                    </button>
                 </div>
             </div>
 
@@ -59,41 +96,6 @@
             {
                 <div class="scan-overlay" @onclick="CloseScanPanel"></div>
             }
-
-            @* 排序栏 *@
-            <div class="sort-bar">
-                <button class="btn-sort @GetSortClass("name")" @onclick="OnSortByName" title="按名称排序">
-                    名称 @GetSortArrow("name")
-                </button>
-                <span class="sort-sep"></span>
-                <button class="btn-sort @GetSortClass("type")" @onclick="OnSortByType" title="按类型排序">
-                    类型 @GetSortArrow("type")
-                </button>
-                <span class="sort-sep"></span>
-                <button class="btn-sort @GetSortClass("count")" @onclick="OnSortByCount" title="按项目数排序">
-                    项目数 @GetSortArrow("count")
-                </button>
-                <span class="sort-sep"></span>
-                <button class="btn-sort @GetSortClass("date")" @onclick="OnSortByDate" title="按修改时间排序">
-                    修改时间 @GetSortArrow("date")
-                </button>
-                <span class="sort-bar-spacer"></span>
-                <div class="theme-dropdown"
-                     @onmouseenter="() => showThemeMenu = true"
-                     @onmouseleave="() => showThemeMenu = false">
-                    <button class="btn-sort-icon" @onclick="() => showThemeMenu = !showThemeMenu" title="切换主题">
-                        @(themeMode == "light" ? "☀️" : themeMode == "dark" ? "🌙" : "🖥️")
-                    </button>
-                    <div class="theme-menu @(showThemeMenu ? "open" : "")">
-                        <button class="theme-option @(themeMode == "light" ? "active" : "")" @onclick="SetThemeLight">☀️ 浅色</button>
-                        <button class="theme-option @(themeMode == "dark" ? "active" : "")" @onclick="SetThemeDark">🌙 深色</button>
-                        <button class="theme-option @(themeMode == "system" ? "active" : "")" @onclick="SetThemeSystem">🖥️ 跟随系统</button>
-                    </div>
-                </div>
-                <button class="btn-sort-icon" @onclick="ToggleViewMode" title="@(viewMode == "list" ? "切换网格视图" : "切换列表视图")">
-                    @(viewMode == "list" ? "▦" : "☰")
-                </button>
-            </div>
 
             @if (isLoading)
     {
@@ -129,8 +131,8 @@
         @if (isScanned)
         {
             <div class="scan-header">
-                <button class="btn btn-back" style="font-size:13px;padding:4px 10px;" @onclick="ExitScan">← 返回浏览</button>
-                <span style="font-size:13px;color:var(--text-secondary);">@scanTypeLabel (@items.Count 个文件)</span>
+                <button class="btn btn-back" @onclick="ExitScan">← 返回浏览</button>
+                <span class="scan-info">@scanTypeLabel (@items.Count 个文件)</span>
             </div>
         }
         @if (viewMode == "grid")

@@ -268,10 +268,19 @@ h1:focus {
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-radius: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
     gap: 8px;
     position: relative; /* 移动端下拉菜单位置基准 */
+}
+
+/* 地址栏 + 排序栏固定容器 */
+.browser-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-primary);
+    padding-bottom: 8px;
 }
 
 .path-bar {
@@ -537,9 +546,18 @@ h1:focus {
     align-items: center;
     gap: 8px;
     padding: 8px 16px;
+    margin-bottom: 10px;
     background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-primary);
-    flex-shrink: 0;
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    font-size: 13px;
+}
+.scan-header .btn-back {
+    padding: 4px 10px;
+    font-size: 13px;
+}
+.scan-header .scan-info {
+    color: var(--text-secondary);
 }
 /* --- Sort Bar --- */
 
@@ -548,7 +566,6 @@ h1:focus {
     align-items: center;
     gap: 0;
     padding: 6px 12px;
-    margin-bottom: 10px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-radius: 8px;
