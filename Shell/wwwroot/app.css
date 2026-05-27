@@ -353,7 +353,7 @@ h1:focus {
 /* --- Overlay modal (权限/查看器选择) --- */
 .picker-overlay {
     position: fixed;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     background: rgba(0,0,0,.45);
     display: flex;
     align-items: center;
@@ -507,7 +507,7 @@ h1:focus {
 .scan-type-btn:hover { background: var(--hover-bg); }
 .scan-overlay {
     position: fixed;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     background: rgba(0,0,0,.3);
     z-index: 998;
 }
