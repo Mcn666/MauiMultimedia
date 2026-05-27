@@ -182,6 +182,20 @@
     pointer-events: none;
 }
 
+/* ── 滑动切换动画容器 ── */
+
+.img-slide {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    will-change: transform;
+}
+.img-slide.sliding {
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* ── 信息叠加层 ── */
 
 .img-info {
@@ -205,4 +219,146 @@
 
 .i-sep {
     color: rgba(255,255,255,0.25);
+}
+
+/* ── 图片详情面板 ── */
+
+.v-detail-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.3);
+    z-index: 100;
+}
+
+.v-detail-panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: 280px;
+    height: 100vh;
+    background: var(--bg-primary);
+    border-left: 1px solid var(--border-primary);
+    box-shadow: -4px 0 16px rgba(0,0,0,.12);
+    z-index: 101;
+    display: flex;
+    flex-direction: column;
+    animation: vDetailSlideIn .2s ease;
+}
+@keyframes vDetailSlideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.v-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-primary);
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+}
+
+.v-detail-close {
+    width: 28px; height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 6px;
+    color: var(--text-tertiary);
+    transition: background 0.12s;
+}
+.v-detail-close:hover { background: var(--hover-bg); }
+
+.v-detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.v-detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.v-detail-label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.v-detail-value {
+    font-size: 13px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.v-detail-path {
+    font-size: 11px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+/* ── 拼接视图 ── */
+
+.v-stitch-container {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-viewport, #1a1a1a);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 0;
+}
+
+.v-stitch-img {
+    width: auto;
+    max-width: min(100%, 800px);
+    height: auto;
+    display: block;
+}
+
+.v-btn-active {
+    background: var(--accent-bg, #2196F3) !important;
+    color: #fff !important;
+}
+
+/* ── 移动端适配 ── */
+
+@media (max-width: 600px) {
+    .v-toolbar {
+        padding: 4px 8px;
+        gap: 3px;
+    }
+    .v-title {
+        font-size: 12px;
+        max-width: 100px;
+    }
+    .v-pos { font-size: 10px; }
+
+    /* 非必要的按钮隐藏（移动端用滑动手势 + 双指缩放） */
+    .v-btn-nav { display: none; }              /* ← →（移动端滑动切换） */
+    .v-btn-icon { display: none; }             /* − + */
+    .v-btn-sm:not(.v-detail-btn):not(.v-stitch-btn) { display: none; }  /* 适应 原大 */
+    .v-zoom { display: none; }                 /* 缩放百分比 */
+    .v-sep { display: none; }                  /* 分隔线 */
+
+    .v-detail-panel { width: 240px; }
+    .v-detail-body { padding: 8px 12px; gap: 8px; }
+
+    .v-stitch-container { gap: 2px; padding: 4px 0; }
 }

@@ -30,6 +30,20 @@ public partial class ImagePage : ComponentBase
     private int imageHeight;
     private string fileSizeDisplay = "";
     private string imageFormat = "";
+    private bool showDetails;
+
+    // 拼接模式
+    private bool stitchMode;
+    private bool canStitch;
+    private string? stitchError;
+    private List<StitchImageInfo>? stitchImages;
+    private class StitchImageInfo
+    {
+        public string DataUri { get; init; } = "";
+        public int Width { get; init; }
+        public int Height { get; init; }
+    }
+    private float _stitchZoom = 1.0f;
 
     // 缩放
     private const float ZoomStep = 1.5f;
@@ -48,13 +62,8 @@ public partial class ImagePage : ComponentBase
     private bool isDragging;
     private float dragStartX, dragStartY, panAtDragStartX, panAtDragStartY;
 
-    // 触摸状态
-    private long touchId1, touchId2;
-    private float touchStartDist;
-    private float touchStartZoom;
-    private float touchMidX, touchMidY;
+    // 触摸状态（部分在新方法区声明以匹配类型变化）
     private bool isTouchPan;
-    private float touchPanStartX, touchPanStartY, touchPanAtDragStartX, touchPanAtDragStartY;
 
     private bool hasPrev => currentIndex > 0;
     private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
@@ -116,6 +125,7 @@ public partial class ImagePage : ComponentBase
             string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
         ResetView();
         await LoadImageAsync();
+        _ = CheckCanStitchAsync();
     }
 
     private void ResetView()
@@ -125,6 +135,112 @@ public partial class ImagePage : ComponentBase
         zoomFitMode = true;
         panX = 0;
         panY = 0;
+    }
+
+    /// <summary>
+    /// 异步检查所有图片宽度是否相似，结果通过 canStitch 通知 UI
+    /// </summary>
+    private async Task CheckCanStitchAsync()
+    {
+        canStitch = false;
+        if (fileList.Count < 2) return;
+
+        // 先让 UI 完成当前渲染
+        await Task.Yield();
+
+        var widths = new List<int>();
+        foreach (var p in fileList)
+        {
+            var c = DecodeCache.Get(p);
+            if (c.HasValue)
+                widths.Add(c.Value.Width);
+        }
+        if (widths.Count < 2) return;
+
+        int minW = widths.Min();
+        int maxW = widths.Max();
+        canStitch = minW > 0 && (float)minW / maxW >= 0.95f;
+
+        // 通知 UI 拼接按钮已就绪（如适用）
+        if (canStitch)
+            StateHasChanged();
+    }
+
+    private void ToggleDetails() => showDetails = !showDetails;
+    private void CloseDetails() => showDetails = false;
+
+    // ═══════════ 拼接模式 ═══════════
+
+    private async Task ToggleStitch()
+    {
+        stitchMode = !stitchMode;
+        _stitchZoom = 0.75f;
+        if (!stitchMode)
+        {
+            stitchImages = null;
+            stitchError = null;
+            return;
+        }
+
+        // 检查宽度是否相似
+        var cachedSizes = new List<(string path, int w, int h)>();
+        foreach (var p in fileList)
+        {
+            var c = DecodeCache.Get(p);
+            if (c.HasValue) cachedSizes.Add((p, c.Value.Width, c.Value.Height));
+        }
+        if (cachedSizes.Count < 2)
+        {
+            stitchError = "至少需要 2 张图片才能拼接";
+            return;
+        }
+
+        // 计算宽度差
+        int minW = cachedSizes.Min(l => l.w);
+        int maxW = cachedSizes.Max(l => l.w);
+        if (maxW == 0)
+        {
+            stitchError = "无法获取图片尺寸";
+            return;
+        }
+        float ratio = (float)minW / maxW;
+        if (ratio < 0.95f)
+        {
+            stitchError = "图片尺寸差异过大，无法拼接";
+            return;
+        }
+
+        // 加载所有图片（已缓存的直接使用，未缓存的解码）
+        var semaphore = new SemaphoreSlim(2);
+        var tasks = fileList.Select(async path =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                var cached = DecodeCache.Get(path);
+                if (cached.HasValue)
+                    return new StitchImageInfo { DataUri = cached.Value.DataUri, Width = cached.Value.Width, Height = cached.Value.Height };
+
+                var result = await Task.Run(() => ImageProcessingService.DecodeImage(path));
+                DecodeCache.Set(path, result.DataUri, result.Width, result.Height);
+                return new StitchImageInfo { DataUri = result.DataUri, Width = result.Width, Height = result.Height };
+            }
+            finally { semaphore.Release(); }
+        });
+        stitchImages = (await Task.WhenAll(tasks)).ToList();
+        stitchError = null;
+
+        // 滚动到当前图片位置
+        StateHasChanged();
+        await Task.Delay(50);
+        await JS.InvokeVoidAsync("eval", $@"
+            var c = document.querySelector('.v-stitch-container');
+            if (c) {{
+                var imgs = c.querySelectorAll('img');
+                if (imgs.length > {currentIndex})
+                    imgs[{currentIndex}].scrollIntoView({{block:'center'}});
+            }}
+        ");
     }
 
     // ═══════════ 图片加载 + 缓存 + 预加载 ═══════════
@@ -188,6 +304,7 @@ public partial class ImagePage : ComponentBase
         finally
         {
             isLoading = false;
+            _ = CheckCanStitchAsync();
             StateHasChanged();
         }
     }
@@ -260,17 +377,30 @@ public partial class ImagePage : ComponentBase
         panY = 0;
     }
 
-    private void ZoomIn() { ExitFit(); displayZoom = Math.Min(displayZoom * ZoomStep, MaxZoom); ClampPan(); }
-    private void ZoomOut() { ExitFit(); displayZoom = Math.Max(displayZoom / ZoomStep, MinZoom); ClampPan(); }
+    private void ZoomIn()
+    {
+        if (stitchMode) { _stitchZoom = Math.Min(_stitchZoom * 1.15f, 3.0f); StateHasChanged(); return; }
+        ExitFit(); displayZoom = Math.Min(displayZoom * ZoomStep, MaxZoom); ClampPan();
+    }
+    private void ZoomOut()
+    {
+        if (stitchMode) { _stitchZoom = Math.Max(_stitchZoom / 1.15f, 0.5f); StateHasChanged(); return; }
+        ExitFit(); displayZoom = Math.Max(displayZoom / ZoomStep, MinZoom); ClampPan();
+    }
 
     private void ZoomFit()
     {
+        if (stitchMode) { _stitchZoom = 0.75f; StateHasChanged(); return; }
         zoomFitMode = true;
         displayZoom = fitZoom;
         panX = 0; panY = 0;
     }
 
-    private void ZoomActual() { ExitFit(); displayZoom = 1.0f; }
+    private void ZoomActual()
+    {
+        if (stitchMode) { _stitchZoom = 1.0f; StateHasChanged(); return; }
+        ExitFit(); displayZoom = 1.0f;
+    }
 
     private void OnWheel(WheelEventArgs e)
     {
@@ -330,11 +460,22 @@ public partial class ImagePage : ComponentBase
 
     // ═══════════ 触摸手势 ═══════════
 
+    private float touchStartX, touchStartY;
+    private float touchPanStartX, touchPanStartY;
+    private float touchPanAtDragStartX, touchPanAtDragStartY;
+    private long touchId1, touchId2;
+    private float touchMidX, touchMidY;
+    private float touchStartDist;
+    private float touchStartZoom;
+    private float touchSwipeDx; // 累计水平滑动距离，用于左滑右滑翻页
+
     private void OnTouchStart(TouchEventArgs e)
     {
-        if (zoomFitMode) return;
+        touchSwipeDx = 0;
         if (e.Touches.Length == 1)
         {
+            touchStartX = (float)e.Touches[0].ClientX;
+            touchStartY = (float)e.Touches[0].ClientY;
             isTouchPan = true;
             touchId1 = e.Touches[0].Identifier;
             touchPanStartX = (float)e.Touches[0].ClientX;
@@ -358,11 +499,10 @@ public partial class ImagePage : ComponentBase
 
     private void OnTouchMove(TouchEventArgs e)
     {
-        if (zoomFitMode) return;
-
-        // 双指捏合缩放
+        // 双指捏合缩放（任何模式下都支持）
         if (e.Touches.Length == 2)
         {
+            isTouchPan = false;
             float dx = (float)(e.Touches[0].ClientX - e.Touches[1].ClientX);
             float dy = (float)(e.Touches[0].ClientY - e.Touches[1].ClientY);
             float dist = MathF.Sqrt(dx * dx + dy * dy);
@@ -390,19 +530,36 @@ public partial class ImagePage : ComponentBase
             return;
         }
 
-        // 单指拖拽平移
+        // 单指：适应模式下累计滑动距离，非适应模式拖拽平移
         if (e.Touches.Length == 1 && isTouchPan)
         {
-            panX = touchPanAtDragStartX + (float)(e.Touches[0].ClientX - touchPanStartX);
-            panY = touchPanAtDragStartY + (float)(e.Touches[0].ClientY - touchPanStartY);
-            ClampPan();
-            StateHasChanged();
+            float cx = (float)e.Touches[0].ClientX;
+
+            if (zoomFitMode)
+            {
+                // 适应模式：只记录滑动距离，拖拽手感轻反馈
+                touchSwipeDx = cx - touchStartX;
+            }
+            else
+            {
+                // 非适应模式：拖拽平移
+                panX = touchPanAtDragStartX + (float)(e.Touches[0].ClientX - touchPanStartX);
+                panY = touchPanAtDragStartY + (float)(e.Touches[0].ClientY - touchPanStartY);
+                ClampPan();
+                StateHasChanged();
+            }
         }
     }
 
     private void OnTouchEnd(TouchEventArgs e)
     {
         isTouchPan = false;
+
+        // 适应模式下检测左滑右滑翻页
+        if (zoomFitMode && Math.Abs(touchSwipeDx) > 60)
+        {
+            _ = touchSwipeDx > 0 ? GoPrev() : GoNext();
+        }
     }
 
     // ═══════════ 键盘 ═══════════
@@ -411,9 +568,9 @@ public partial class ImagePage : ComponentBase
     {
         switch (e.Key)
         {
-            case "ArrowLeft": GoPrev(); break;
+            case "ArrowLeft": _ = GoPrev(); break;
             case "ArrowRight":
-            case " ": GoNext(); break;
+            case " ": _ = GoNext(); break;
             case "ArrowUp":
             case "=": ZoomIn(); StateHasChanged(); break;
             case "ArrowDown":
@@ -426,6 +583,7 @@ public partial class ImagePage : ComponentBase
 
     private void GoBack()
     {
+        stitchMode = false; stitchImages = null;
         _ = JS.InvokeVoidAsync("eval",
             "document.documentElement.style.overflowY = ''");
         var ret = NavState.ReturnUrl;
@@ -433,19 +591,70 @@ public partial class ImagePage : ComponentBase
         else Navigation.NavigateTo("/");
     }
 
-    private void GoPrev()
+    // 滑动切换动画
+    private float _slideOffsetPercent;
+    private bool _slideInProgress;
+    private bool _isAnimating;
+
+    private async Task GoPrev()
     {
-        if (!hasPrev) return;
+        if (!hasPrev || _isAnimating) return;
+        _isAnimating = true;
+        stitchMode = false; stitchImages = null;
+
+        // Phase 1: 滑出（向右）
+        _slideOffsetPercent = 100;
+        _slideInProgress = true;
+        StateHasChanged();
+        await Task.Delay(280);
+
+        // Phase 2: 切换图片，定位到右侧外
+        _slideInProgress = false;
+        _slideOffsetPercent = -100;
         currentIndex--; filePath = fileList[currentIndex];
         fileName = Path.GetFileName(filePath);
-        ResetView(); _ = LoadImageAsync();
+        ResetView();
+        await LoadImageAsync();
+        StateHasChanged();
+        await Task.Delay(16);
+
+        // Phase 3: 滑入（向左）
+        _slideOffsetPercent = 0;
+        _slideInProgress = true;
+        StateHasChanged();
+        await Task.Delay(280);
+
+        _isAnimating = false;
     }
 
-    private void GoNext()
+    private async Task GoNext()
     {
-        if (!hasNext) return;
+        if (!hasNext || _isAnimating) return;
+        _isAnimating = true;
+        stitchMode = false; stitchImages = null;
+
+        // Phase 1: 滑出（向左）
+        _slideOffsetPercent = -100;
+        _slideInProgress = true;
+        StateHasChanged();
+        await Task.Delay(280);
+
+        // Phase 2: 切换图片，定位到左侧外
+        _slideInProgress = false;
+        _slideOffsetPercent = 100;
         currentIndex++; filePath = fileList[currentIndex];
         fileName = Path.GetFileName(filePath);
-        ResetView(); _ = LoadImageAsync();
+        ResetView();
+        await LoadImageAsync();
+        StateHasChanged();
+        await Task.Delay(16);
+
+        // Phase 3: 滑入（向右）
+        _slideOffsetPercent = 0;
+        _slideInProgress = true;
+        StateHasChanged();
+        await Task.Delay(280);
+
+        _isAnimating = false;
     }
 }
