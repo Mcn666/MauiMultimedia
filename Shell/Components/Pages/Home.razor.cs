@@ -383,8 +383,19 @@ public partial class Home
         FileSystemService.RequestStoragePermission();
     }
 
-    private void ToggleScanPanel() { showScanPanel = !showScanPanel; }
-    private void CloseScanPanel() { showScanPanel = false; }
+    private async Task ToggleScanPanel()
+    {
+        showScanPanel = !showScanPanel;
+        if (showScanPanel)
+            await JS.InvokeVoidAsync("eval",
+                "document.querySelector('.browser-main').classList.add('panel-open')");
+    }
+    private async Task CloseScanPanel()
+    {
+        showScanPanel = false;
+        await JS.InvokeVoidAsync("eval",
+            "document.querySelector('.browser-main').classList.remove('panel-open')");
+    }
 
     private void ExitScan()
     {

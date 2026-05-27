@@ -502,6 +502,14 @@ h1:focus {
     background: rgba(0,0,0,.3);
     z-index: 998;
 }
+/* 面板打开时：拦截主内容区点击，仅 overlay 和 panel 可点 */
+.browser-main.panel-open {
+    pointer-events: none;
+}
+.browser-main.panel-open .scan-overlay,
+.browser-main.panel-open .scan-panel {
+    pointer-events: auto;
+}
 
 .btn-scan-panel {
     display: none;
