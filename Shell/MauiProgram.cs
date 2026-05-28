@@ -20,6 +20,7 @@ namespace MauiMultimedia.Shell
             builder.Services.AddSingleton<IFileSystemService, FileSystemService>();
             builder.Services.AddSingleton<FileBrowserStateService>();
             builder.Services.AddSingleton<IFileNavigationState>(sp => sp.GetRequiredService<FileBrowserStateService>());
+            builder.Services.AddSingleton<AliasService>();
             builder.Services.AutoRegisterViewers();
 
 #if DEBUG

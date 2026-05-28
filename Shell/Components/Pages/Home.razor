@@ -8,6 +8,7 @@
 @inject IEnumerable<IViewProvider> ViewProviders
 @inject IEnumerable<IFileViewer> FileViewers
 @inject FileBrowserStateService BrowserState
+@inject AliasService Alias
 
 <div class="file-browser">
     <div class="browser-layout">
@@ -153,22 +154,25 @@
                     {
                         <div class="grid-thumb">
                             <img src="@snap" class="grid-thumb-img" alt="" loading="lazy" />
-                            <div class="grid-thumb-label">@item.Name</div>
+                            <div class="grid-thumb-label">@GetDisplayName(item)</div>
                         </div>
                     }
                     else if (CanProvideSnapshot(item))
                     {
                         <div class="grid-thumb" data-thumb-path="@item.FullPath">
                             <div class="grid-thumb-placeholder-icon">@GetItemIcon(item)</div>
-                            <div class="grid-thumb-label">@item.Name</div>
+                            <div class="grid-thumb-label">@GetDisplayName(item)</div>
                         </div>
                     }
                     else
                     {
                         <span class="grid-icon">@GetItemIcon(item)</span>
-                        <span class="grid-name">@item.Name</span>
+                        <span class="grid-name">@GetDisplayName(item)</span>
                         <span class="grid-count">@item.ChildCountDisplay</span>
                     }
+                    <span class="grid-alias-btn" @onclick:stopPropagation="true"
+                          @onclick="() => OnItemRightClick(item)"
+                          title="设置别名">✏️</span>
                 </div>
             }
         </div>
@@ -197,9 +201,12 @@
                      tabindex="0"
                      title="@item.FullPath">
                     <span class="col-icon item-icon">@GetItemIcon(item)</span>
-                    <span class="col-name item-name">@item.Name</span>
+                    <span class="col-name item-name">@GetDisplayName(item)</span>
                     <span class="col-count item-count">@item.ChildCountDisplay</span>
                     <span class="col-date item-date">@item.LastModifiedDisplay</span>
+                    <span class="col-alias" @onclick:stopPropagation="true"
+                          @onclick="() => OnItemRightClick(item)"
+                          title="设置别名">✏️</span>
                 </div>
             }
         </div>
@@ -247,6 +254,32 @@ else if (showViewerPicker && pendingItem != null)
                             <span class="picker-item-name">@GetViewerDisplayName(v)</span>
                         </button>
                     }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* 设置别名对话框 *@
+@if (_showAliasDialog && _aliasTarget != null)
+{
+    <div class="picker-overlay" @onclick="CloseAliasDialog" @onkeydown="() => {}">
+        <div class="picker-modal" @onclick:stopPropagation="true">
+            <div class="picker-header">
+                <span class="picker-title">✏️ 设置别名</span>
+                <button class="picker-close" @onclick="CloseAliasDialog">✕</button>
+            </div>
+            <div class="picker-body">
+                <div class="picker-file">@_aliasTarget.Name</div>
+                <input class="alias-input" @bind="_aliasText"
+                       @onkeydown="OnAliasKeyDown"
+                       placeholder="输入别名（留空清除）"
+                       autofocus />
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="btn btn-back" style="flex:1;justify-content:center;"
+                            @onclick="ConfirmAlias">确认</button>
+                    <button class="btn btn-back" style="flex:1;justify-content:center;"
+                            @onclick="CloseAliasDialog">取消</button>
                 </div>
             </div>
         </div>

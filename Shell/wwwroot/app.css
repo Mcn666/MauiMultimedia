@@ -466,6 +466,19 @@ h1:focus {
     justify-content: center;
     z-index: 1000;
 }
+@media (max-width: 600px) {
+    .picker-overlay {
+        align-items: flex-start;
+        padding-top: 10vh;
+    }
+    .picker-modal {
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    .picker-body {
+        padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    }
+}
 .picker-modal {
     background: var(--bg-primary);
     border-radius: 12px;
@@ -1007,6 +1020,90 @@ h1:focus {
 .item-date {
     font-size: 13px;
     color: var(--text-tertiary);
+}
+
+.col-alias {
+    flex: 0 0 28px;
+    text-align: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s;
+    font-size: 13px;
+    user-select: none;
+    box-sizing: border-box;
+}
+.item-row:hover .col-alias,
+.item-row:focus-within .col-alias { opacity: 1; }
+.col-alias-set {
+    opacity: 0.7 !important;
+}
+@media (hover: none) {
+    .col-alias { opacity: 0.5; }
+}
+
+.grid-alias-btn {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s;
+    z-index: 2;
+    user-select: none;
+    background: rgba(0,0,0,.35);
+    border-radius: 4px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+.grid-item:hover .grid-alias-btn,
+.grid-item:focus-within .grid-alias-btn { opacity: 1; }
+.grid-alias-set {
+    opacity: 0.7 !important;
+}
+@media (hover: none) {
+    .grid-alias-btn { opacity: 0.6; }
+}
+
+/* ── 别名输入框 ── */
+.alias-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+    margin-top: 10px;
+}
+.alias-input:focus {
+    border-color: var(--text-link);
+}
+
+/* ── 移动端文件名换行 ── */
+@media (max-width: 600px) {
+    .item-name {
+        white-space: normal !important;
+        word-break: break-all !important;
+        line-height: 1.3;
+    }
+    .grid-name {
+        white-space: normal !important;
+        word-break: break-all !important;
+        line-height: 1.3;
+    }
+    .grid-thumb-label {
+        white-space: normal !important;
+        word-break: break-all !important;
+        line-height: 1.3;
+        padding: 4px 6px;
+    }
 }
 
 /* --- Count column --- */

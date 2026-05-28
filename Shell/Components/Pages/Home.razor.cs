@@ -3,6 +3,7 @@ using MauiMultimedia.Core.Models;
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Shell.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 
 namespace MauiMultimedia.Shell.Components.Pages;
@@ -24,6 +25,9 @@ public partial class Home
     private bool showViewerPicker = false;
     private FileSystemItem? pendingItem;
     private List<IFileViewer> availableViewers = new();
+    private bool _showAliasDialog;
+    private FileSystemItem? _aliasTarget;
+    private string _aliasText = "";
     private bool permissionDenied;
     private bool showScanPanel;
     private bool isScanning;
@@ -60,6 +64,44 @@ public partial class Home
         foreach (var p in ViewProviders)
             if (p.CanHandle(item)) { var i = p.GetIcon(item); if (i != null) return i; }
         return "\U0001F4C4";
+    }
+
+    private string GetDisplayName(FileSystemItem item)
+    {
+        var alias = Alias.GetAlias(item.FullPath);
+        return alias ?? item.Name;
+    }
+
+    private async Task OnItemRightClick(FileSystemItem item)
+    {
+        _aliasTarget = item;
+        _aliasText = Alias.GetAlias(item.FullPath) ?? "";
+        _showAliasDialog = true;
+        StateHasChanged();
+        // 延迟聚焦输入框
+        await Task.Delay(100);
+        await JS.InvokeVoidAsync("eval",
+            "document.querySelector('.alias-input')?.focus()");
+    }
+
+    private void ConfirmAlias()
+    {
+        if (_aliasTarget == null) return;
+        Alias.SetAlias(_aliasTarget.FullPath, _aliasText);
+        _showAliasDialog = false;
+        StateHasChanged();
+    }
+
+    private void CloseAliasDialog()
+    {
+        _showAliasDialog = false;
+        StateHasChanged();
+    }
+
+    private async Task OnAliasKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { ConfirmAlias(); }
+        else if (e.Key == "Escape") { CloseAliasDialog(); }
     }
 
     private string? GetItemSnapshot(FileSystemItem item)

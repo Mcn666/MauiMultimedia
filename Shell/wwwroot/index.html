@@ -24,6 +24,13 @@
             document.documentElement.style.background = bg;
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
         })();
+
+        // 通过 DotNetStreamReference 创建 blob URL
+        window.createBlobUrl = async function(streamRef, mimeType) {
+            const ab = await streamRef.arrayBuffer();
+            const blob = new Blob([ab], { type: mimeType });
+            return URL.createObjectURL(blob);
+        };
     </script>
 </head>
 

@@ -40,7 +40,7 @@
         <div class="v-stitch-container">
             @foreach (var si in stitchImages)
             {
-                <img src="@si.DataUri" alt="" class="v-stitch-img"
+                <img src="@si.BlobUrl" alt="" class="v-stitch-img" loading="lazy"
                      style="aspect-ratio:@si.Width/@si.Height; max-width:min(100%, @((int)(800 * _stitchZoom))px)" />
             }
         </div>

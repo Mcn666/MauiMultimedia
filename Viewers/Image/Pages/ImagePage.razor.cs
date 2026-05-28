@@ -39,7 +39,7 @@ public partial class ImagePage : ComponentBase
     private List<StitchImageInfo>? stitchImages;
     private class StitchImageInfo
     {
-        public string DataUri { get; init; } = "";
+        public string BlobUrl { get; init; } = "";
         public int Width { get; init; }
         public int Height { get; init; }
     }
@@ -171,12 +171,26 @@ public partial class ImagePage : ComponentBase
 
     // ═══════════ 拼接模式 ═══════════
 
+    /// <summary>撤销所有 blob URL，释放浏览器内存</summary>
+    private async Task RevokeBlobUrls()
+    {
+        if (stitchImages != null)
+        {
+            var urls = stitchImages.Select(si => si.BlobUrl)
+                .Where(u => !string.IsNullOrEmpty(u)).ToArray();
+            if (urls.Length > 0)
+                await JS.InvokeVoidAsync("eval",
+                    urls.Select(u => $"URL.revokeObjectURL('{u}')").Aggregate((a, b) => a + ";" + b));
+        }
+    }
+
     private async Task ToggleStitch()
     {
         stitchMode = !stitchMode;
         _stitchZoom = 0.75f;
         if (!stitchMode)
         {
+            await RevokeBlobUrls();
             stitchImages = null;
             stitchError = null;
             return;
@@ -210,24 +224,41 @@ public partial class ImagePage : ComponentBase
             return;
         }
 
-        // 加载所有图片（已缓存的直接使用，未缓存的解码）
-        var semaphore = new SemaphoreSlim(2);
-        var tasks = fileList.Select(async path =>
+        // 收集每张图片，用 DotNetStreamReference 传给 JS 创建 blob URL
+        stitchImages = new List<StitchImageInfo>(fileList.Count);
+        foreach (var path in fileList)
         {
-            await semaphore.WaitAsync();
+            var cached = DecodeCache.Get(path);
+            int w, h;
+            if (cached.HasValue) { w = cached.Value.Width; h = cached.Value.Height; }
+            else
+            {
+                var dim = await Task.Run(() => ImageProcessingService.GetImageDimensions(path));
+                w = dim.width; h = dim.height;
+            }
+
+            // 通过 DotNetStreamReference 传文件流 → JS 创建 blob URL
             try
             {
-                var cached = DecodeCache.Get(path);
-                if (cached.HasValue)
-                    return new StitchImageInfo { DataUri = cached.Value.DataUri, Width = cached.Value.Width, Height = cached.Value.Height };
-
-                var result = await Task.Run(() => ImageProcessingService.DecodeImage(path));
-                DecodeCache.Set(path, result.DataUri, result.Width, result.Height);
-                return new StitchImageInfo { DataUri = result.DataUri, Width = result.Width, Height = result.Height };
+                var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+                var mime = ext switch
+                {
+                    "jpg" or "jpeg" => "image/jpeg",
+                    "png" => "image/png",
+                    "gif" => "image/gif",
+                    "webp" => "image/webp",
+                    "bmp" => "image/bmp",
+                    _ => "image/jpeg"
+                };
+                var streamRef = new DotNetStreamReference(File.OpenRead(path));
+                var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, mime);
+                stitchImages.Add(new StitchImageInfo { BlobUrl = blobUrl, Width = w, Height = h });
             }
-            finally { semaphore.Release(); }
-        });
-        stitchImages = (await Task.WhenAll(tasks)).ToList();
+            catch
+            {
+                // 某一张失败继续处理其他
+            }
+        }
         stitchError = null;
 
         // 滚动到当前图片位置
