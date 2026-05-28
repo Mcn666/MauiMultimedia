@@ -4,11 +4,11 @@
 @inject IFileNavigationState NavState
 
 <div class="viewer-page">
-    <div class="viewer-toolbar">
-        <button class="btn btn-back" @onclick="GoBack">⬅ 返回</button>
-        <button class="btn btn-nav" disabled="@(hasPrev ? null : true)" @onclick="GoPrev">⬅ 上一个</button>
-        <span class="viewer-title" title="@filePath">@fileName</span>
-        <button class="btn btn-nav" disabled="@(hasNext ? null : true)" @onclick="GoNext">下一个 ➡</button>
+    <div class="v-toolbar">
+        <button class="v-btn" @onclick="GoBack">← 返回</button>
+        <button class="v-btn v-btn-nav" disabled="@(hasPrev ? null : true)" @onclick="GoPrev">←</button>
+        <span class="v-title" title="@filePath">@fileName</span>
+        <button class="v-btn v-btn-nav" disabled="@(hasNext ? null : true)" @onclick="GoNext">→</button>
     </div>
 
     @if (isLoading)

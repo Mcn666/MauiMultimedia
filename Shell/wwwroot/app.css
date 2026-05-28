@@ -124,6 +124,112 @@
     }
 }
 
+/* ===== 查看器顶部工具栏（全局统一） ===== */
+
+.v-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 7px 12px;
+    margin: 6px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 7px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    user-select: none;
+}
+
+.v-title {
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 0;
+    margin: 0 4px;
+}
+
+.v-pos {
+    flex: 1;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    margin-right: 4px;
+}
+
+.v-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border-primary);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+.v-zoom {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 44px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    letter-spacing: 0.3px;
+}
+
+.v-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--btn-border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    transition: background 0.12s;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.4;
+}
+
+.v-btn:hover:not(:disabled) {
+    background: var(--btn-hover-bg);
+}
+
+.v-btn:disabled {
+    opacity: var(--btn-disabled-opacity);
+    cursor: default;
+}
+
+.v-btn-icon {
+    padding: 4px 8px;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.v-btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+@media (max-width: 600px) {
+    .v-toolbar {
+        padding: 4px 8px;
+        gap: 3px;
+    }
+    .v-title { font-size: 12px; max-width: 100px; }
+    .v-pos { font-size: 10px; }
+    .v-btn-nav { display: none; }
+    .v-btn-icon { display: none; }
+    .v-btn-sm:not(.v-detail-btn):not(.v-stitch-btn) { display: none; }
+    .v-zoom { display: none; }
+    .v-sep { display: none; }
+}
+
 /* ===== Scrollbar (page-level only) ===== */
 ::-webkit-scrollbar {
     width: 10px;

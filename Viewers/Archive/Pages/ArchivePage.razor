@@ -12,14 +12,15 @@
 @inject IEnumerable<IFileViewer> Viewers
 @inject IFileSystemService FileSystem
 
-<div class="browser-items" style="margin:0;border-radius:0;border:none;height:100vh;display:flex;flex-direction:column;">
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border-primary);flex-shrink:0;">
-        <button style="width:30px;height:30px;border-radius:6px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;" @onclick="GoBack">←</button>
-        <span style="font-size:22px;flex-shrink:0;">📦</span>
-        <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@fileName</div>
-            <div style="font-size:11px;color:var(--text-tertiary);">@(items.Count > 0 ? $"{items.Count} 项" : "")</div>
-        </div>
+<div class="viewer-page" style="height:100vh;display:flex;flex-direction:column;">
+    <div class="v-toolbar">
+        <button class="v-btn" @onclick="GoBack">← 返回</button>
+        <span style="font-size:18px;flex-shrink:0;">📦</span>
+        <span class="v-title">@fileName</span>
+        @if (items.Count > 0)
+        {
+            <span style="font-size:12px;color:var(--text-tertiary);margin-left:4px;">- @(items.Count) 项</span>
+        }
     </div>
     <div class="items-header">
         <span class="col-icon"></span>

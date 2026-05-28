@@ -9,19 +9,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* ── 工具栏：跟随 Shell 主题 ── */
-
-.v-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-primary);
-    flex-shrink: 0;
-    z-index: 20;
-    user-select: none;
-}
+/* ── 工具栏（v-toolbar 已在 app.css 全局定义） ── */
 
 .v-title {
     flex: 0 1 auto;
@@ -340,23 +328,6 @@
 /* ── 移动端适配 ── */
 
 @media (max-width: 600px) {
-    .v-toolbar {
-        padding: 4px 8px;
-        gap: 3px;
-    }
-    .v-title {
-        font-size: 12px;
-        max-width: 100px;
-    }
-    .v-pos { font-size: 10px; }
-
-    /* 非必要的按钮隐藏（移动端用滑动手势 + 双指缩放） */
-    .v-btn-nav { display: none; }              /* ← →（移动端滑动切换） */
-    .v-btn-icon { display: none; }             /* − + */
-    .v-btn-sm:not(.v-detail-btn):not(.v-stitch-btn) { display: none; }  /* 适应 原大 */
-    .v-zoom { display: none; }                 /* 缩放百分比 */
-    .v-sep { display: none; }                  /* 分隔线 */
-
     .v-detail-panel { width: 240px; }
     .v-detail-body { padding: 8px 12px; gap: 8px; }
 
