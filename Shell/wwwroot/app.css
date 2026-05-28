@@ -40,6 +40,8 @@
 
     --theme-btn-bg: #e8e8e8;
     --theme-btn-icon: #f4b400;
+
+    --bg-viewport: #e8e8e8;
 }
 
 /* Dark theme (explicit) */
@@ -80,6 +82,8 @@
 
     --theme-btn-bg: #444444;
     --theme-btn-icon: #a0c4ff;
+
+    --bg-viewport: #111111;
 }
 
 /* Auto dark when OS dark and no manual override */
@@ -121,6 +125,8 @@
 
         --theme-btn-bg: #444444;
         --theme-btn-icon: #a0c4ff;
+
+        --bg-viewport: #111111;
     }
 }
 
@@ -257,8 +263,7 @@
 
 html {
     background: var(--bg-primary);
-    overflow-y: scroll;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 body {

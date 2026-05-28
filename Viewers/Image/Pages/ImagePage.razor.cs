@@ -11,6 +11,7 @@ public partial class ImagePage : ComponentBase
     [Inject] private NavigationManager Navigation { get; set; } = null!;
     [Inject] private IFileNavigationState NavState { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
+    [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -103,14 +104,12 @@ public partial class ImagePage : ComponentBase
     private async Task LoadAsync()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        var qs = uri.Query.TrimStart('?');
-        var path = "";
-        foreach (var p in qs.Split('&'))
-        {
-            var kv = p.Split('=', 2);
-            if (kv.Length == 2 && kv[0] == "path")
-                path = Uri.UnescapeDataString(kv[1]);
-        }
+        var path = NavState.CurrentFilePath
+            ?? uri.Query.TrimStart('?').Split('&')
+                .Select(p => p.Split('=', 2))
+                .Where(kv => kv.Length == 2 && kv[0] == "path")
+                .Select(kv => Uri.UnescapeDataString(kv[1]))
+                .FirstOrDefault() ?? "";
 
         if (string.IsNullOrEmpty(path))
         {
@@ -615,11 +614,7 @@ public partial class ImagePage : ComponentBase
     private void GoBack()
     {
         stitchMode = false; stitchImages = null;
-        _ = JS.InvokeVoidAsync("eval",
-            "document.documentElement.style.overflowY = ''");
-        var ret = NavState.ReturnUrl;
-        if (ret != null) { NavState.ReturnUrl = null; Navigation.NavigateTo(ret); }
-        else Navigation.NavigateTo("/");
+        _ = MauiNav.GoBackAsync();
     }
 
     // 滑动切换动画

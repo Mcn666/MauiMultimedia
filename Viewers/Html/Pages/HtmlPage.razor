@@ -1,9 +1,11 @@
 @page "/htmlviewer"
 @using Microsoft.JSInterop
 @using MauiMultimedia.Core.Abstractions
+@using System.Linq
 @using MauiMultimedia.Viewers.Html.Services
 @inject NavigationManager Navigation
 @inject IFileNavigationState NavState
+@inject IMauiNavigation MauiNav
 @inject IJSRuntime JS
 
 <div class="v-page">
@@ -61,14 +63,12 @@
     private async Task LoadAsync()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        var qs = uri.Query.TrimStart('?');
-        var path = "";
-        foreach (var p in qs.Split('&'))
-        {
-            var kv = p.Split('=', 2);
-            if (kv.Length == 2 && kv[0] == "path")
-                path = Uri.UnescapeDataString(kv[1]);
-        }
+        var path = NavState.CurrentFilePath
+            ?? uri.Query.TrimStart('?').Split('&')
+                .Select(p => p.Split('=', 2))
+                .Where(kv => kv.Length == 2 && kv[0] == "path")
+                .Select(kv => Uri.UnescapeDataString(kv[1]))
+                .FirstOrDefault() ?? "";
 
         if (string.IsNullOrEmpty(path))
         {
@@ -175,11 +175,7 @@
 
     private void GoBack()
     {
-        _ = JS.InvokeVoidAsync("eval",
-            "document.documentElement.style.overflowY = ''");
-        var ret = NavState.ReturnUrl;
-        if (ret != null) { NavState.ReturnUrl = null; Navigation.NavigateTo(ret); }
-        else Navigation.NavigateTo("/");
+        _ = MauiNav.GoBackAsync();
     }
 
     private void GoPrev()

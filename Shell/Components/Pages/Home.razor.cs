@@ -1,4 +1,3 @@
-using System.IO;
 using MauiMultimedia.Core.Models;
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Shell.Services;
@@ -374,8 +373,7 @@ public partial class Home
 
         if (viewers.Count == 1)
         {
-            SaveBrowserState();
-            Navigation.NavigateTo(viewers[0].GetViewerRoute(item));
+            _ = NavigateToViewer(viewers[0], item);
         }
         else if (viewers.Count > 1)
         {
@@ -396,10 +394,9 @@ public partial class Home
     {
         if (pendingItem != null)
         {
-            var route = viewer.GetViewerRoute(pendingItem);
+            var item = pendingItem;
             CloseViewerPicker();
-            SaveBrowserState();
-            Navigation.NavigateTo(route);
+            _ = NavigateToViewer(viewer, item);
         }
     }
 
@@ -413,6 +410,15 @@ public partial class Home
             .Where(i => !i.IsFolder)
             .Select(i => i.FullPath)
             .ToList();
+    }
+
+    private async Task NavigateToViewer(IFileViewer viewer, FileSystemItem item)
+    {
+        SaveBrowserState();
+        BrowserState.CurrentFilePath = item.FullPath;
+
+        var page = PageFactory.CreatePage(viewer, item);
+        await Application.Current?.Windows[0]?.Page?.Navigation.PushAsync(page)!;
     }
 
     private static string GetViewerDisplayName(IFileViewer viewer)

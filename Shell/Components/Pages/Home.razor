@@ -4,11 +4,11 @@
 @using MauiMultimedia.Shell.Services
 @inject IFileSystemService FileSystemService
 @inject IJSRuntime JS
-@inject NavigationManager Navigation
 @inject IEnumerable<IViewProvider> ViewProviders
 @inject IEnumerable<IFileViewer> FileViewers
 @inject FileBrowserStateService BrowserState
 @inject AliasService Alias
+@inject ViewerPageFactory PageFactory
 
 <div class="file-browser">
     <div class="browser-layout">

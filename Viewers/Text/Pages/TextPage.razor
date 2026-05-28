@@ -1,7 +1,9 @@
 @page "/textviewer"
 @using MauiMultimedia.Core.Abstractions
+@using System.Linq
 @inject NavigationManager Navigation
 @inject IFileNavigationState NavState
+@inject IMauiNavigation MauiNav
 
 <div class="viewer-page">
     <div class="v-toolbar">
@@ -56,14 +58,12 @@
     private async Task LoadAsync()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        var qs = uri.Query.TrimStart('?');
-        filePath = "";
-        foreach (var p in qs.Split('&'))
-        {
-            var kv = p.Split('=', 2);
-            if (kv.Length == 2 && kv[0] == "path")
-                filePath = Uri.UnescapeDataString(kv[1]);
-        }
+        filePath = NavState.CurrentFilePath
+            ?? uri.Query.TrimStart('?').Split('&')
+                .Select(p => p.Split('=', 2))
+                .Where(kv => kv.Length == 2 && kv[0] == "path")
+                .Select(kv => Uri.UnescapeDataString(kv[1]))
+                .FirstOrDefault() ?? "";
         fileName = Path.GetFileName(filePath);
         currentIndex = fileList.FindIndex(f => string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
 
@@ -90,9 +90,7 @@
 
     private void GoBack()
     {
-        var ret = NavState.ReturnUrl;
-        if (ret != null) { NavState.ReturnUrl = null; Navigation.NavigateTo(ret); }
-        else Navigation.NavigateTo("/");
+        _ = MauiNav.GoBackAsync();
     }
     private void GoPrev()
     {

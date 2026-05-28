@@ -11,6 +11,11 @@ public interface IFileNavigationState
     IReadOnlyList<string>? CurrentDirectoryFiles { get; set; }
 
     /// <summary>
+    /// 当前选中的文件路径，Home 在导航前设置，查看器在 OnInitialized 中读取
+    /// </summary>
+    string? CurrentFilePath { get; set; }
+
+    /// <summary>
     /// 返回 URL。查看器页面调用 GoBack 时跳转至此地址而非首页。
     /// 由 ArchivePage 等中间页面设置，用完后清空。
     /// </summary>

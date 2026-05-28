@@ -1,6 +1,5 @@
 /* ── 覆盖 Shell 全局约束 ── */
 .viewer-page {
-    all: initial;
     display: flex;
     flex-direction: column;
     height: 100vh;

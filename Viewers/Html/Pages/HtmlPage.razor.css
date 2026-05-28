@@ -1,8 +1,5 @@
 /* 覆盖 Shell 全局约束 */
 .v-page {
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
     display: flex;
     flex-direction: column;
     height: 100vh;

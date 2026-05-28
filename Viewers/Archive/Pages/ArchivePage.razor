@@ -5,9 +5,11 @@
 @using SharpCompress.Common
 @using SharpCompress.Readers
 @using MauiMultimedia.Core.Abstractions
+@using System.Linq
 @using MauiMultimedia.Core.Models
 @inject NavigationManager Navigation
 @inject IFileNavigationState NavState
+@inject IMauiNavigation MauiNav
 @inject IJSRuntime JS
 @inject IEnumerable<IFileViewer> Viewers
 @inject IFileSystemService FileSystem
@@ -125,9 +127,11 @@
     private async Task Load()
     {
         var q = Navigation.ToAbsoluteUri(Navigation.Uri).Query.TrimStart('?');
-        var p = "";
-        foreach (var s in q.Split('&'))
-        { var kv = s.Split('=', 2); if (kv.Length == 2 && kv[0] == "path") p = Uri.UnescapeDataString(kv[1]); }
+        var p = NavState.CurrentFilePath
+            ?? q.Split('&').Select(s => s.Split('=', 2))
+                .Where(kv => kv.Length == 2 && kv[0] == "path")
+                .Select(kv => Uri.UnescapeDataString(kv[1]))
+                .FirstOrDefault() ?? "";
         if (string.IsNullOrEmpty(p)) { errorMessage = "无路径"; isLoading = false; return; }
         filePath = p; fileName = Path.GetFileName(p);
         try
@@ -362,11 +366,11 @@
             fileList.Sort(StringComparer.OrdinalIgnoreCase);
             NavState.CurrentDirectoryFiles = fileList;
 
+            // 使用 MauiNav 创建 ContentPage 并导航到查看器
             fi.FullPath = outPath;
-            if (NavState != null)
-                NavState.ReturnUrl = Navigation.ToAbsoluteUri(Navigation.Uri).PathAndQuery;
-            var route = v.GetViewerRoute(fi);
-            _ = InvokeAsync(() => Navigation.NavigateTo(route));
+            NavState.CurrentFilePath = outPath;
+            NavState.ReturnUrl = Navigation.ToAbsoluteUri(Navigation.Uri).PathAndQuery;
+            _ = MauiNav.NavigateToViewerAsync(v, fi);
         }
         catch (Exception ex)
         {
@@ -425,7 +429,6 @@
 
     private void GoBack()
     {
-        _ = JS.InvokeVoidAsync("eval", "document.documentElement.style.overflowY='scroll'");
         try
         {
             var cacheDir = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive");
@@ -433,7 +436,7 @@
                 Directory.Delete(cacheDir, true);
         }
         catch { }
-        Navigation.NavigateTo("/");
+        _ = MauiNav.GoBackAsync();
     }
 
     private static bool IsPasswordError(Exception ex)

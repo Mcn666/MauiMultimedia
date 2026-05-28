@@ -1,5 +1,6 @@
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Core.Models;
+using MauiMultimedia.Viewers.Archive.Pages;
 
 namespace MauiMultimedia.Viewers.Archive;
 
@@ -12,6 +13,7 @@ public class ArchiveViewer : IFileViewer
     };
 
     public string DisplayName => "压缩文件查看器";
+    public Type ComponentType => typeof(ArchivePage);
 
     public bool CanHandle(FileSystemItem item)
     {

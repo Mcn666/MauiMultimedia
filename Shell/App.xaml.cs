@@ -9,7 +9,9 @@
 
         protected override Window CreateWindow(IActivationState? activationState)
         {
-            return new Window(new MainPage()) { Title = "MauiMultimedia.Shell" };
+            var mainPage = new MainPage();
+            NavigationPage.SetHasNavigationBar(mainPage, false);
+            return new Window(new NavigationPage(mainPage)) { Title = "MauiMultimedia.Shell" };
         }
     }
 }
