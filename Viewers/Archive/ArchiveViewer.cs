@@ -17,11 +17,8 @@ public class ArchiveViewer : IFileViewer
 
     public bool CanHandle(FileSystemItem item)
     {
-        if (item.IsFolder) return false;
+        if (item == null || item.IsFolder) return false;
         var ext = Path.GetExtension(item.Name);
         return Exts.Contains(ext) || item.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
     }
-
-    public string GetViewerRoute(FileSystemItem item) =>
-        $"/archiveviewer?path={Uri.EscapeDataString(item.FullPath)}";
 }

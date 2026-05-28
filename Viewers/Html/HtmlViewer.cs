@@ -15,8 +15,5 @@ public class HtmlViewer : IFileViewer
     public Type ComponentType => typeof(HtmlPage);
 
     public bool CanHandle(FileSystemItem item) =>
-        !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
-
-    public string GetViewerRoute(FileSystemItem item) =>
-        $"/htmlviewer?path={Uri.EscapeDataString(item.FullPath)}";
+        item != null && !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
 }

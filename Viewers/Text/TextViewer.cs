@@ -21,7 +21,4 @@ public class TextViewer : IFileViewer
 
     public bool CanHandle(FileSystemItem item) =>
         !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
-
-    public string GetViewerRoute(FileSystemItem item) =>
-        $"/textviewer?path={Uri.EscapeDataString(item.FullPath)}";
 }

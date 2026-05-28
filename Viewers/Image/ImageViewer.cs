@@ -17,7 +17,4 @@ public class ImageViewer : IFileViewer
 
     public bool CanHandle(FileSystemItem item) =>
         !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
-
-    public string GetViewerRoute(FileSystemItem item) =>
-        $"/imageviewer?path={Uri.EscapeDataString(item.FullPath)}";
 }
