@@ -1177,6 +1177,21 @@ h1:focus {
     box-sizing: border-box;
 }
 
+.grid-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-link);
+}
+
+.grid-item.active-file {
+    border-color: var(--text-link);
+    box-shadow: inset 0 0 0 2px var(--text-link);
+}
+
+.item-row.active-file {
+    background: var(--bg-hover);
+    border-left: 3px solid var(--text-link);
+}
+
 /* 图片文件：缩略图填充整个网格项 */
 .grid-item.is-image-file {
     padding: 0;

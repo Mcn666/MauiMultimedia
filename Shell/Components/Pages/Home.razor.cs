@@ -35,6 +35,7 @@ public partial class Home
     private string? scanTypeLabel;
     private CancellationTokenSource? scanCts;
     private List<FileScanCategory> scanCategories = new();
+    private string? _activeFilePath;
 
     private enum WindowsQuickAccess
     {
@@ -122,6 +123,8 @@ public partial class Home
         var cls = item.IsFolder ? "folder" : "file";
         foreach (var p in ViewProviders)
             if (p.CanHandle(item)) { var e = p.GetItemCssClass(item); if (e != null) cls += " " + e; }
+        if (_activeFilePath != null && string.Equals(item.FullPath, _activeFilePath, StringComparison.OrdinalIgnoreCase))
+            cls += " active-file";
         return cls;
     }
 
@@ -414,6 +417,7 @@ public partial class Home
 
     private async Task NavigateToViewer(IFileViewer viewer, FileSystemItem item)
     {
+        _activeFilePath = item.FullPath;
         SaveBrowserState();
         BrowserState.CurrentFilePath = item.FullPath;
 
