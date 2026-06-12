@@ -1,5 +1,8 @@
 /* ===== Theme Variables ===== */
 
+/* 主题切换时平滑过渡 */
+* { transition: background-color .25s ease, color .25s ease, border-color .25s ease; }
+
 /* Light theme (default + explicit) */
 :root,
 [data-theme="light"] {

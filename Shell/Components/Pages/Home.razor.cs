@@ -7,7 +7,7 @@ using Microsoft.JSInterop;
 
 namespace MauiMultimedia.Shell.Components.Pages;
 
-public partial class Home : IDisposable
+public partial class Home
 {
     private string currentPath = "";
     private List<FileSystemItem> items = new();
@@ -213,19 +213,29 @@ public partial class Home : IDisposable
         await RestoreViewModeAsync();
 
         await LoadItemsAsync();
-
-        // 订阅运行时系统主题变更（App.OnRequestedThemeChanged → ApplyTheme → ThemeEvents）
-        ThemeEvents.SystemThemeChanged += OnSystemThemeChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await RestoreThemeAsync();
+            // 1. 从 localStorage 恢复用户保存的模式（"light"/"dark"/"system"）
+            await RestoreThemeModeAsync();
+
+            // 2. 根据用户模式应用主题：
+            //    "system" → 用 Application.Current.RequestedTheme
+            //    "light"/"dark" → 强制使用用户的选择
+            bool isDark = themeMode == "system"
+                ? Application.Current?.RequestedTheme == AppTheme.Dark
+                : themeMode == "dark";
+            await ApplyThemeDirect(isDark);
+
+            // 3. 订阅运行时系统主题切换
+            if (Application.Current != null)
+                Application.Current.RequestedThemeChanged += OnSystemThemeChanged;
+
             StateHasChanged();
 
-            // 首次渲染完成后淡入显示页面内容
             await JS.InvokeVoidAsync("eval",
                 "document.getElementById('app').style.opacity = '1'");
         }
@@ -315,51 +325,53 @@ public partial class Home : IDisposable
         await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-sort','{sortColumn}|{sortDirection}')");
     }
 
-    private async Task RestoreThemeAsync()
+    // ────────── 主题管理（基于文章方案：Blazor 直接读 Application.Current.RequestedTheme） ──────────
+
+    /// <summary>直接应用暗/亮主题到 HTML 和状态栏（不经过 mode 判断）</summary>
+    private async Task ApplyThemeDirect(bool isDark)
     {
-        var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-theme')");
-        themeMode = (saved == "light" || saved == "dark" || saved == "system") ? saved : "system";
-        await ApplyThemeAsync(themeMode);
-        // localStorage 保存原始 mode，ApplyThemeAsync 已将解析值写入 Preferences
-    }
-
-    private async Task ApplyThemeAsync(string mode)
-    {
-        bool dark;
-        if (mode == "system")
-        {
-            // 从 Preferences 读取已由原生代码（App.CreateWindow / App.ApplyTheme）解析好的值
-            // 避免依赖 Android WebView 中不可靠的 window.matchMedia
-            var saved = Preferences.Get("filebrowser-theme", "");
-            dark = saved == "dark";
-        }
-        else
-        {
-            dark = mode == "dark";
-        }
-
-        await JS.InvokeVoidAsync("eval", $"document.documentElement.setAttribute('data-theme','{(dark ? "dark" : "light")}')");
-
-        // 将解析后的暗/亮值写入 Preferences（供原生代码直接使用）
-        Preferences.Set("filebrowser-theme", dark ? "dark" : "light");
-
-        // 写入 localStorage 解析值，供内联 <script> 在 Blazor 加载前直接读取
-        // 避免 Android WebView 中 window.matchMedia 不可靠导致的白色闪烁
-        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-theme-resolved','{(dark ? "dark" : "light")}')");
+        await JS.InvokeVoidAsync("eval",
+            $"document.documentElement.setAttribute('data-theme','{(isDark ? "dark" : "light")}');" +
+            $"document.documentElement.style.background='{(isDark ? "#1a1a1a" : "#ffffff")}';");
 
         // 同步 Android 状态栏
 #if ANDROID
         if (Microsoft.Maui.ApplicationModel.Platform.CurrentActivity is MauiMultimedia.Shell.MainActivity ma)
-            ma.SetStatusBarStyle(dark);
+            ma.SetStatusBarStyle(isDark);
 #endif
     }
 
+    /// <summary>从 localStorage 恢复用户选中的模式（仅用于下拉菜单显示）</summary>
+    private async Task RestoreThemeModeAsync()
+    {
+        var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-theme')");
+        themeMode = (saved == "light" || saved == "dark" || saved == "system") ? saved : "system";
+    }
+
+    /// <summary>运行时系统主题切换</summary>
+    private void OnSystemThemeChanged(object? sender, AppThemeChangedEventArgs e)
+    {
+        // 只在"跟随系统"模式下响应，不覆盖用户的显式选择
+        if (themeMode != "system") return;
+
+        var isDark = e.RequestedTheme == AppTheme.Dark;
+        _ = InvokeAsync(async () =>
+        {
+            await ApplyThemeDirect(isDark);
+        });
+    }
+
+    /// <summary>用户从下拉菜单选择浅色/深色/跟随系统</summary>
     private async Task SetTheme(string mode)
     {
         themeMode = mode;
-        await ApplyThemeAsync(mode);
+
+        bool isDark = mode == "system"
+            ? Application.Current?.RequestedTheme == AppTheme.Dark  // "跟随系统" → 用原生 API
+            : mode == "dark";
+
+        await ApplyThemeDirect(isDark);
         await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-theme','{mode}')");
-        // localStorage 保存原始 mode，ApplyThemeAsync 已将解析值写入 Preferences
     }
 
     private Task SetThemeLight() => SetTheme("light");
@@ -587,26 +599,5 @@ public partial class Home : IDisposable
 
     // ────────── 运行时系统主题变更 ──────────
 
-    /// <summary>
-    /// 系统主题在运行时切换时（如 Android 设置中切换暗/亮），
-    /// App.OnRequestedThemeChanged → ApplyTheme → ThemeEvents 触发此方法。
-    /// 直接通过 JS 更新 HTML data-theme，仅在 "system" 模式下响应。
-    /// </summary>
-    private void OnSystemThemeChanged(bool isDark)
-    {
-        // 只在"跟随系统"模式下响应，不覆盖用户的显式选择
-        if (themeMode != "system") return;
-
-        _ = InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("eval",
-                $"document.documentElement.setAttribute('data-theme','{(isDark ? "dark" : "light")}');" +
-                $"document.documentElement.style.background='{(isDark ? "#1a1a1a" : "#ffffff")}';");
-        });
-    }
-
-    public void Dispose()
-    {
-        ThemeEvents.SystemThemeChanged -= OnSystemThemeChanged;
-    }
 }
+
