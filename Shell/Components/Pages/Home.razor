@@ -87,10 +87,27 @@
                     <button class="scan-panel-close" @onclick="CloseScanPanel">✕</button>
                 </div>
                 <div class="scan-panel-body">
+                    @{
+                        string? lastLabel = null;
+                        var catColors = new[] { "#4A90D9", "#34A853", "#EA4335", "#FBBC04", "#9C27B0", "#00ACC1" };
+                    }
                     @foreach (var cat in scanCategories)
                     {
                         var idx = scanCategories.IndexOf(cat) + 1;
-                        <button class="scan-type-btn" @onclick="() => StartScan(idx)">@cat.Icon @cat.Label</button>
+                        var accent = catColors[idx % catColors.Length];
+                        // 不同标签间加分隔线
+                        if (lastLabel != null && lastLabel != cat.Label)
+                        {
+                            <div class="scan-type-sep"></div>
+                        }
+                        lastLabel = cat.Label;
+                        <button class="scan-type-btn" @onclick="() => StartScan(idx)" style="--accent:@accent">
+                            <span class="scan-type-icon">@cat.Icon</span>
+                            <span class="scan-type-info">
+                                <span class="scan-type-label">@cat.Label</span>
+                                <span class="scan-type-count">@cat.Extensions.Length 种格式</span>
+                            </span>
+                        </button>
                     }
                 </div>
             </div>

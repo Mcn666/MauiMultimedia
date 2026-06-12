@@ -608,27 +608,84 @@ h1:focus {
 .scan-panel-close:hover { background: var(--hover-bg); }
 .scan-panel-body {
     flex: 1;
-    padding: 8px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    overflow-y: auto;
 }
 .scan-type-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     width: 100%;
-    padding: 10px 14px;
+    padding: 12px 14px;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     background: none;
-    font-size: 14px;
-    color: var(--text-primary);
     cursor: pointer;
     text-align: left;
-    transition: background .15s;
+    transition: background .15s, transform .12s, box-shadow .12s;
+    position: relative;
+    overflow: hidden;
 }
-.scan-type-btn:hover { background: var(--hover-bg); }
+.scan-type-btn::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 4px; bottom: 4px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent, #888);
+    opacity: 0;
+    transition: opacity .15s;
+}
+.scan-type-btn:hover {
+    background: color-mix(in srgb, var(--accent, #888) 10%, transparent);
+    transform: translateX(2px);
+}
+.scan-type-btn:hover::before {
+    opacity: 1;
+}
+.scan-type-btn:active {
+    transform: translateX(1px);
+}
+.scan-type-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 18px;
+    background: color-mix(in srgb, var(--accent, #888) 15%, transparent);
+    transition: background .15s, transform .12s;
+    user-select: none;
+}
+.scan-type-btn:hover .scan-type-icon {
+    transform: scale(1.08);
+    background: color-mix(in srgb, var(--accent, #888) 22%, transparent);
+}
+.scan-type-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.scan-type-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.scan-type-count {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.scan-type-sep {
+    height: 1px;
+    background: var(--border-secondary);
+    margin: 4px 0;
+}
 .scan-overlay {
     position: fixed;
     top: 0; right: 0; bottom: 0; left: 0;
