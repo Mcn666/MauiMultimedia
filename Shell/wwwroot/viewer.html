@@ -7,13 +7,25 @@
     <base href="/" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MauiMultimedia.Shell.styles.css" />
+    <style>
+        :root { background: #1a1a1a; }
+        @media (prefers-color-scheme: light) {
+            :root { background: #ffffff; }
+        }
+    </style>
     <script>
         (function() {
             var s = localStorage.getItem('filebrowser-theme');
             var d;
             if (s === 'dark') d = true;
             else if (s === 'light') d = false;
-            else d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            else {
+                var r = localStorage.getItem('filebrowser-theme-resolved');
+                if (r === 'dark') d = true;
+                else if (r === 'light') d = false;
+                else d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            document.documentElement.style.background = d ? '#1a1a1a' : '#ffffff';
             document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
         })();
 

@@ -15,7 +15,24 @@ public partial class MainPage : ContentPage
 
         var bg = dark ? "#1a1a1a" : "#ffffff";
         BackgroundColor = Color.FromArgb(bg);
+
+        // WebView Handler 就绪时立即设置原生背景色（比 Page.OnHandlerChanged 更早）
+#if ANDROID
+        blazorWebView.HandlerChanged += OnBlazorWebViewHandlerChanged;
+#endif
     }
+
+#if ANDROID
+    private void OnBlazorWebViewHandlerChanged(object? sender, EventArgs e)
+    {
+        if (blazorWebView.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
+        {
+            // 强制设置深色背景，防止 Android WebView 默认白色背景的闪烁
+            // HTML 加载后内联脚本会立刻纠正为正确值
+            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor("#1a1a1a"));
+        }
+    }
+#endif
 
     protected override void OnHandlerChanged()
     {
@@ -35,19 +52,6 @@ public partial class MainPage : ContentPage
                     if (topPadding > 0)
                         Padding = new Thickness(0, topPadding, 0, 0);
                 }
-            }
-
-            // 设置 Android 原生 WebView 背景色（HTML 加载前就生效）
-            if (blazorWebView.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
-            {
-                var saved = Preferences.Get("filebrowser-theme", "");
-                bool dark;
-                if (saved == "dark") dark = true;
-                else if (saved == "light") dark = false;
-                else dark = Application.Current?.RequestedTheme == AppTheme.Dark;
-
-                nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor(
-                    dark ? "#1a1a1a" : "#ffffff"));
             }
         }
 #endif

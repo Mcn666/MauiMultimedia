@@ -7,7 +7,7 @@ using Microsoft.JSInterop;
 
 namespace MauiMultimedia.Shell.Components.Pages;
 
-public partial class Home
+public partial class Home : IDisposable
 {
     private string currentPath = "";
     private List<FileSystemItem> items = new();
@@ -213,6 +213,9 @@ public partial class Home
         await RestoreViewModeAsync();
 
         await LoadItemsAsync();
+
+        // 订阅运行时系统主题变更（App.OnRequestedThemeChanged → ApplyTheme → ThemeEvents）
+        ThemeEvents.SystemThemeChanged += OnSystemThemeChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -317,17 +320,32 @@ public partial class Home
         var saved = await JS.InvokeAsync<string>("eval", "localStorage.getItem('filebrowser-theme')");
         themeMode = (saved == "light" || saved == "dark" || saved == "system") ? saved : "system";
         await ApplyThemeAsync(themeMode);
-        Preferences.Set("filebrowser-theme", themeMode);
+        // localStorage 保存原始 mode，ApplyThemeAsync 已将解析值写入 Preferences
     }
 
     private async Task ApplyThemeAsync(string mode)
     {
         bool dark;
         if (mode == "system")
-            dark = await JS.InvokeAsync<bool>("eval", "window.matchMedia('(prefers-color-scheme: dark)').matches");
+        {
+            // 从 Preferences 读取已由原生代码（App.CreateWindow / App.ApplyTheme）解析好的值
+            // 避免依赖 Android WebView 中不可靠的 window.matchMedia
+            var saved = Preferences.Get("filebrowser-theme", "");
+            dark = saved == "dark";
+        }
         else
+        {
             dark = mode == "dark";
+        }
+
         await JS.InvokeVoidAsync("eval", $"document.documentElement.setAttribute('data-theme','{(dark ? "dark" : "light")}')");
+
+        // 将解析后的暗/亮值写入 Preferences（供原生代码直接使用）
+        Preferences.Set("filebrowser-theme", dark ? "dark" : "light");
+
+        // 写入 localStorage 解析值，供内联 <script> 在 Blazor 加载前直接读取
+        // 避免 Android WebView 中 window.matchMedia 不可靠导致的白色闪烁
+        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-theme-resolved','{(dark ? "dark" : "light")}')");
 
         // 同步 Android 状态栏
 #if ANDROID
@@ -341,7 +359,7 @@ public partial class Home
         themeMode = mode;
         await ApplyThemeAsync(mode);
         await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-theme','{mode}')");
-        Preferences.Set("filebrowser-theme", mode);
+        // localStorage 保存原始 mode，ApplyThemeAsync 已将解析值写入 Preferences
     }
 
     private Task SetThemeLight() => SetTheme("light");
@@ -565,5 +583,30 @@ public partial class Home
     {
         viewMode = (viewMode == "list") ? "grid" : "list";
         await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-view','{viewMode}')");
+    }
+
+    // ────────── 运行时系统主题变更 ──────────
+
+    /// <summary>
+    /// 系统主题在运行时切换时（如 Android 设置中切换暗/亮），
+    /// App.OnRequestedThemeChanged → ApplyTheme → ThemeEvents 触发此方法。
+    /// 直接通过 JS 更新 HTML data-theme，仅在 "system" 模式下响应。
+    /// </summary>
+    private void OnSystemThemeChanged(bool isDark)
+    {
+        // 只在"跟随系统"模式下响应，不覆盖用户的显式选择
+        if (themeMode != "system") return;
+
+        _ = InvokeAsync(async () =>
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"document.documentElement.setAttribute('data-theme','{(isDark ? "dark" : "light")}');" +
+                $"document.documentElement.style.background='{(isDark ? "#1a1a1a" : "#ffffff")}';");
+        });
+    }
+
+    public void Dispose()
+    {
+        ThemeEvents.SystemThemeChanged -= OnSystemThemeChanged;
     }
 }

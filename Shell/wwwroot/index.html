@@ -9,8 +9,11 @@
     <link rel="stylesheet" href="MauiMultimedia.Shell.styles.css" />
     <link rel="icon" href="data:,">
     <style>
-        /* 默认背景色（在 JS 执行前使用） */
-        :root { background: #ffffff; }
+        /* 默认深色背景，防止 Android WebView 白色闪烁。内联脚本会立刻纠正为正确值 */
+        :root { background: #1a1a1a; }
+        @media (prefers-color-scheme: light) {
+            :root { background: #ffffff; }
+        }
     </style>
     <script>
         (function() {
@@ -18,7 +21,13 @@
             var dark;
             if (saved === 'dark') dark = true;
             else if (saved === 'light') dark = false;
-            else dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            else {
+                // "system" 模式：优先读 Home.razor 存好的解析值，避免 matchMedia 不可靠
+                var resolved = localStorage.getItem('filebrowser-theme-resolved');
+                if (resolved === 'dark') dark = true;
+                else if (resolved === 'light') dark = false;
+                else dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
 
             var bg = dark ? '#1a1a1a' : '#ffffff';
             document.documentElement.style.background = bg;
