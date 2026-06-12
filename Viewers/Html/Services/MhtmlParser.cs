@@ -15,6 +15,18 @@ public static partial class MhtmlParser
     public static ParseResult Parse(string filePath)
     {
         var text = File.ReadAllText(filePath, Encoding.UTF8);
+        return ParseText(text);
+    }
+
+    /// <summary>从字节数组解析 MHTML 内容</summary>
+    public static ParseResult Parse(byte[] data)
+    {
+        var text = Encoding.UTF8.GetString(data);
+        return ParseText(text);
+    }
+
+    private static ParseResult ParseText(string text)
+    {
         var boundary = DetectBoundary(text);
         if (boundary == null)
             throw new InvalidDataException("无法找到 MIME boundary");

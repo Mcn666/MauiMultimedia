@@ -1,9 +1,11 @@
 @* @page "/textviewer" — 已由 ContentPage 动态加载 *@
 @using MauiMultimedia.Core.Abstractions
 @using System.Linq
+@using System.Text
 @inject NavigationManager Navigation
 @inject IFileNavigationState NavState
 @inject IMauiNavigation MauiNav
+@inject IFileLockEncryptionService FileLockService
 
 <div class="viewer-page">
     <div class="v-toolbar">
@@ -78,7 +80,11 @@
         errorMessage = null;
         try
         {
-            fileContent = await Task.Run(() => File.ReadAllText(filePath));
+            fileContent = await Task.Run(async () =>
+            {
+                var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                return Encoding.UTF8.GetString(bytes);
+            });
         }
         catch (Exception ex)
         {
@@ -109,7 +115,11 @@
         isLoading = true; errorMessage = null;
         try
         {
-            fileContent = await Task.Run(() => File.ReadAllText(filePath));
+            fileContent = await Task.Run(async () =>
+            {
+                var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                return Encoding.UTF8.GetString(bytes);
+            });
         }
         catch (Exception ex)
         {

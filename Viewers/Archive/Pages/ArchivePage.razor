@@ -13,6 +13,7 @@
 @inject IJSRuntime JS
 @inject IEnumerable<IFileViewer> Viewers
 @inject IFileSystemService FileSystem
+@inject IFileLockEncryptionService FileLockService
 
 <div class="viewer-page" style="height:100vh;display:flex;flex-direction:column;">
     <div class="v-toolbar">
@@ -137,7 +138,8 @@
         try
         {
             if (!File.Exists(p)) { errorMessage = "文件不存在"; return; }
-            items = await Task.Run(() => Scan(p, archivePassword));
+            var archiveStream = await FileLockService.OpenDecryptedReadStreamAsync(p);
+            items = await Task.Run(() => Scan(archiveStream, archivePassword));
             nodes = Build(items);
         }
         catch (Exception ex)
@@ -154,9 +156,8 @@
         finally { isLoading = false; StateHasChanged(); }
     }
 
-    private static List<Entry> Scan(string path, string? password = null)
+    private static List<Entry> Scan(Stream stream, string? password = null)
     {
-        using var stream = File.OpenRead(path);
         var options = password != null ? new ReaderOptions { Password = password } : null;
         using var archive = ArchiveFactory.OpenArchive(stream, options);
         var result = new List<Entry>();
@@ -288,9 +289,12 @@
                 var dir = Path.GetDirectoryName(outPath);
                 if (dir != null) Directory.CreateDirectory(dir);
 
-                ExtractEntry(filePath, n.Full, outPath);
-
-                var inner = ReadArchiveEntries(outPath);
+                // 对于锁定文件，通过解密服务读取；否则直接打开
+                var archiveStream = await FileLockService.OpenDecryptedReadStreamAsync(filePath);
+                ExtractEntry(archiveStream, n.Full, outPath);
+                // outPath 是刚提取出来的文件（在 AppData 中，未被锁定）
+                using var innerStream = new FileStream(outPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                var inner = ReadArchiveEntries(innerStream);
                 var rawKids = Build(inner);
                 RemapLevels(rawKids, n.Level + 1);
                 MarkSource(rawKids, outPath);
@@ -309,7 +313,7 @@
     }
 
     /// <summary>读取压缩文件的条目列表</summary>
-    private static List<Entry> ReadArchiveEntries(string path) => Scan(path, archivePassword);
+    private static List<Entry> ReadArchiveEntries(Stream stream) => Scan(stream, archivePassword);
 
     private async Task Open(TreeItem n)
     {
@@ -330,21 +334,27 @@
             var outPath = Path.Combine(tmp, n.Full);
             var dir = Path.GetDirectoryName(outPath);
             if (dir != null) Directory.CreateDirectory(dir);
-            ExtractEntry(srcPath, n.Full, outPath);
+
+            // 通过解密服务读取档案（已锁定则自动解密）
+            var srcBytes = await FileLockService.ReadDecryptedBytesAsync(srcPath);
+            using var firstStream = new MemoryStream(srcBytes);
+            ExtractEntry(firstStream, n.Full, outPath);
 
             // 收集同级文件列表用于前后导航
             List<string> fileList;
             if (n.Source != null)
             {
                 // 内层压缩包：提取所有文件
-                var all = ReadArchiveEntries(n.Source);
+                var nestedBytes = await FileLockService.ReadDecryptedBytesAsync(n.Source);
+                var all = ReadArchiveEntries(new MemoryStream(nestedBytes));
                 fileList = new List<string>(all.Count);
                 foreach (var e in all)
                 {
                     var p = Path.Combine(tmp, e.Full);
                     var d = Path.GetDirectoryName(p);
                     if (d != null) Directory.CreateDirectory(d);
-                    ExtractEntry(n.Source, e.Full, p);
+                    using var es = new MemoryStream(nestedBytes);
+                    ExtractEntry(es, e.Full, p);
                     fileList.Add(p);
                 }
             }
@@ -359,7 +369,8 @@
                     var p = Path.Combine(tmp, e.Full);
                     var d = Path.GetDirectoryName(p);
                     if (d != null) Directory.CreateDirectory(d);
-                    ExtractEntry(srcPath, e.Full, p);
+                    using var es = new MemoryStream(srcBytes);
+                    ExtractEntry(es, e.Full, p);
                     fileList.Add(p);
                 }
             }
@@ -388,11 +399,10 @@
     }
 
     /// <summary>从指定档案中提取一个条目到目标路径</summary>
-    private static void ExtractEntry(string archivePath, string entryName, string outPath)
+    private static void ExtractEntry(Stream archiveStream, string entryName, string outPath)
     {
-        using var stream = File.OpenRead(archivePath);
         var opts = archivePassword != null ? new ReaderOptions { Password = archivePassword } : null;
-        using var archive = ArchiveFactory.OpenArchive(stream, opts);
+        using var archive = ArchiveFactory.OpenArchive(archiveStream, opts);
         foreach (var entry in archive.Entries)
         {
             if (entry.IsDirectory) continue;

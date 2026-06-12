@@ -155,6 +155,118 @@ public static class ImageProcessingService
         return $"data:image/jpeg;base64,{base64}";
     }
 
+    /// <summary>
+    /// 从字节数组解码图片（适用于已解密的内存数据）。
+    /// </summary>
+    public static ImageResult DecodeImage(byte[] fileData, string fileName, int maxDimension = 4000)
+    {
+        var ext = Path.GetExtension(fileName);
+
+        // SVG 走文本读取
+        if (string.Equals(ext, ".svg", StringComparison.OrdinalIgnoreCase))
+            return DecodeSvg(fileData);
+
+        using var stream = new MemoryStream(fileData);
+        using var codec = SKCodec.Create(stream);
+        if (codec == null)
+            throw new InvalidOperationException("无法解码图片");
+
+        var origin = codec.EncodedOrigin;
+        bool needsDownscale = codec.Info.Width > maxDimension || codec.Info.Height > maxDimension;
+        bool needsExifFix = origin != SKEncodedOrigin.TopLeft;
+
+        // ── 快速路径：无需缩放且无需 EXIF 校正 → 直接 base64 ──
+        if (!needsDownscale && !needsExifFix)
+        {
+            var base64 = Convert.ToBase64String(fileData);
+            var mime = GetMimeType(ext);
+            var dataUri = $"data:{mime};base64,{base64}";
+            var fmtName = ext.TrimStart('.').ToUpperInvariant();
+            return new ImageResult(dataUri, codec.Info.Width, codec.Info.Height,
+                fileData.Length, fmtName);
+        }
+
+        // ── 慢速路径 ──
+        else
+        {
+            using var bitmap = SKBitmap.Decode(codec);
+            if (bitmap == null)
+                throw new InvalidOperationException("无法解码位图");
+
+            using var orientedBitmap = ApplyOrientation(bitmap, origin);
+            using var displayBitmap = Downscale(orientedBitmap, maxDimension);
+
+            bool hasAlpha = displayBitmap.AlphaType != SKAlphaType.Opaque;
+            var encFormat = hasAlpha ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg;
+            int quality = hasAlpha ? 100 : 90;
+
+            using var image = SKImage.FromBitmap(displayBitmap);
+            using var encoded = image.Encode(encFormat, quality);
+            var base64Encoded = Convert.ToBase64String(encoded.ToArray());
+            var mimeEncoded = hasAlpha ? "image/png" : "image/jpeg";
+            var dataUriEncoded = $"data:{mimeEncoded};base64,{base64Encoded}";
+            var fmtName = ext.TrimStart('.').ToUpperInvariant();
+
+            return new ImageResult(dataUriEncoded, displayBitmap.Width, displayBitmap.Height,
+                fileData.Length, fmtName);
+        }
+    }
+
+    /// <summary>
+    /// 从字节数组中获取图片原始尺寸（考虑 EXIF 方向）
+    /// </summary>
+    public static (int width, int height) GetImageDimensions(byte[] fileData)
+    {
+        using var stream = new MemoryStream(fileData);
+        using var codec = SKCodec.Create(stream);
+        if (codec == null) return (0, 0);
+
+        var origin = codec.EncodedOrigin;
+        bool swap = origin == SKEncodedOrigin.LeftBottom ||
+                    origin == SKEncodedOrigin.RightTop;
+        return swap
+            ? (codec.Info.Height, codec.Info.Width)
+            : (codec.Info.Width, codec.Info.Height);
+    }
+
+    /// <summary>
+    /// 从字节数组生成缩略图 data:URI
+    /// </summary>
+    public static string GenerateThumbnail(byte[] fileData, int maxSize = 180)
+    {
+        using var stream = new MemoryStream(fileData);
+        using var codec = SKCodec.Create(stream);
+        if (codec == null) return "";
+        var origin = codec.EncodedOrigin;
+
+        int origW = codec.Info.Width;
+        int origH = codec.Info.Height;
+
+        float scale = Math.Min(maxSize / (float)origW, maxSize / (float)origH);
+        scale = Math.Min(scale, 1f);
+
+        var scaled = codec.GetScaledDimensions(scale);
+        int decodeW = Math.Max(1, scaled.Width);
+        int decodeH = Math.Max(1, scaled.Height);
+
+        var info = new SKImageInfo(decodeW, decodeH, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        using var bitmap = new SKBitmap(info);
+        var result = codec.GetPixels(info, bitmap.GetPixels());
+
+        if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+            return "";
+
+        using var oriented = ApplyOrientation(bitmap, origin);
+        using var final = (oriented.Width > maxSize || oriented.Height > maxSize)
+            ? Downscale(oriented, maxSize)
+            : oriented.Copy();
+
+        using var image = SKImage.FromBitmap(final);
+        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+        var base64 = Convert.ToBase64String(encoded.ToArray());
+        return $"data:image/jpeg;base64,{base64}";
+    }
+
     // ── 内部方法 ──────────────────────────────────────────
 
     /// <summary>
@@ -209,6 +321,14 @@ public static class ImageProcessingService
         return new ImageResult(
             $"data:image/svg+xml;base64,{base64}",
             0, 0, fileSize, "SVG");
+    }
+
+    private static ImageResult DecodeSvg(byte[] fileData)
+    {
+        var base64 = Convert.ToBase64String(fileData);
+        return new ImageResult(
+            $"data:image/svg+xml;base64,{base64}",
+            0, 0, fileData.Length, "SVG");
     }
 
     /// <summary>

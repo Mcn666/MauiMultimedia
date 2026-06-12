@@ -12,6 +12,7 @@ public partial class ImagePage : ComponentBase
     [Inject] private IFileNavigationState NavState { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
+    [Inject] private IFileLockEncryptionService FileLockService { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -249,7 +250,8 @@ public partial class ImagePage : ComponentBase
                     "bmp" => "image/bmp",
                     _ => "image/jpeg"
                 };
-                var streamRef = new DotNetStreamReference(File.OpenRead(path));
+                var stream = await FileLockService.OpenDecryptedReadStreamAsync(path);
+                var streamRef = new DotNetStreamReference(stream);
                 var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, mime);
                 stitchImages.Add(new StitchImageInfo { BlobUrl = blobUrl, Width = w, Height = h });
             }
@@ -307,20 +309,26 @@ public partial class ImagePage : ComponentBase
             fileSizeDisplay = ImageProcessingService.FormatFileSize(fileInfo.Length);
             imageFormat = Path.GetExtension(filePath).TrimStart('.').ToUpperInvariant();
 
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
                 try
                 {
-                    var result = ImageProcessingService.DecodeImage(filePath);
+                    var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                    var result = ImageProcessingService.DecodeImage(bytes, fileName);
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     ApplyDecoded(result.DataUri, result.Width, result.Height);
                 }
                 catch
                 {
                     imageSource = new Uri(filePath).AbsoluteUri;
-                    var dims = ImageProcessingService.GetImageDimensions(filePath);
-                    imageWidth = dims.width;
-                    imageHeight = dims.height;
+                    try
+                    {
+                        var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                        var dims = ImageProcessingService.GetImageDimensions(bytes);
+                        imageWidth = dims.width;
+                        imageHeight = dims.height;
+                    }
+                    catch { /* fallback 失败也继续 */ }
                 }
             });
 
@@ -360,7 +368,8 @@ public partial class ImagePage : ComponentBase
             if (DecodeCache.Get(p).HasValue) continue; // 已缓存
             try
             {
-                var result = await Task.Run(() => ImageProcessingService.DecodeImage(p));
+                var bytes = await FileLockService.ReadDecryptedBytesAsync(p);
+                var result = await Task.Run(() => ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p)));
                 DecodeCache.Set(p, result.DataUri, result.Width, result.Height);
             }
             catch { /* 预加载失败不影响当前图 */ }

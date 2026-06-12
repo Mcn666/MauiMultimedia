@@ -36,6 +36,7 @@ public partial class Home
     private CancellationTokenSource? scanCts;
     private List<FileScanCategory> scanCategories = new();
     private string? _activeFilePath;
+    private HashSet<string> _lockedFiles = new(StringComparer.OrdinalIgnoreCase);
 
     private enum WindowsQuickAccess
     {
@@ -82,6 +83,42 @@ public partial class Home
         await Task.Delay(100);
         await JS.InvokeVoidAsync("eval",
             "document.querySelector('.alias-input')?.focus()");
+    }
+
+    private bool IsFileLocked(FileSystemItem item)
+        => _lockedFiles.Contains(item.FullPath);
+
+    private async Task OnLockClick(FileSystemItem item)
+    {
+        try
+        {
+            if (_lockedFiles.Contains(item.FullPath))
+            {
+                await FileLockService.UnlockAsync(item.FullPath);
+                _lockedFiles.Remove(item.FullPath);
+            }
+            else
+            {
+                await FileLockService.LockAsync(item.FullPath);
+                _lockedFiles.Add(item.FullPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"锁定操作失败：{ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private void RefreshLockStatus()
+    {
+        var locked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
+        {
+            if (!item.IsFolder && FileLockService.IsLocked(item.FullPath))
+                locked.Add(item.FullPath);
+        }
+        _lockedFiles = locked;
     }
 
     private void ConfirmAlias()
@@ -321,6 +358,7 @@ public partial class Home
         {
             items = await FileSystemService.ListItemsAsync(currentPath);
             ApplySort();
+            RefreshLockStatus();
             _ = LoadChildCountsAsync(items);
         }
         catch (Exception ex)
@@ -484,6 +522,7 @@ public partial class Home
             var results = await FileSystemService.ScanFilesByTypeAsync(currentPath, exts, ct);
             scanResults = results;
             items = scanResults;
+            RefreshLockStatus();
             isScanned = true;
         }
         catch (OperationCanceledException) { }

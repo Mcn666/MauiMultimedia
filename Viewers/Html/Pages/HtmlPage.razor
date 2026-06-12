@@ -7,6 +7,7 @@
 @inject IFileNavigationState NavState
 @inject IMauiNavigation MauiNav
 @inject IJSRuntime JS
+@inject IFileLockEncryptionService FileLockService
 
 <div class="v-page">
     <div class="v-toolbar">
@@ -109,7 +110,11 @@
             if (isMhtml)
             {
                 MhtmlParser.ParseResult result = null!;
-                await Task.Run(() => { result = MhtmlParser.Parse(filePath); });
+                await Task.Run(async () =>
+                {
+                    var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                    result = MhtmlParser.Parse(bytes);
+                });
 
                 // 通过 JS 创建 Blob URL 并替换占位符
                 htmlContent = await InjectBlobUrls(result);
@@ -117,9 +122,10 @@
             }
             else
             {
-                htmlContent = await Task.Run(() =>
+                htmlContent = await Task.Run(async () =>
                 {
-                    var content = File.ReadAllText(filePath);
+                    var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                    var content = System.Text.Encoding.UTF8.GetString(bytes);
                     var dir = Path.GetDirectoryName(filePath);
                     if (dir != null)
                         content = ResourceInliner.Inline(content, dir);
