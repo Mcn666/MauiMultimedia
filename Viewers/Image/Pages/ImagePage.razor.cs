@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -32,6 +33,8 @@ public partial class ImagePage : ComponentBase
     private int imageHeight;
     private string fileSizeDisplay = "";
     private string imageFormat = "";
+    private string? _fileCreationTime;
+    private string? _fileLastWriteTime;
     private bool showDetails;
 
     // 拼接模式
@@ -258,7 +261,7 @@ public partial class ImagePage : ComponentBase
             }
             catch
             {
-                // 某一张失败继续处理其他
+                Debug.WriteLine($"[Stitch] Failed to load: {path}");
             }
         }
         stitchError = null;
@@ -287,6 +290,8 @@ public partial class ImagePage : ComponentBase
         imageHeight = 0;
         fileSizeDisplay = "";
         imageFormat = "";
+        _fileCreationTime = null;
+        _fileLastWriteTime = null;
 
         try
         {
@@ -295,6 +300,16 @@ public partial class ImagePage : ComponentBase
             if (cached.HasValue)
             {
                 ApplyDecoded(cached.Value.DataUri, cached.Value.Width, cached.Value.Height);
+                // 缓存命中时也要读取文件元数据（大小/格式/时间）
+                try
+                {
+                    var fi = new FileInfo(filePath);
+                    fileSizeDisplay = ImageProcessingService.FormatFileSize(fi.Length);
+                    imageFormat = Path.GetExtension(filePath).TrimStart('.').ToUpperInvariant();
+                    _fileCreationTime = fi.CreationTime.ToString("yyyy-MM-dd HH:mm:ss");
+                    _fileLastWriteTime = fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+                catch { Debug.WriteLine($"[Load] FileInfo read failed for: {fileName}"); }
                 isLoading = false;
                 StateHasChanged();
                 return;
@@ -309,6 +324,8 @@ public partial class ImagePage : ComponentBase
 
             fileSizeDisplay = ImageProcessingService.FormatFileSize(fileInfo.Length);
             imageFormat = Path.GetExtension(filePath).TrimStart('.').ToUpperInvariant();
+            _fileCreationTime = fileInfo.CreationTime.ToString("yyyy-MM-dd HH:mm:ss");
+            _fileLastWriteTime = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
 
             await Task.Run(async () =>
             {
@@ -321,6 +338,7 @@ public partial class ImagePage : ComponentBase
                 }
                 catch
                 {
+                    Debug.WriteLine($"[Load] DecodeImage fallback for: {fileName}");
                     imageSource = new Uri(filePath).AbsoluteUri;
                     try
                     {
@@ -329,7 +347,10 @@ public partial class ImagePage : ComponentBase
                         imageWidth = dims.width;
                         imageHeight = dims.height;
                     }
-                    catch { /* fallback 失败也继续 */ }
+                    catch
+                    {
+                        Debug.WriteLine($"[Load] Fallback get dimensions failed: {fileName}");
+                    }
                 }
             });
 
@@ -373,7 +394,10 @@ public partial class ImagePage : ComponentBase
                 var result = await Task.Run(() => ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p)));
                 DecodeCache.Set(p, result.DataUri, result.Width, result.Height);
             }
-            catch { /* 预加载失败不影响当前图 */ }
+            catch
+            {
+                Debug.WriteLine($"[Preload] Failed: {p}");
+            }
         }
     }
 
@@ -395,7 +419,11 @@ public partial class ImagePage : ComponentBase
             float cssFitH = vpHeight / imageHeight;
             return Math.Min(Math.Min(cssFitW, cssFitH), 1.0f);
         }
-        catch { return 1.0f; }
+        catch
+        {
+            Debug.WriteLine("[Zoom] CalcFitZoom JS interop failed");
+            return 1.0f;
+        }
     }
 
     private void ClampPan()
@@ -656,10 +684,20 @@ public partial class ImagePage : ComponentBase
         _ = MauiNav.GoBackAsync();
     }
 
-    // 滑动切换动画
-    private float _slideOffsetPercent;
-    private bool _slideInProgress;
+    // 滑动切换动画（CSS @keyframes + JS animationend Promise 驱动）
+    private string _slideAniClass = "";
     private bool _isAnimating;
+
+    /// <summary>等待当前 img-slide 的 animationend 事件</summary>
+    private Task WaitSlideAnimation()
+    {
+        return JS.InvokeAsync<object>("eval", @"
+            new Promise(r => {
+                var el = document.querySelector('.img-slide');
+                if (!el) { r(); return; }
+                el.addEventListener('animationend', () => r(), {once:true});
+            })").AsTask();
+    }
 
     private async Task GoPrev()
     {
@@ -667,15 +705,18 @@ public partial class ImagePage : ComponentBase
         _isAnimating = true;
         stitchMode = false; stitchImages = null;
 
-        // Phase 1: 滑出（向右）
-        _slideOffsetPercent = 100;
-        _slideInProgress = true;
+        // Phase 1: 滑出（向右 +100%）
+        _slideAniClass = "slide-out-right";
         StateHasChanged();
-        await Task.Delay(280);
+        await Task.Delay(16);
+        await WaitSlideAnimation();
 
-        // Phase 2: 切换图片，定位到右侧外
-        _slideInProgress = false;
-        _slideOffsetPercent = -100;
+        // 定位到左侧外（-100%），为滑入做准备
+        await JS.InvokeVoidAsync("eval",
+            @"document.querySelector('.img-slide').style.transform = 'translateX(-100%)'");
+        _slideAniClass = "";
+
+        // Phase 2: 切换图片
         currentIndex--; filePath = fileList[currentIndex];
         fileName = Path.GetFileName(filePath);
         ResetView();
@@ -683,12 +724,17 @@ public partial class ImagePage : ComponentBase
         StateHasChanged();
         await Task.Delay(16);
 
-        // Phase 3: 滑入（向左）
-        _slideOffsetPercent = 0;
-        _slideInProgress = true;
+        // Phase 3: 从左侧滑入（向左）
+        _slideAniClass = "slide-in-from-left";
         StateHasChanged();
-        await Task.Delay(280);
+        await Task.Delay(16);
+        await WaitSlideAnimation();
 
+        // 清理
+        await JS.InvokeVoidAsync("eval",
+            @"document.querySelector('.img-slide')?.style.removeProperty('transform')");
+        _slideAniClass = "";
+        StateHasChanged();
         _isAnimating = false;
     }
 
@@ -698,15 +744,18 @@ public partial class ImagePage : ComponentBase
         _isAnimating = true;
         stitchMode = false; stitchImages = null;
 
-        // Phase 1: 滑出（向左）
-        _slideOffsetPercent = -100;
-        _slideInProgress = true;
+        // Phase 1: 滑出（向左 -100%）
+        _slideAniClass = "slide-out-left";
         StateHasChanged();
-        await Task.Delay(280);
+        await Task.Delay(16);
+        await WaitSlideAnimation();
 
-        // Phase 2: 切换图片，定位到左侧外
-        _slideInProgress = false;
-        _slideOffsetPercent = 100;
+        // 定位到右侧外（+100%），为滑入做准备
+        await JS.InvokeVoidAsync("eval",
+            @"document.querySelector('.img-slide').style.transform = 'translateX(100%)'");
+        _slideAniClass = "";
+
+        // Phase 2: 切换图片
         currentIndex++; filePath = fileList[currentIndex];
         fileName = Path.GetFileName(filePath);
         ResetView();
@@ -714,12 +763,17 @@ public partial class ImagePage : ComponentBase
         StateHasChanged();
         await Task.Delay(16);
 
-        // Phase 3: 滑入（向右）
-        _slideOffsetPercent = 0;
-        _slideInProgress = true;
+        // Phase 3: 从右侧滑入
+        _slideAniClass = "slide-in-from-right";
         StateHasChanged();
-        await Task.Delay(280);
+        await Task.Delay(16);
+        await WaitSlideAnimation();
 
+        // 清理
+        await JS.InvokeVoidAsync("eval",
+            @"document.querySelector('.img-slide')?.style.removeProperty('transform')");
+        _slideAniClass = "";
+        StateHasChanged();
         _isAnimating = false;
     }
 }

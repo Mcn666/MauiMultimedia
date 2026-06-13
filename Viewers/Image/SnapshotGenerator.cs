@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Microsoft.JSInterop;
 using MauiMultimedia.Viewers.Image.Services;
@@ -49,6 +50,7 @@ public static class SnapshotGenerator
         }
         catch
         {
+            Debug.WriteLine($"[Snap] Thumbnail failed: {filePath}");
             return null;
         }
         finally

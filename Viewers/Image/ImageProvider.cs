@@ -19,6 +19,8 @@ public class ImageProvider : IViewProvider
         ".svg"
     };
 
+    private static readonly FileScanCategory _scanCategory = new("图片", Exts.ToArray(), "\U0001F5BC");
+
     public bool CanHandle(FileSystemItem item) =>
         !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
 
@@ -34,5 +36,5 @@ public class ImageProvider : IViewProvider
 
     public void RequestItemSnapshot(FileSystemItem item) { }
     public event Action? SnapshotsUpdated { add { } remove { } }
-    public FileScanCategory? ScanCategory => new("图片", Exts.ToArray(), "\U0001F5BC");
+    public FileScanCategory? ScanCategory => _scanCategory;
 }

@@ -69,7 +69,7 @@
                  @ontouchmove="OnTouchMove"
                  @ontouchend="OnTouchEnd">
 
-                <div class="img-slide @(_slideInProgress ? "sliding" : "")" style="transform: translateX(@(_slideOffsetPercent)%)">
+                <div class="img-slide @_slideAniClass">
                     <div class="img-wrap" style="@GetZoomStyle()">
                         <img src="@imageSource" alt="@fileName" class="img-display" />
                     </div>
@@ -117,11 +117,11 @@
                 </div>
                 <div class="v-detail-row">
                     <span class="v-detail-label">创建时间</span>
-                    <span class="v-detail-value">@(string.IsNullOrEmpty(filePath) ? "-" : File.GetCreationTime(filePath).ToString("yyyy-MM-dd HH:mm:ss"))</span>
+                    <span class="v-detail-value">@(_fileCreationTime ?? "-")</span>
                 </div>
                 <div class="v-detail-row">
                     <span class="v-detail-label">修改时间</span>
-                    <span class="v-detail-value">@(string.IsNullOrEmpty(filePath) ? "-" : File.GetLastWriteTime(filePath).ToString("yyyy-MM-dd HH:mm:ss"))</span>
+                    <span class="v-detail-value">@(_fileLastWriteTime ?? "-")</span>
                 </div>
             </div>
         </div>

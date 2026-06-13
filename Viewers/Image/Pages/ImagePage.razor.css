@@ -169,7 +169,7 @@
     pointer-events: none;
 }
 
-/* ── 滑动切换动画容器 ── */
+/* ── 滑动切换动画（CSS @keyframes + animationend 驱动） ── */
 
 .img-slide {
     width: 100%;
@@ -179,9 +179,28 @@
     justify-content: center;
     will-change: transform;
 }
-.img-slide.sliding {
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+
+@keyframes ani-slide-out-left {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-100%); }
 }
+@keyframes ani-slide-out-right {
+    from { transform: translateX(0); }
+    to   { transform: translateX(100%); }
+}
+@keyframes ani-slide-in-from-right {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}
+@keyframes ani-slide-in-from-left {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(0); }
+}
+
+.img-slide.slide-out-left  { animation: ani-slide-out-left .28s cubic-bezier(.4,0,.2,1) forwards; }
+.img-slide.slide-out-right { animation: ani-slide-out-right .28s cubic-bezier(.4,0,.2,1) forwards; }
+.img-slide.slide-in-from-right { animation: ani-slide-in-from-right .28s cubic-bezier(.4,0,.2,1) forwards; }
+.img-slide.slide-in-from-left  { animation: ani-slide-in-from-left .28s cubic-bezier(.4,0,.2,1) forwards; }
 
 /* ── 信息叠加层 ── */
 
