@@ -278,18 +278,18 @@ public partial class Home
         {
             case "name":
                 items = (sortDirection == "asc")
-                    ? items.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList()
-                    : items.OrderByDescending(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                    ? items.OrderBy(i => i.Name, MauiMultimedia.Core.Utils.NaturalSortComparer.Instance).ToList()
+                    : items.OrderByDescending(i => i.Name, MauiMultimedia.Core.Utils.NaturalSortComparer.Instance).ToList();
                 break;
             case "type":
                 items = (sortDirection == "asc")
                     ? items.OrderBy(i => i.IsFolder ? 0 : 1)
                         .ThenBy(i => i.IsFolder ? "" : Path.GetExtension(i.Name), StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(i => i.Name, MauiMultimedia.Core.Utils.NaturalSortComparer.Instance)
                         .ToList()
                     : items.OrderBy(i => i.IsFolder ? 1 : 0)
                         .ThenBy(i => Path.GetExtension(i.Name), StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(i => i.Name, MauiMultimedia.Core.Utils.NaturalSortComparer.Instance)
                         .ToList();
                 break;
             case "count":

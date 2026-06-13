@@ -170,7 +170,7 @@
                 entry.Size,
                 entry.LastModifiedTime ?? DateTime.MinValue));
         }
-        result.Sort((x, y) => string.Compare(x.Full, y.Full, StringComparison.Ordinal));
+        result.Sort((x, y) => MauiMultimedia.Core.Utils.NaturalSortComparer.Instance.Compare(x.Full, y.Full));
         return result;
     }
 
@@ -200,7 +200,7 @@
 
     private static void Sort(List<TreeItem> items)
     {
-        items.Sort((a, b) => a.Dir != b.Dir ? (a.Dir ? -1 : 1) : string.Compare(a.Label, b.Label, StringComparison.Ordinal));
+        items.Sort((a, b) => a.Dir != b.Dir ? (a.Dir ? -1 : 1) : MauiMultimedia.Core.Utils.NaturalSortComparer.Instance.Compare(a.Label, b.Label));
         foreach (var n in items) Sort(n.Kids);
     }
 
@@ -374,7 +374,7 @@
                     fileList.Add(p);
                 }
             }
-            fileList.Sort(StringComparer.OrdinalIgnoreCase);
+            fileList.Sort(MauiMultimedia.Core.Utils.NaturalSortComparer.Instance);
             NavState.CurrentDirectoryFiles = fileList;
 
             // 使用 MauiNav 创建 ContentPage 并导航到查看器
