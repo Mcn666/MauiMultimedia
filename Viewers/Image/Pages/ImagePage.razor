@@ -12,11 +12,14 @@
 
         <span class="v-sep"></span>
 
-        <span class="v-zoom">@(((stitchMode ? _stitchZoom : displayZoom) * 100).ToString("F0"))%</span>
+        <span class="v-zoom">@(stitchMode
+            ? $"{(_stitchZoom * 100):F0}%"
+            : $"{(displayZoom * _dpr * 100):F0}%")</span>
         <button class="v-btn v-btn-icon" @onclick="ZoomOut" disabled="@((stitchMode ? _stitchZoom <= 0.5f : displayZoom <= MinZoom) ? true : null)" title="缩小 (-)">−</button>
         <button class="v-btn v-btn-icon" @onclick="ZoomIn" disabled="@((stitchMode ? _stitchZoom >= 3.0f : displayZoom >= MaxZoom) ? true : null)" title="放大 (+)">+</button>
-        <button class="v-btn v-btn-sm" @onclick="ZoomFit">适应</button>
-        <button class="v-btn v-btn-sm" @onclick="ZoomActual">原大</button>
+        <button class="v-btn v-btn-sm @(zoomFitMode && !stitchMode ? "v-btn-active" : "")"
+                @onclick="ToggleFitActual"
+                title="@GetFitToggleTitle()">@GetFitToggleText()</button>
 
         <span class="v-sep"></span>
         @if (canStitch)

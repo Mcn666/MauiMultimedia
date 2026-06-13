@@ -58,6 +58,7 @@ public partial class ImagePage : ComponentBase
     // 视口尺寸
     private float vpWidth;
     private float vpHeight;
+    private float _dpr = 1f;
 
     // 鼠标拖拽
     private float panX, panY;
@@ -381,12 +382,18 @@ public partial class ImagePage : ComponentBase
         try
         {
             var dims = await JS.InvokeAsync<double[]>("eval",
-                "(() => { var r = document.querySelector('.image-viewport').getBoundingClientRect(); return [r.width, r.height]; })()");
+                "(() => { var v = document.querySelector('.image-viewport'); " +
+                "return [v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1]; })()");
             vpWidth = (float)dims[0];
             vpHeight = (float)dims[1];
+            _dpr = (float)dims[2];
             if (vpWidth <= 0 || vpHeight <= 0 || imageWidth <= 0 || imageHeight <= 0)
                 return 1.0f;
-            return Math.Min(Math.Min(vpWidth / imageWidth, vpHeight / imageHeight), 1.0f);
+
+            // 图片适配视口所需的 CSS 缩放（上限 CSS 1:1，不过度放大）
+            float cssFitW = vpWidth / imageWidth;
+            float cssFitH = vpHeight / imageHeight;
+            return Math.Min(Math.Min(cssFitW, cssFitH), 1.0f);
         }
         catch { return 1.0f; }
     }
@@ -438,7 +445,30 @@ public partial class ImagePage : ComponentBase
     private void ZoomActual()
     {
         if (stitchMode) { _stitchZoom = 1.0f; StateHasChanged(); return; }
-        ExitFit(); displayZoom = 1.0f;
+        ExitFit();
+        // 除以 DPR 实现物理像素 1:1（1 图像像素 = 1 物理像素）
+        displayZoom = Math.Max(1.0f / _dpr, 0.01f);
+    }
+
+    /// <summary>
+    /// 在适应和1:1之间切换（合并按钮）
+    /// </summary>
+    private void ToggleFitActual()
+    {
+        if (zoomFitMode) ZoomActual(); else ZoomFit();
+        StateHasChanged();
+    }
+
+    private string GetFitToggleText()
+    {
+        if (stitchMode) return _stitchZoom >= 1.0f ? "适应" : "1:1";
+        return zoomFitMode ? "1:1" : "适应";
+    }
+
+    private string GetFitToggleTitle()
+    {
+        if (stitchMode) return _stitchZoom >= 1.0f ? "适应窗口" : "1:1";
+        return zoomFitMode ? "1:1" : "适应窗口";
     }
 
     private void OnWheel(WheelEventArgs e)
