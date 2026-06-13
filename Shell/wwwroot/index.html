@@ -57,6 +57,52 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // 检测 flex-gap 支持（Chrome < 84 不支持 flex 中的 gap）
+            // 注意：子元素必须有宽度，否则 getBoundingClientRect 始终为 0
+            (function(){
+                var d = document.createElement('div');
+                d.style.cssText = 'display:flex;gap:1px';
+                d.innerHTML = '<div style="width:10px;height:1px"></div><div style="width:10px;height:1px"></div>';
+                document.body.appendChild(d);
+                var r1 = d.children[0].getBoundingClientRect();
+                var r2 = d.children[1].getBoundingClientRect();
+                if (Math.round(r2.left) <= Math.round(r1.right))
+                    document.documentElement.classList.add('no-flex-gap');
+                document.body.removeChild(d);
+            })();
+
+            // 检测 color-mix 支持（Chrome < 111 不支持）
+            if (CSS && CSS.supports && CSS.supports('color', 'color-mix(in srgb, red, blue)'))
+                document.documentElement.classList.add('color-mix');
+
+            // Android 虚拟键盘：弹出时将 overlay 上移使输入框可见
+            document.addEventListener('focusin', function(e) {
+                var el = e.target;
+                if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return;
+                var overlay = el.closest('.picker-overlay');
+                if (!overlay) return;
+                setTimeout(function() {
+                    // 尝试用 visualViewport 计算精确键盘高度
+                    var vv = window.visualViewport;
+                    var kbdH = vv ? window.innerHeight - vv.height : 0;
+                    if (kbdH > 50) {
+                        // 精确计算：输入框底部超出可视区域多少就上移多少
+                        var r = el.getBoundingClientRect();
+                        var overlap = r.bottom - (vv ? vv.height : window.innerHeight);
+                        if (overlap > 0) {
+                            overlay.style.setProperty('margin-top', (-overlap - 20) + 'px', 'important');
+                            return;
+                        }
+                    }
+                    // fallback: 直接上移 35%
+                    overlay.style.setProperty('margin-top', '-35vh', 'important');
+                }, 350);
+            });
+            document.addEventListener('focusout', function(e) {
+                var overlay = e.target.closest('.picker-overlay');
+                if (overlay) overlay.style.removeProperty('margin-top');
+            });
+
             const obs = new IntersectionObserver(async (entries) => {
                 for (const e of entries) {
                     if (!e.isIntersecting) continue;

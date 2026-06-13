@@ -39,6 +39,48 @@
 <body>
     <div id="app">Loading...</div>
     <div id="blazor-error-ui" class="blazor-error">An error occurred.</div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var d = document.createElement('div');
+            d.style.cssText = 'display:flex;gap:1px';
+            d.innerHTML = '<div style="width:10px;height:1px"></div><div style="width:10px;height:1px"></div>';
+            document.body.appendChild(d);
+            var r1 = d.children[0].getBoundingClientRect();
+            var r2 = d.children[1].getBoundingClientRect();
+            if (Math.round(r2.left) <= Math.round(r1.right))
+                document.documentElement.classList.add('no-flex-gap');
+            document.body.removeChild(d);
+
+            // 检测 color-mix 支持（Chrome < 111 不支持）
+            if (CSS && CSS.supports && CSS.supports('color', 'color-mix(in srgb, red, blue)'))
+                document.documentElement.classList.add('color-mix');
+
+            // Android 虚拟键盘：弹出时将 overlay 上移使输入框可见
+            document.addEventListener('focusin', function(e) {
+                var el = e.target;
+                if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return;
+                var overlay = el.closest('.picker-overlay');
+                if (!overlay) return;
+                setTimeout(function() {
+                    var vv = window.visualViewport;
+                    var kbdH = vv ? window.innerHeight - vv.height : 0;
+                    if (kbdH > 50) {
+                        var r = el.getBoundingClientRect();
+                        var overlap = r.bottom - (vv ? vv.height : window.innerHeight);
+                        if (overlap > 0) {
+                            overlay.style.setProperty('margin-top', (-overlap - 20) + 'px', 'important');
+                            return;
+                        }
+                    }
+                    overlay.style.setProperty('margin-top', '-35vh', 'important');
+                }, 350);
+            });
+            document.addEventListener('focusout', function(e) {
+                var overlay = e.target.closest('.picker-overlay');
+                if (overlay) overlay.style.removeProperty('margin-top');
+            });
+        });
+    </script>
     <script src="scripts/blazor.webview.es2019.js" autostart="false"></script>
 </body>
 </html>

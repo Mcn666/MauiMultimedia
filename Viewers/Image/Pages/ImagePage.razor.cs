@@ -399,6 +399,8 @@ public partial class ImagePage : ComponentBase
                 Debug.WriteLine($"[Preload] Failed: {p}");
             }
         }
+        // 预加载完成后重新检查拼接条件（首次加载时缓存只有1张，无法判定）
+        await CheckCanStitchAsync();
     }
 
     private async Task<float> CalcFitZoomAsync()

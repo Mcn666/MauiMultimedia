@@ -351,3 +351,14 @@
 
     .v-stitch-container { gap: 2px; padding: 4px 0; }
 }
+
+/* JS 检测到不支持 flex-gap 时回退（@supports 无法区分 grid-gap vs flex-gap） */
+html.no-flex-gap .img-info > * + *          { margin-inline-start: 6px; }
+html.no-flex-gap .v-status > * + *          { margin-block-start: 16px; }
+html.no-flex-gap .v-detail-body > * + *     { margin-block-start: 12px; }
+html.no-flex-gap .v-detail-row > * + *      { margin-block-start: 2px; }
+html.no-flex-gap .v-stitch-container > * + * { margin-block-start: 4px; }
+@media (max-width: 600px) {
+    html.no-flex-gap .v-detail-body > * + *     { margin-block-start: 8px; }
+    html.no-flex-gap .v-stitch-container > * + * { margin-block-start: 2px; }
+}

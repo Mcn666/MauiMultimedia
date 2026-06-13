@@ -475,10 +475,6 @@ h1:focus {
     z-index: 1000;
 }
 @media (max-width: 600px) {
-    .picker-overlay {
-        align-items: flex-start;
-        padding-top: 10vh;
-    }
     .picker-modal {
         max-height: 80vh;
         overflow-y: auto;
@@ -528,6 +524,8 @@ h1:focus {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    max-height: 60vh;
+    overflow-y: auto;
 }
 .picker-file {
     font-size: 13px;
@@ -643,8 +641,12 @@ h1:focus {
     transition: opacity .15s;
 }
 .scan-type-btn:hover {
-    background: color-mix(in srgb, var(--accent, #888) 10%, transparent);
+    background-color: rgba(136,136,136,0.25);
     transform: translateX(2px);
+}
+/* JS 检测到浏览器支持 color-mix 时加 .color-mix 类，用动态彩色覆盖 */
+html.color-mix .scan-type-btn:hover {
+    background: color-mix(in srgb, var(--accent, #888) 10%, transparent);
 }
 .scan-type-btn:hover::before {
     opacity: 1;
@@ -661,12 +663,18 @@ h1:focus {
     justify-content: center;
     border-radius: 10px;
     font-size: 18px;
-    background: color-mix(in srgb, var(--accent, #888) 15%, transparent);
+    background-color: rgba(136,136,136,0.35);
     transition: background .15s, transform .12s;
     user-select: none;
 }
+html.color-mix .scan-type-icon {
+    background: color-mix(in srgb, var(--accent, #888) 15%, transparent);
+}
 .scan-type-btn:hover .scan-type-icon {
     transform: scale(1.08);
+    background-color: rgba(136,136,136,0.45);
+}
+html.color-mix .scan-type-btn:hover .scan-type-icon {
     background: color-mix(in srgb, var(--accent, #888) 22%, transparent);
 }
 .scan-type-info {
@@ -1297,6 +1305,7 @@ h1:focus {
     text-align: center;
     min-width: 0;
     aspect-ratio: 1;
+    height: 110px; /* fallback: Chrome < 88 忽略 aspect-ratio 时保底 */
     min-height: 100px;
     position: relative;
     overflow: hidden;
@@ -1448,3 +1457,46 @@ h1:focus {
     }
     .grid-icon { font-size: 20px; }
 }
+
+/* ═══════════════════════════════════════════════
+   Android 10 WebView (Chromium < 84) 兼容回退
+   flex 容器中的 gap 在 Chrome 84+ 才被支持，
+   低版本 WebView 中 gap 被静默忽略，靠 margin 回退。
+   ═══════════════════════════════════════════════ */
+
+/* JS 检测到不支持 flex-gap 时给 <html> 加上 .no-flex-gap 类
+   @supports 无法区分 grid-gap 和 flex-gap，所以用 JS 实测判断 */
+html.no-flex-gap .v-toolbar > * + *     { margin-inline-start: 4px; }
+html.no-flex-gap .browser-header > * + * { margin-inline-start: 8px; }
+html.no-flex-gap .path-bar > * + *      { margin-inline-start: 12px; }
+html.no-flex-gap .picker-item > * + *   { margin-inline-start: 10px; }
+html.no-flex-gap .scan-type-btn > * + * { margin-inline-start: 12px; }
+html.no-flex-gap .scan-header > * + *   { margin-inline-start: 8px; }
+html.no-flex-gap .btn-sort > * + *      { margin-inline-start: 3px; }
+html.no-flex-gap .browser-layout > * + * { margin-inline-start: 16px; }
+html.no-flex-gap .sidebar-item > * + *  { margin-inline-start: 8px; }
+html.no-flex-gap .theme-option > * + *  { margin-inline-start: 6px; }
+
+html.no-flex-gap .picker-body > * + *    { margin-block-start: 8px; }
+html.no-flex-gap .picker-list > * + *    { margin-block-start: 4px; }
+html.no-flex-gap .scan-panel-body > * + * { margin-block-start: 2px; }
+html.no-flex-gap .scan-type-info > * + * { margin-block-start: 2px; }
+html.no-flex-gap .browser-loading > * + * { margin-block-start: 12px; }
+html.no-flex-gap .grid-item > * + *      { margin-block-start: 8px; }
+
+@media (max-width: 768px) {
+    html.no-flex-gap .grid-item > * + * { margin-block-start: 4px; }
+}
+@media (max-width: 600px) {
+    html.no-flex-gap .v-toolbar > * + * { margin-inline-start: 3px; }
+}
+@media (max-width: 400px) {
+    html.no-flex-gap .browser-header > * + * { margin-inline-start: 4px; }
+}
+
+/* ═══════════════════════════════════════════════
+   补充: aspect-ratio 回退（Chrome < 88）
+   .grid-item 已有 min-height: 100px 作为保底，
+   没有 aspect-ratio 时项目高度由内容决定，
+   功能不受影响，仅视觉效果非正方形。
+   ═══════════════════════════════════════════════ */

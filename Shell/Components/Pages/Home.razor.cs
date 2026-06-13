@@ -82,7 +82,7 @@ public partial class Home
         // 延迟聚焦输入框
         await Task.Delay(100);
         await JS.InvokeVoidAsync("eval",
-            "document.querySelector('.alias-input')?.focus()");
+            "var el=document.querySelector('.alias-input');if(el)el.focus()");
     }
 
     private bool IsFileLocked(FileSystemItem item)
