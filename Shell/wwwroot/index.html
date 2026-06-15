@@ -10,23 +10,32 @@
     <link rel="icon" href="data:,">
     <style>
         /* 默认深色背景，防止 Android WebView 白色闪烁。内联脚本会立刻纠正为正确值 */
-        :root { background: #1a1a1a; }
+        :root {
+            background: #1a1a1a;
+        }
+
         @media (prefers-color-scheme: light) {
-            :root { background: #ffffff; }
+            :root {
+                background: #ffffff;
+            }
         }
     </style>
     <script>
-        (function() {
+        (function () {
             var saved = localStorage.getItem('filebrowser-theme');
             var dark;
             if (saved === 'dark') dark = true;
             else if (saved === 'light') dark = false;
             else {
-                // "system" 模式：优先读 Home.razor 存好的解析值，避免 matchMedia 不可靠
+                // "system" 模式：优先读 Home.razor 存好的解析值
                 var resolved = localStorage.getItem('filebrowser-theme-resolved');
                 if (resolved === 'dark') dark = true;
                 else if (resolved === 'light') dark = false;
-                else dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                else {
+                    // matchMedia 在 Android WebView 早期加载时不可靠，不作为强制依据
+                    // 让 CSS @media (prefers-color-scheme) 自行处理，不设内联背景
+                    return;
+                }
             }
 
             var bg = dark ? '#1a1a1a' : '#ffffff';
@@ -35,7 +44,7 @@
         })();
 
         // 通过 DotNetStreamReference 创建 blob URL
-        window.createBlobUrl = async function(streamRef, mimeType) {
+        window.createBlobUrl = async function (streamRef, mimeType) {
             const ab = await streamRef.arrayBuffer();
             const blob = new Blob([ab], { type: mimeType });
             return URL.createObjectURL(blob);
@@ -43,7 +52,7 @@
     </script>
 </head>
 
-<body>
+<body style="background:#1a1a1a;margin:0;">
 
     <div class="status-bar-safe-area"></div>
 
@@ -59,7 +68,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             // 检测 flex-gap 支持（Chrome < 84 不支持 flex 中的 gap）
             // 注意：子元素必须有宽度，否则 getBoundingClientRect 始终为 0
-            (function(){
+            (function () {
                 var d = document.createElement('div');
                 d.style.cssText = 'display:flex;gap:1px';
                 d.innerHTML = '<div style="width:10px;height:1px"></div><div style="width:10px;height:1px"></div>';
@@ -76,12 +85,12 @@
                 document.documentElement.classList.add('color-mix');
 
             // Android 虚拟键盘：弹出时将 overlay 上移使输入框可见
-            document.addEventListener('focusin', function(e) {
+            document.addEventListener('focusin', function (e) {
                 var el = e.target;
                 if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return;
                 var overlay = el.closest('.picker-overlay');
                 if (!overlay) return;
-                setTimeout(function() {
+                setTimeout(function () {
                     // 尝试用 visualViewport 计算精确键盘高度
                     var vv = window.visualViewport;
                     var kbdH = vv ? window.innerHeight - vv.height : 0;
@@ -98,7 +107,7 @@
                     overlay.style.setProperty('margin-top', '-35vh', 'important');
                 }, 350);
             });
-            document.addEventListener('focusout', function(e) {
+            document.addEventListener('focusout', function (e) {
                 var overlay = e.target.closest('.picker-overlay');
                 if (overlay) overlay.style.removeProperty('margin-top');
             });

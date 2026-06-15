@@ -15,18 +15,18 @@
     </style>
     <script>
         (function() {
-            var s = localStorage.getItem('filebrowser-theme');
-            var d;
-            if (s === 'dark') d = true;
-            else if (s === 'light') d = false;
+            var saved = localStorage.getItem('filebrowser-theme');
+            var dark;
+            if (saved === 'dark') dark = true;
+            else if (saved === 'light') dark = false;
             else {
-                var r = localStorage.getItem('filebrowser-theme-resolved');
-                if (r === 'dark') d = true;
-                else if (r === 'light') d = false;
-                else d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var resolved = localStorage.getItem('filebrowser-theme-resolved');
+                if (resolved === 'dark') dark = true;
+                else if (resolved === 'light') dark = false;
+                else return;
             }
-            document.documentElement.style.background = d ? '#1a1a1a' : '#ffffff';
-            document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
+            document.documentElement.style.background = dark ? '#1a1a1a' : '#ffffff';
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
         })();
 
         window.createBlobUrl = async function(streamRef, mimeType) {

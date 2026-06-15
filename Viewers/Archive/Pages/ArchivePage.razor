@@ -6,6 +6,8 @@
 @using SharpCompress.Readers
 @using MauiMultimedia.Core.Abstractions
 @using System.Linq
+@using System.Text
+@using System.Globalization
 @using MauiMultimedia.Core.Models
 @inject NavigationManager Navigation
 @inject IFileNavigationState NavState
@@ -101,7 +103,7 @@
         return Arc.Contains(e) || name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
     }
 
-    private record Entry(string Full, string Name, long Size, DateTime Modified);
+    private record Entry(string Full, string Name, long Size, DateTime Modified, bool IsDir);
     private class TreeItem
     {
         public string Label { get; set; }
@@ -158,20 +160,35 @@
 
     private static List<Entry> Scan(Stream stream, string? password = null)
     {
-        var options = password != null ? new ReaderOptions { Password = password } : null;
-        using var archive = ArchiveFactory.OpenArchive(stream, options);
+        EnsureEncoding();
+        var encoding = Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        var opts = new ReaderOptions
+        {
+            Password = password,
+            ArchiveEncoding = new SharpCompress.Common.ArchiveEncoding { Default = encoding }
+        };
+        using var archive = ArchiveFactory.OpenArchive(stream, opts);
         var result = new List<Entry>();
         foreach (var entry in archive.Entries)
         {
-            if (entry.IsDirectory) continue;
+            var key = entry.Key ?? "";
             result.Add(new Entry(
-                entry.Key ?? "",
-                Path.GetFileName(entry.Key ?? ""),
+                key.TrimEnd('/'),
+                Path.GetFileName(key.TrimEnd('/')),
                 entry.Size,
-                entry.LastModifiedTime ?? DateTime.MinValue));
+                entry.LastModifiedTime ?? DateTime.MinValue,
+                entry.IsDirectory));
         }
         result.Sort((x, y) => MauiMultimedia.Core.Utils.NaturalSortComparer.Instance.Compare(x.Full, y.Full));
         return result;
+    }
+
+    private static bool _encRegistered;
+    private static void EnsureEncoding()
+    {
+        if (_encRegistered) return;
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        _encRegistered = true;
     }
 
     private static List<TreeItem> Build(List<Entry> entries)
@@ -191,8 +208,19 @@
                 map[cur] = n.Kids;
                 (i == 0 ? root : map[cur[..^(parts[i].Length + 1)]]).Add(n);
             }
-            var f = new TreeItem(r.Name, r.Full, false, r.Size, r.Modified, parts.Length - 1, new());
-            (parts.Length == 1 ? root : map[string.Join("/", parts[..^1])]).Add(f);
+            var parent = parts.Length == 1 ? root : map[string.Join("/", parts[..^1])];
+            if (r.IsDir)
+            {
+                if (map.ContainsKey(r.Full)) continue;
+                var n = new TreeItem(r.Name, r.Full, true, 0, r.Modified, parts.Length - 1, new());
+                map[r.Full] = n.Kids;
+                parent.Add(n);
+            }
+            else
+            {
+                var f = new TreeItem(r.Name, r.Full, false, r.Size, r.Modified, parts.Length - 1, new());
+                parent.Add(f);
+            }
         }
         Sort(root);
         return root;
@@ -401,12 +429,18 @@
     /// <summary>从指定档案中提取一个条目到目标路径</summary>
     private static void ExtractEntry(Stream archiveStream, string entryName, string outPath)
     {
-        var opts = archivePassword != null ? new ReaderOptions { Password = archivePassword } : null;
+        EnsureEncoding();
+        var encoding = Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        var opts = new ReaderOptions
+        {
+            Password = archivePassword,
+            ArchiveEncoding = new SharpCompress.Common.ArchiveEncoding { Default = encoding }
+        };
         using var archive = ArchiveFactory.OpenArchive(archiveStream, opts);
         foreach (var entry in archive.Entries)
         {
             if (entry.IsDirectory) continue;
-            if (entry.Key == entryName)
+            if ((entry.Key ?? "") == entryName)
             {
                 entry.WriteToFile(outPath, new ExtractionOptions { Overwrite = true });
                 return;
