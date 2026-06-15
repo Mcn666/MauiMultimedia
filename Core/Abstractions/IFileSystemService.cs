@@ -13,6 +13,16 @@ public interface IFileSystemService
     Task<List<FileSystemItem>> ListItemsAsync(string path);
 
     /// <summary>
+    /// 仅列出目录（快速，数量少时 <50ms）
+    /// </summary>
+    Task<List<FileSystemItem>> ListDirItemsAsync(string path);
+
+    /// <summary>
+    /// 仅列出文件（大文件夹慢）
+    /// </summary>
+    Task<List<FileSystemItem>> ListFileItemsAsync(string path);
+
+    /// <summary>
     /// 获取路径的根目录
     /// </summary>
     string GetPathRoot(string path);

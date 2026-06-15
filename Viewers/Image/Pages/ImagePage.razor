@@ -12,11 +12,9 @@
 
         <span class="v-sep"></span>
 
-        <span class="v-zoom">@(stitchMode
-            ? $"{(_stitchZoom * 100):F0}%"
-            : $"{(displayZoom * _dpr * 100):F0}%")</span>
-        <button class="v-btn v-btn-icon" @onclick="ZoomOut" disabled="@((stitchMode ? _stitchZoom <= 0.5f : displayZoom <= MinZoom) ? true : null)" title="缩小 (-)">−</button>
-        <button class="v-btn v-btn-icon" @onclick="ZoomIn" disabled="@((stitchMode ? _stitchZoom >= 3.0f : displayZoom >= MaxZoom) ? true : null)" title="放大 (+)">+</button>
+        <span class="v-zoom">@GetDisplayZoom()</span>
+        <button class="v-btn v-btn-icon" @onclick="ZoomOut" disabled="@((stitchMode ? _stitchZoom <= 0.1f : displayZoom <= MinZoom) ? true : null)" title="缩小 (-)">−</button>
+        <button class="v-btn v-btn-icon" @onclick="ZoomIn" disabled="@((stitchMode ? _stitchZoom >= 5.0f : displayZoom >= MaxZoom) ? true : null)" title="放大 (+)">+</button>
         <button class="v-btn v-btn-sm @(zoomFitMode && !stitchMode ? "v-btn-active" : "")"
                 @onclick="ToggleFitActual"
                 title="@GetFitToggleTitle()">@GetFitToggleText()</button>
@@ -41,10 +39,17 @@
     else if (stitchMode && stitchImages != null)
     {
         <div class="v-stitch-container">
+            @if (_stitchLoadedCount < stitchImages.Count)
+            {
+                <div class="v-stitch-progress">⏳ 加载中 @_stitchLoadedCount/@stitchImages.Count ...</div>
+            }
             @foreach (var si in stitchImages)
             {
-                <img src="@si.BlobUrl" alt="" class="v-stitch-img" loading="lazy"
-                     style="aspect-ratio:@si.Width/@si.Height; max-width:min(100%, @((int)(800 * _stitchZoom))px)" />
+                <div class="v-stitch-item">
+                    <img src="@(string.IsNullOrEmpty(si.BlobUrl) ? "" : si.BlobUrl)" alt="" class="v-stitch-img" loading="lazy"
+                         style="max-width:100%; width:@((int)(si.Width * _stitchZoom))px; aspect-ratio:@si.Width/@si.Height;" />
+                    <span class="v-stitch-label">@si.FileName</span>
+                </div>
             }
         </div>
     }

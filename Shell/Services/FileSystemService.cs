@@ -23,38 +23,75 @@ public class FileSystemService : IFileSystemService
 #endif
         return _userRoot;
     }
-    public Task<List<FileSystemItem>> ListItemsAsync(string path)
+    public async Task<List<FileSystemItem>> ListItemsAsync(string path)
     {
-        var items = new List<FileSystemItem>();
-
-        try
+        return await Task.Run(() =>
         {
-            // 枚举并排序目录
-            var dirs = Directory.EnumerateDirectories(path)
-                .Select(dir => SafeCreateItem(dir, isFolder: true))
-                .Where(item => item != null)
-                .OrderBy(item => item!.Name)
-                .Cast<FileSystemItem>()
-                .ToList();
+            var items = new List<FileSystemItem>();
 
-            items.AddRange(dirs);
+            try
+            {
+                // 枚举并排序目录
+                var dirs = Directory.EnumerateDirectories(path)
+                    .Select(dir => SafeCreateItem(dir, isFolder: true))
+                    .Where(item => item != null)
+                    .OrderBy(item => item!.Name)
+                    .Cast<FileSystemItem>()
+                    .ToList();
 
-            // 枚举并排序文件
-            var files = Directory.EnumerateFiles(path)
-                .Select(file => SafeCreateItem(file, isFolder: false))
-                .Where(item => item != null)
-                .OrderBy(item => item!.Name)
-                .Cast<FileSystemItem>()
-                .ToList();
+                items.AddRange(dirs);
 
-            items.AddRange(files);
-        }
-        catch (UnauthorizedAccessException) { }
-        catch (DirectoryNotFoundException) { }
-        catch (PathTooLongException) { }
-        catch (IOException) { }
+                // 枚举并排序文件
+                var files = Directory.EnumerateFiles(path)
+                    .Select(file => SafeCreateItem(file, isFolder: false))
+                    .Where(item => item != null)
+                    .OrderBy(item => item!.Name)
+                    .Cast<FileSystemItem>()
+                    .ToList();
 
-        return Task.FromResult(items);
+                items.AddRange(files);
+            }
+            catch (UnauthorizedAccessException) { }
+            catch (DirectoryNotFoundException) { }
+            catch (PathTooLongException) { }
+            catch (IOException) { }
+
+            return items;
+        }).ConfigureAwait(false);
+    }
+
+    public Task<List<FileSystemItem>> ListDirItemsAsync(string path)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                return Directory.EnumerateDirectories(path)
+                    .Select(dir => SafeCreateItem(dir, isFolder: true))
+                    .Where(item => item != null)
+                    .OrderBy(item => item!.Name)
+                    .Cast<FileSystemItem>()
+                    .ToList();
+            }
+            catch { return new List<FileSystemItem>(); }
+        });
+    }
+
+    public Task<List<FileSystemItem>> ListFileItemsAsync(string path)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                return Directory.EnumerateFiles(path)
+                    .Select(file => SafeCreateItem(file, isFolder: false))
+                    .Where(item => item != null)
+                    .OrderBy(item => item!.Name)
+                    .Cast<FileSystemItem>()
+                    .ToList();
+            }
+            catch { return new List<FileSystemItem>(); }
+        });
     }
 
     private static FileSystemItem? SafeCreateItem(string fullPath, bool isFolder)

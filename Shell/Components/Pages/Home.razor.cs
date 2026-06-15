@@ -37,13 +37,15 @@ public partial class Home
     private List<FileScanCategory> scanCategories = new();
     private string? _activeFilePath;
     private HashSet<string> _lockedFiles = new(StringComparer.OrdinalIgnoreCase);
+    // 多级父目录滚动位置栈：进入子文件夹时入栈，返回时出栈恢复
+    private readonly Stack<double> _parentScrollStack = new();
 
     private enum WindowsQuickAccess
     {
         Desktop, Downloads, Documents, Pictures, Music, Videos
     }
 
-    private void NavigateToQuickAccess(WindowsQuickAccess qa)
+    private async void NavigateToQuickAccess(WindowsQuickAccess qa)
     {
         var folder = qa switch
         {
@@ -88,6 +90,16 @@ public partial class Home
     private bool IsFileLocked(FileSystemItem item)
         => _lockedFiles.Contains(item.FullPath);
 
+    private async Task SaveParentState()
+    {
+        try
+        {
+            var scrollY = await JS.InvokeAsync<double>("eval", "window.scrollY");
+            _parentScrollStack.Push(scrollY);
+        }
+        catch { }
+    }
+
     private async Task OnLockClick(FileSystemItem item)
     {
         try
@@ -110,14 +122,24 @@ public partial class Home
         StateHasChanged();
     }
 
-    private void RefreshLockStatus()
+    private async Task RefreshLockStatusAsync()
     {
-        var locked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in items)
+        var paths = items
+            .Where(i => !i.IsFolder)
+            .Select(i => i.FullPath)
+            .ToList();
+
+        var locked = await Task.Run(() =>
         {
-            if (!item.IsFolder && FileLockService.IsLocked(item.FullPath))
-                locked.Add(item.FullPath);
-        }
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in paths)
+            {
+                if (FileLockService.IsLocked(path))
+                    result.Add(path);
+            }
+            return result;
+        });
+
         _lockedFiles = locked;
     }
 
@@ -386,19 +408,49 @@ public partial class Home
 
         try
         {
-            items = await FileSystemService.ListItemsAsync(currentPath);
-            ApplySort();
-            RefreshLockStatus();
+            // Phase 1：加载目录（快速，<50ms）→ 立即显示
+            var dirs = await FileSystemService.ListDirItemsAsync(currentPath);
+            await InvokeAsync(() =>
+            {
+                items = dirs;
+                isLoading = false;       // 先释放加载状态，用户看到目录列表
+                StateHasChanged();
+            });
+
+            // Phase 2：加载文件（慢，1-3 秒）→ 追加到目录后，排序后显示
+            var files = await FileSystemService.ListFileItemsAsync(currentPath);
+            await InvokeAsync(() =>
+            {
+                items.AddRange(files);
+                ApplySort();
+                StateHasChanged();
+            });
+
+            // 重置滚动位置（子文件夹/新导航都滚到顶部，父目录恢复由 GoBack 负责）
+            await JS.InvokeVoidAsync("eval",
+                "requestAnimationFrame(() => window.scrollTo(0,0))");
+
+            // Phase 3：锁状态 + 子文件夹计数（后台不阻塞）
+            await RefreshLockStatusAsync();
             _ = LoadChildCountsAsync(items);
         }
         catch (Exception ex)
         {
-            errorMessage = $"加载目录失败：{ex.Message}";
-            items = new List<FileSystemItem>();
+            await InvokeAsync(() =>
+            {
+                errorMessage = $"加载目录失败：{ex.Message}";
+                items = new List<FileSystemItem>();
+                isLoading = false;
+                StateHasChanged();
+            });
         }
         finally
         {
-            isLoading = false;
+            await InvokeAsync(() =>
+            {
+                isLoading = false;
+                StateHasChanged();
+            });
         }
     }
 
@@ -431,10 +483,11 @@ public partial class Home
         await Task.WhenAll(tasks);
     }
 
-    private void OnItemClick(FileSystemItem item)
+    private async void OnItemClick(FileSystemItem item)
     {
         if (item.IsFolder)
         {
+            await SaveParentState();
             currentPath = item.FullPath;
             _ = LoadItemsAsync();
             return;
@@ -552,7 +605,7 @@ public partial class Home
             var results = await FileSystemService.ScanFilesByTypeAsync(currentPath, exts, ct);
             scanResults = results;
             items = scanResults;
-            RefreshLockStatus();
+            await RefreshLockStatusAsync();
             isScanned = true;
         }
         catch (OperationCanceledException) { }
@@ -579,6 +632,13 @@ public partial class Home
         {
             currentPath = parent;
             await LoadItemsAsync();
+
+            // 出栈恢复父目录滚动位置
+            if (_parentScrollStack.TryPop(out var scrollY))
+            {
+                await JS.InvokeVoidAsync("eval",
+                    $"requestAnimationFrame(() => window.scrollTo(0, {scrollY}))");
+            }
         }
     }
 

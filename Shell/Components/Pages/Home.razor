@@ -221,8 +221,7 @@
                 <span class="col-header-action" title="别名"></span>
                 <span class="col-header-action" title="锁定"></span>
             </div>
-            @foreach (var item in items)
-            {
+            <Virtualize Items="items" Context="item" ItemSize="44" OverscanCount="20">
                 <div class="item-row @GetItemRowClass(item)"
                      @onclick="() => OnItemClick(item)"
                      @onkeydown="() => {}"
@@ -249,7 +248,7 @@
                         <span class="col-lock-placeholder"></span>
                     }
                 </div>
-            }
+            </Virtualize>
         </div>
     }
     }

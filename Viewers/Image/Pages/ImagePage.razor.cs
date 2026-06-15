@@ -42,11 +42,14 @@ public partial class ImagePage : ComponentBase
     private bool canStitch;
     private string? stitchError;
     private List<StitchImageInfo>? stitchImages;
+    private int _stitchLoadedCount;
+    private CancellationTokenSource? _stitchCts;
     private class StitchImageInfo
     {
-        public string BlobUrl { get; init; } = "";
+        public string BlobUrl { get; set; } = "";
         public int Width { get; init; }
         public int Height { get; init; }
+        public string FileName { get; init; } = "";
     }
     private float _stitchZoom = 1.0f;
 
@@ -175,9 +178,12 @@ public partial class ImagePage : ComponentBase
 
     // ═══════════ 拼接模式 ═══════════
 
-    /// <summary>撤销所有 blob URL，释放浏览器内存</summary>
+    /// <summary>撤销所有 blob URL，取消后台加载</summary>
     private async Task RevokeBlobUrls()
     {
+        _stitchCts?.Cancel();
+        _stitchCts = null;
+
         if (stitchImages != null)
         {
             var urls = stitchImages.Select(si => si.BlobUrl)
@@ -188,86 +194,68 @@ public partial class ImagePage : ComponentBase
         }
     }
 
+    private static string GetMimeType(string ext) => ext switch
+    {
+        "jpg" or "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        _ => "image/jpeg"
+    };
+
     private async Task ToggleStitch()
     {
         stitchMode = !stitchMode;
-        _stitchZoom = 0.75f;
+        // 继承当前单图浏览的缩放比
+        _stitchZoom = Math.Clamp(displayZoom, 0.3f, 3.0f);
         if (!stitchMode)
         {
+            _stitchCts?.Cancel();
             await RevokeBlobUrls();
             stitchImages = null;
             stitchError = null;
+            _stitchLoadedCount = 0;
             return;
         }
 
         // 检查宽度是否相似
-        var cachedSizes = new List<(string path, int w, int h)>();
+        var dims = new List<(string path, int w, int h)>();
         foreach (var p in fileList)
         {
             var c = DecodeCache.Get(p);
-            if (c.HasValue) cachedSizes.Add((p, c.Value.Width, c.Value.Height));
+            if (c.HasValue) dims.Add((p, c.Value.Width, c.Value.Height));
+            else
+            {
+                var d = await Task.Run(() => ImageProcessingService.GetImageDimensions(p));
+                dims.Add((p, d.width, d.height));
+            }
         }
-        if (cachedSizes.Count < 2)
+        if (dims.Count < 2)
         {
             stitchError = "至少需要 2 张图片才能拼接";
             return;
         }
 
-        // 计算宽度差
-        int minW = cachedSizes.Min(l => l.w);
-        int maxW = cachedSizes.Max(l => l.w);
-        if (maxW == 0)
-        {
-            stitchError = "无法获取图片尺寸";
-            return;
-        }
-        float ratio = (float)minW / maxW;
-        if (ratio < 0.95f)
-        {
-            stitchError = "图片尺寸差异过大，无法拼接";
-            return;
-        }
+        int minW = dims.Min(l => l.w);
+        int maxW = dims.Max(l => l.w);
+        if (maxW == 0) { stitchError = "无法获取图片尺寸"; return; }
+        if ((float)minW / maxW < 0.95f) { stitchError = "图片尺寸差异过大，无法拼接"; return; }
 
-        // 收集每张图片，用 DotNetStreamReference 传给 JS 创建 blob URL
-        stitchImages = new List<StitchImageInfo>(fileList.Count);
-        foreach (var path in fileList)
-        {
-            var cached = DecodeCache.Get(path);
-            int w, h;
-            if (cached.HasValue) { w = cached.Value.Width; h = cached.Value.Height; }
-            else
-            {
-                var dim = await Task.Run(() => ImageProcessingService.GetImageDimensions(path));
-                w = dim.width; h = dim.height;
-            }
-
-            // 通过 DotNetStreamReference 传文件流 → JS 创建 blob URL
-            try
-            {
-                var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-                var mime = ext switch
-                {
-                    "jpg" or "jpeg" => "image/jpeg",
-                    "png" => "image/png",
-                    "gif" => "image/gif",
-                    "webp" => "image/webp",
-                    "bmp" => "image/bmp",
-                    _ => "image/jpeg"
-                };
-                var stream = await FileLockService.OpenDecryptedReadStreamAsync(path);
-                var streamRef = new DotNetStreamReference(stream);
-                var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, mime);
-                stitchImages.Add(new StitchImageInfo { BlobUrl = blobUrl, Width = w, Height = h });
-            }
-            catch
-            {
-                Debug.WriteLine($"[Stitch] Failed to load: {path}");
-            }
-        }
+        // 初始化所有项目（无 blob URL），立即渲染结构
+        stitchImages = dims.Select(d => new StitchImageInfo { BlobUrl = "", Width = d.w, Height = d.h, FileName = Path.GetFileName(d.path) }).ToList();
+        _stitchLoadedCount = 0;
         stitchError = null;
-
-        // 滚动到当前图片位置
         StateHasChanged();
+
+        // 分批加载 blob URL：先加载第一屏（12 张）
+        _stitchCts = new CancellationTokenSource();
+        await LoadStitchBatchAsync(0, Math.Min(12, fileList.Count), _stitchCts.Token);
+
+        // 后台继续加载剩余批次
+        _ = LoadRemainingStitchBatchesAsync(12, _stitchCts.Token);
+
+        // 滚动到当前图片
         await Task.Delay(50);
         await JS.InvokeVoidAsync("eval", $@"
             var c = document.querySelector('.v-stitch-container');
@@ -277,6 +265,51 @@ public partial class ImagePage : ComponentBase
                     imgs[{currentIndex}].scrollIntoView({{block:'center'}});
             }}
         ");
+    }
+
+    /// <summary>加载一批 blob URL</summary>
+    private async Task LoadStitchBatchAsync(int start, int end, CancellationToken ct)
+    {
+        if (stitchImages == null) return;
+        for (int i = start; i < end && i < fileList.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!string.IsNullOrEmpty(stitchImages[i].BlobUrl)) continue;
+
+            try
+            {
+                var path = fileList[i];
+                var stream = await FileLockService.OpenDecryptedReadStreamAsync(path);
+                await using var _ = stream.ConfigureAwait(false);
+                var streamRef = new DotNetStreamReference(stream);
+                var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+                var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, GetMimeType(ext));
+                stitchImages[i].BlobUrl = blobUrl;
+                _stitchLoadedCount++;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch
+            {
+                Debug.WriteLine($"[Stitch] Failed to load: {fileList[i]}");
+            }
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>后台分批加载剩余图片</summary>
+    private async Task LoadRemainingStitchBatchesAsync(int startIndex, CancellationToken ct)
+    {
+        const int batchSize = 10;
+        try
+        {
+            for (int i = startIndex; i < fileList.Count; i += batchSize)
+            {
+                ct.ThrowIfCancellationRequested();
+                await LoadStitchBatchAsync(i, Math.Min(i + batchSize, fileList.Count), ct);
+                await Task.Delay(30, ct); // 让 UI 喘息
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     // ═══════════ 图片加载 + 缓存 + 预加载 ═══════════
@@ -455,18 +488,22 @@ public partial class ImagePage : ComponentBase
 
     private void ZoomIn()
     {
-        if (stitchMode) { _stitchZoom = Math.Min(_stitchZoom * 1.15f, 3.0f); StateHasChanged(); return; }
+        if (stitchMode) { _stitchZoom = Math.Min(_stitchZoom * 1.5f, 5.0f); StateHasChanged(); return; }
         ExitFit(); displayZoom = Math.Min(displayZoom * ZoomStep, MaxZoom); ClampPan();
     }
     private void ZoomOut()
     {
-        if (stitchMode) { _stitchZoom = Math.Max(_stitchZoom / 1.15f, 0.5f); StateHasChanged(); return; }
+        if (stitchMode) { _stitchZoom = Math.Max(_stitchZoom / 1.5f, 0.1f); StateHasChanged(); return; }
         ExitFit(); displayZoom = Math.Max(displayZoom / ZoomStep, MinZoom); ClampPan();
     }
 
     private void ZoomFit()
     {
-        if (stitchMode) { _stitchZoom = 0.75f; StateHasChanged(); return; }
+        if (stitchMode)
+        {
+            _stitchZoom = imageWidth > 0 ? Math.Max(vpWidth / imageWidth, 0.1f) : 1.0f;
+            StateHasChanged(); return;
+        }
         zoomFitMode = true;
         displayZoom = fitZoom;
         panX = 0; panY = 0;
@@ -474,11 +511,13 @@ public partial class ImagePage : ComponentBase
 
     private void ZoomActual()
     {
-        if (stitchMode) { _stitchZoom = 1.0f; StateHasChanged(); return; }
+        if (stitchMode) { _stitchZoom = GetOneToOneZoom(); StateHasChanged(); return; }
         ExitFit();
-        // 除以 DPR 实现物理像素 1:1（1 图像像素 = 1 物理像素）
-        displayZoom = Math.Max(1.0f / _dpr, 0.01f);
+        displayZoom = GetOneToOneZoom();
     }
+
+    /// <summary>物理像素 1:1 对应的缩放值（1 图像像素 = 1 物理像素）</summary>
+    private float GetOneToOneZoom() => Math.Max(1.0f / _dpr, 0.01f);
 
     /// <summary>
     /// 在适应和1:1之间切换（合并按钮）
@@ -487,6 +526,12 @@ public partial class ImagePage : ComponentBase
     {
         if (zoomFitMode) ZoomActual(); else ZoomFit();
         StateHasChanged();
+    }
+
+    private string GetDisplayZoom()
+    {
+        var zoom = stitchMode ? _stitchZoom : displayZoom;
+        return $"{zoom * _dpr * 100:F0}%";
     }
 
     private string GetFitToggleText()
