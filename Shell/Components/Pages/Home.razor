@@ -154,9 +154,8 @@
                 <span class="scan-info">@scanTypeLabel (@items.Count 个文件)</span>
             </div>
         }
-        @if (viewMode == "grid")
-    {
-        <div class="browser-grid">
+        @* 网格和列表视图共存于 DOM，通过 display:none 切换，避免切换时全部重建 *@
+        <div class="browser-grid" style="display:@(viewMode == "grid" ? "" : "none")">
             @foreach (var item in items)
             {
                 <div class="grid-item @GetItemRowClass(item)"
@@ -203,10 +202,7 @@
                 </div>
             }
         </div>
-    }
-    else
-    {
-        <div class="browser-items">
+        <div class="browser-items" style="display:@(viewMode == "list" ? "" : "none")">
             <div class="items-header">
                 <span class="col-icon"></span>
                 <span class="col-name sortable" @onclick="OnSortByName">
@@ -250,7 +246,6 @@
                 </div>
             </Virtualize>
         </div>
-    }
     }
     </main>
 </div>

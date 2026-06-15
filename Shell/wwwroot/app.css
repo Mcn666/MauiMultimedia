@@ -1310,6 +1310,8 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     position: relative;
     overflow: hidden;
     box-sizing: border-box;
+    content-visibility: auto;
+    contain-intrinsic-size: 110px;
 }
 
 .grid-item:hover {

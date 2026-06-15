@@ -23,7 +23,7 @@
                 var resolved = localStorage.getItem('filebrowser-theme-resolved');
                 if (resolved === 'dark') dark = true;
                 else if (resolved === 'light') dark = false;
-                else return;
+                else dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             }
             document.documentElement.style.background = dark ? '#1a1a1a' : '#ffffff';
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');

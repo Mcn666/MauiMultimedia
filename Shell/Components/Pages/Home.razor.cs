@@ -39,6 +39,7 @@ public partial class Home
     private HashSet<string> _lockedFiles = new(StringComparer.OrdinalIgnoreCase);
     // 多级父目录滚动位置栈：进入子文件夹时入栈，返回时出栈恢复
     private readonly Stack<double> _parentScrollStack = new();
+    private bool _skipRender;
 
     private enum WindowsQuickAccess
     {
@@ -237,6 +238,12 @@ public partial class Home
         await LoadItemsAsync();
     }
 
+    protected override bool ShouldRender()
+    {
+        if (_skipRender) { _skipRender = false; return false; }
+        return true;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -354,7 +361,8 @@ public partial class Home
     {
         await JS.InvokeVoidAsync("eval",
             $"document.documentElement.setAttribute('data-theme','{(isDark ? "dark" : "light")}');" +
-            $"document.documentElement.style.background='{(isDark ? "#1a1a1a" : "#ffffff")}';");
+            $"document.documentElement.style.background='{(isDark ? "#1a1a1a" : "#ffffff")}';" +
+            $"localStorage.setItem('filebrowser-theme-resolved','{(isDark ? "dark" : "light")}');");
 
         // 同步 Android 状态栏
 #if ANDROID
@@ -653,8 +661,15 @@ public partial class Home
 
     private async Task ToggleViewMode()
     {
+        _skipRender = true;
         viewMode = (viewMode == "list") ? "grid" : "list";
-        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-view','{viewMode}')");
+        await JS.InvokeVoidAsync("eval", $@"
+            var g = document.querySelector('.browser-grid');
+            var l = document.querySelector('.browser-items');
+            if (g) g.style.display = {(viewMode == "grid" ? "''" : "'none'")};
+            if (l) l.style.display = {(viewMode == "list" ? "''" : "'none'")};
+            localStorage.setItem('filebrowser-view', '{(viewMode == "grid" ? "grid" : "list")}');
+        ");
     }
 
     // ────────── 运行时系统主题变更 ──────────
