@@ -8,12 +8,12 @@ public class TextViewer : IFileViewer
 {
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".txt", ".log", ".md", ".csv", ".xml", ".json", ".yaml", ".yml",
-        ".cs", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".less",
-        ".html", ".htm", ".php", ".py", ".java", ".cpp", ".c", ".h",
-        ".sql", ".sh", ".bat", ".ps1", ".rb", ".go", ".rs", ".swift",
-        ".ini", ".cfg", ".conf", ".env", ".gitignore", ".dockerfile",
-        ".csproj", ".sln", ".slnx", ".props", ".targets"
+        ".txt", ".log", ".md", ".csv",
+        ".xml", ".json", ".yaml", ".yml",
+        ".html", ".htm", ".css", ".js",
+        ".py", ".cs",
+        ".sh", ".bat", ".ps1",
+        ".ini", ".cfg", ".conf", ".env", ".gitignore"
     };
 
     public string DisplayName => "文本查看器";
