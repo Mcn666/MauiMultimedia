@@ -1,0 +1,179 @@
+@* @page "/model3dviewer" — 已由 ContentPage 动态加载 *@
+@using MauiMultimedia.Core.Abstractions
+@using Microsoft.JSInterop
+@inject NavigationManager Navigation
+@inject IFileNavigationState NavState
+@inject IMauiNavigation MauiNav
+@inject IFileLockEncryptionService FileLockService
+@inject IJSRuntime JS
+
+<div class="viewer-page">
+    <div class="v-toolbar">
+        <button class="v-btn" @onclick="GoBack">← 返回</button>
+        <span class="v-title" title="@filePath">@fileName</span>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="viewer-loading"><div class="spinner"></div><span>正在加载 3D 模型...</span></div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="viewer-error">⚠️ @errorMessage</div>
+    }
+    else if (_isGlb)
+    {
+        <div class="model-container">
+            <model-viewer src="@_modelUrl" alt="@fileName"
+                          auto-rotate camera-controls
+                          ar ar-modes="webxr scene-viewer quick-look"
+                          environment-image="neutral"
+                          shadow-intensity="1"
+                          style="width:100%;height:100%;">
+            </model-viewer>
+        </div>
+    }
+    else
+    {
+        <div class="model-container">
+            <canvas id="three-canvas" style="width:100%;height:100%;display:block;"></canvas>
+        </div>
+    }
+</div>
+
+@code {
+    private string filePath = "";
+    private string fileName = "";
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? _modelUrl;
+    private bool _isGlb;
+    private bool _threeReady;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoading && string.IsNullOrEmpty(errorMessage) && !_isGlb && !_threeReady && _modelUrl != null)
+        {
+            _threeReady = true;
+            await Task.Delay(1);
+            await JS.InvokeVoidAsync("eval", $@"
+                (function() {{
+                var canvas = document.getElementById('three-canvas');
+                if (!canvas || typeof THREE === 'undefined') return;
+                var ext = '{Path.GetExtension(filePath).ToLowerInvariant()}';
+                var renderer = new THREE.WebGLRenderer({{ canvas: canvas, antialias: true }});
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+                renderer.setClearColor(0x1a1a1a, 1);
+
+                var scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x1a1a1a);
+
+                var camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+                camera.position.set(5, 5, 10);
+
+                // 灯光
+                var ambient = new THREE.AmbientLight(0x404040);
+                scene.add(ambient);
+                var dir = new THREE.DirectionalLight(0xffffff, 1);
+                dir.position.set(5, 10, 7);
+                scene.add(dir);
+                var dir2 = new THREE.DirectionalLight(0xffffff, 0.5);
+                dir2.position.set(-5, -5, -5);
+                scene.add(dir2);
+
+                // 加载模型
+                var loader = ext === '.stl' ? new THREE.STLLoader() : new THREE.OBJLoader();
+                var url = '{_modelUrl}';
+
+                var onLoad = function(obj) {{
+                    var mesh = obj instanceof THREE.BufferGeometry
+                        ? new THREE.Mesh(obj, new THREE.MeshStandardMaterial({{ color: 0x88aaff, roughness: 0.4, metalness: 0.1 }}))
+                        : obj;
+                    // 计算包围盒居中
+                    var box = new THREE.Box3().setFromObject(mesh);
+                    var center = box.getCenter(new THREE.Vector3());
+                    var size = box.getSize(new THREE.Vector3());
+                    var maxDim = Math.max(size.x, size.y, size.z);
+                    var scale = maxDim > 0 ? 4 / maxDim : 1;
+                    mesh.position.sub(center.multiplyScalar(scale));
+                    mesh.scale.set(scale, scale, scale);
+                    scene.add(mesh);
+
+                    // 网格地面
+                    var grid = new THREE.GridHelper(8, 16, 0x444444, 0x333333);
+                    scene.add(grid);
+
+                    // 轨道控制
+                    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+                    controls.enableDamping = true;
+                    controls.target.set(0, 0, 0);
+                    controls.update();
+
+                    (function animate() {{
+                        requestAnimationFrame(animate);
+                        controls.update();
+                        renderer.render(scene, camera);
+                    }})();
+                }};
+
+                if (ext === '.stl') {{
+                    loader.load(url, onLoad);
+                }} else {{
+                    loader.load(url, onLoad);
+                }}
+                }})();
+            ");
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        filePath = NavState.CurrentFilePath
+            ?? uri.Query.TrimStart('?').Split('&')
+                .Select(p => p.Split('=', 2))
+                .Where(kv => kv.Length == 2 && kv[0] == "path")
+                .Select(kv => Uri.UnescapeDataString(kv[1]))
+                .FirstOrDefault() ?? "";
+        fileName = Path.GetFileName(filePath);
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        _isGlb = ext == ".glb" || ext == ".gltf";
+
+        if (string.IsNullOrEmpty(filePath))
+        {
+            errorMessage = "未指定文件路径";
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+            var mime = ext switch
+            {
+                ".gltf" => "model/gltf+json",
+                ".glb" => "model/gltf-binary",
+                ".stl" => "application/sla",
+                ".obj" => "text/plain",
+                _ => "application/octet-stream"
+            };
+            var streamRef = new DotNetStreamReference(new MemoryStream(bytes));
+            _modelUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, mime);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"读取模型失败：{ex.Message}";
+        }
+        finally { isLoading = false; StateHasChanged(); }
+    }
+
+    private void GoBack() { _ = MauiNav.GoBackAsync(); }
+}

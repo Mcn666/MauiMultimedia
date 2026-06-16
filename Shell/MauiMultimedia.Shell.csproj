@@ -77,6 +77,7 @@
         <ProjectReference Include="..\Viewers\Archive\MauiMultimedia.Viewers.Archive.csproj" />
         <ProjectReference Include="..\Viewers\Html\MauiMultimedia.Viewers.Html.csproj" />
         <ProjectReference Include="..\Viewers\Image\MauiMultimedia.Viewers.Image.csproj" />
+        <ProjectReference Include="..\Viewers\Model3D\MauiMultimedia.Viewers.Model3D.csproj" />
         <ProjectReference Include="..\Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
     </ItemGroup>
 
@@ -87,15 +88,11 @@
     <!-- 构建时：收集查看器程序集名称并嵌入为资源 -->
     <Target Name="GenerateViewerEmbed" BeforeTargets="AssignTargetPaths">
         <ItemGroup>
-            <_ViewerRef Include="@(ProjectReference)"
-                         Condition="$([System.String]::new('%(FileName)').StartsWith('MauiMultimedia.Viewers.'))" />
+            <_ViewerRef Include="@(ProjectReference)" Condition="$([System.String]::new('%(FileName)').StartsWith('MauiMultimedia.Viewers.'))" />
         </ItemGroup>
-        <WriteLinesToFile File="$(IntermediateOutputPath)viewer_assemblies.txt"
-                          Lines="@(_ViewerRef->'%(FileName)')"
-                          Overwrite="true" />
+        <WriteLinesToFile File="$(IntermediateOutputPath)viewer_assemblies.txt" Lines="@(_ViewerRef->'%(FileName)')" Overwrite="true" />
         <ItemGroup>
-            <EmbeddedResource Include="$(IntermediateOutputPath)viewer_assemblies.txt"
-                              LogicalName="viewer_assemblies.txt" />
+            <EmbeddedResource Include="$(IntermediateOutputPath)viewer_assemblies.txt" LogicalName="viewer_assemblies.txt" />
         </ItemGroup>
     </Target>
 
