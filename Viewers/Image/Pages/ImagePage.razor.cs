@@ -164,11 +164,13 @@ public partial class ImagePage : ComponentBase
         }
         if (widths.Count < 2) return;
 
-        int minW = widths.Min();
-        int maxW = widths.Max();
-        canStitch = minW > 0 && (float)minW / maxW >= 0.95f;
+        // 剔除宽度异常值，主流宽度有 ≥2 张即可拼接
+        var sorted = widths.OrderBy(w => w).ToList();
+        int median = sorted[sorted.Count / 2];
+        int good = widths.Count(w => Math.Abs((float)w / median - 1f) <= 0.05f);
+        canStitch = good >= 2;
 
-        // 通知 UI 拼接按钮已就绪（如适用）
+        // 通知 UI 拼接按钮已就绪
         if (canStitch)
             StateHasChanged();
     }
@@ -219,15 +221,21 @@ public partial class ImagePage : ComponentBase
             return;
         }
 
-        // 检查宽度是否相似
+        // 收集尺寸（高度仅用于渲染 aspect-ratio，不影响可用性）
+        var widths = new List<int>();
         var dims = new List<(string path, int w, int h)>();
         foreach (var p in fileList)
         {
             var c = DecodeCache.Get(p);
-            if (c.HasValue) dims.Add((p, c.Value.Width, c.Value.Height));
+            if (c.HasValue)
+            {
+                widths.Add(c.Value.Width);
+                dims.Add((p, c.Value.Width, c.Value.Height));
+            }
             else
             {
                 var d = await Task.Run(() => ImageProcessingService.GetImageDimensions(p));
+                widths.Add(d.width);
                 dims.Add((p, d.width, d.height));
             }
         }
@@ -237,13 +245,24 @@ public partial class ImagePage : ComponentBase
             return;
         }
 
-        int minW = dims.Min(l => l.w);
-        int maxW = dims.Max(l => l.w);
-        if (maxW == 0) { stitchError = "无法获取图片尺寸"; return; }
-        if ((float)minW / maxW < 0.95f) { stitchError = "图片尺寸差异过大，无法拼接"; return; }
+        // 剔除宽度异常值，保留主流宽度图片用于拼接
+        var sorted = widths.OrderBy(w => w).ToList();
+        int median = sorted[sorted.Count / 2];
+        var good = dims.Where(d => Math.Abs((float)d.w / median - 1f) <= 0.05f).ToList();
+
+        if (good.Count < 2)
+        {
+            stitchError = "图片宽度差异过大，无法拼接";
+            return;
+        }
+
+        // 如果有图片被剔除，给出提示
+        int excluded = dims.Count - good.Count;
+        if (excluded > 0)
+            stitchError = $"已排除 {excluded} 张宽度不一致的图片";
 
         // 初始化所有项目（无 blob URL），立即渲染结构
-        stitchImages = dims.Select(d => new StitchImageInfo { BlobUrl = "", Width = d.w, Height = d.h, FileName = Path.GetFileName(d.path) }).ToList();
+        stitchImages = good.Select(d => new StitchImageInfo { BlobUrl = "", Width = d.w, Height = d.h, FileName = Path.GetFileName(d.path) }).ToList();
         _stitchLoadedCount = 0;
         stitchError = null;
         StateHasChanged();

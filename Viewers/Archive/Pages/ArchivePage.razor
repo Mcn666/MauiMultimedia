@@ -95,6 +95,8 @@
     private List<TreeItem> nodes = new();
     private List<Entry> items = new();
     private HashSet<string> open = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>加密的档案字节缓存，避免每次提取都重新读磁盘</summary>
+    private byte[]? _archiveBytes;
     private HashSet<string> loaded = new(StringComparer.OrdinalIgnoreCase);
 
     private bool IsArchive(string name)
@@ -140,8 +142,9 @@
         try
         {
             if (!File.Exists(p)) { errorMessage = "文件不存在"; return; }
-            var archiveStream = await FileLockService.OpenDecryptedReadStreamAsync(p);
-            items = await Task.Run(() => Scan(archiveStream, archivePassword));
+            // 一次性读取字节并缓存，后续提取复用避免重复 I/O
+            _archiveBytes = await FileLockService.ReadDecryptedBytesAsync(p);
+            items = await Task.Run(() => Scan(new MemoryStream(_archiveBytes), archivePassword));
             nodes = Build(items);
         }
         catch (Exception ex)
@@ -363,8 +366,11 @@
             var dir = Path.GetDirectoryName(outPath);
             if (dir != null) Directory.CreateDirectory(dir);
 
-            // 通过解密服务读取档案（已锁定则自动解密）
-            var srcBytes = await FileLockService.ReadDecryptedBytesAsync(srcPath);
+            // 使用缓存的档案字节（避免重复读磁盘）
+            var srcBytes = n.Source != null
+                ? await FileLockService.ReadDecryptedBytesAsync(n.Source)
+                : _archiveBytes;
+            if (srcBytes == null) { toast = "读取档案失败"; return; }
             using var firstStream = new MemoryStream(srcBytes);
             ExtractEntry(firstStream, n.Full, outPath);
 
@@ -372,16 +378,15 @@
             List<string> fileList;
             if (n.Source != null)
             {
-                // 内层压缩包：提取所有文件
-                var nestedBytes = await FileLockService.ReadDecryptedBytesAsync(n.Source);
-                var all = ReadArchiveEntries(new MemoryStream(nestedBytes));
+                // 内层压缩包：直接用已读取的 srcBytes 提取所有文件
+                var all = ReadArchiveEntries(new MemoryStream(srcBytes));
                 fileList = new List<string>(all.Count);
                 foreach (var e in all)
                 {
                     var p = Path.Combine(tmp, e.Full);
                     var d = Path.GetDirectoryName(p);
                     if (d != null) Directory.CreateDirectory(d);
-                    using var es = new MemoryStream(nestedBytes);
+                    using var es = new MemoryStream(srcBytes);
                     ExtractEntry(es, e.Full, p);
                     fileList.Add(p);
                 }
