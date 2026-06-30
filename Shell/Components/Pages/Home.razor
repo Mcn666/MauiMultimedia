@@ -190,7 +190,7 @@
                     <span class="grid-alias-btn" @onclick:stopPropagation="true"
                           @onclick="() => OnItemRightClick(item)"
                           title="设置别名">✏️</span>
-                    @if (!item.IsFolder)
+                    @if (!item.IsFolder && CanLockFiles)
                     {
                         <span class="grid-lock-btn @(IsFileLocked(item) ? "locked" : "")"
                               @onclick:stopPropagation="true"
@@ -231,7 +231,7 @@
                     <span class="col-alias" @onclick:stopPropagation="true"
                           @onclick="() => OnItemRightClick(item)"
                           title="设置别名">✏️</span>
-                    @if (!item.IsFolder)
+                    @if (!item.IsFolder && CanLockFiles)
                     {
                         <span class="col-lock" @onclick:stopPropagation="true"
                               @onclick="() => OnLockClick(item)"

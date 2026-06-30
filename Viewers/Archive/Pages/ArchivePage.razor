@@ -359,62 +359,48 @@
                 return;
             }
 
-            var srcPath = n.Source ?? filePath;
             var tmp = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
                 Path.GetFileNameWithoutExtension(fileName));
-            var outPath = Path.Combine(tmp, n.Full);
-            var dir = Path.GetDirectoryName(outPath);
-            if (dir != null) Directory.CreateDirectory(dir);
 
             // 使用缓存的档案字节（避免重复读磁盘）
             var srcBytes = n.Source != null
                 ? await FileLockService.ReadDecryptedBytesAsync(n.Source)
                 : _archiveBytes;
             if (srcBytes == null) { toast = "读取档案失败"; return; }
-            using var firstStream = new MemoryStream(srcBytes);
-            ExtractEntry(firstStream, n.Full, outPath);
 
-            // 收集同级文件列表用于前后导航
+            // 只提取当前点击的文件，立即导航
+            var outPath = Path.Combine(tmp, n.Full);
+            var dir = Path.GetDirectoryName(outPath);
+            if (dir != null) Directory.CreateDirectory(dir);
+            using (var fs = new MemoryStream(srcBytes))
+                ExtractEntry(fs, n.Full, outPath);
+
+            // 构建同级文件路径列表（仅路径，不提取，加快响应）
             List<string> fileList;
+            List<Entry> siblingEntries;
             if (n.Source != null)
             {
-                // 内层压缩包：直接用已读取的 srcBytes 提取所有文件
                 var all = ReadArchiveEntries(new MemoryStream(srcBytes));
-                fileList = new List<string>(all.Count);
-                foreach (var e in all)
-                {
-                    var p = Path.Combine(tmp, e.Full);
-                    var d = Path.GetDirectoryName(p);
-                    if (d != null) Directory.CreateDirectory(d);
-                    using var es = new MemoryStream(srcBytes);
-                    ExtractEntry(es, e.Full, p);
-                    fileList.Add(p);
-                }
+                siblingEntries = all;
+                fileList = all.Select(e => Path.Combine(tmp, e.Full)).ToList();
             }
             else
             {
-                // 外层压缩包：只取同一目录
                 var parent = GetParent(n.Full);
-                fileList = new List<string>();
-                foreach (var e in items)
-                {
-                    if (GetParent(e.Full) != parent) continue;
-                    var p = Path.Combine(tmp, e.Full);
-                    var d = Path.GetDirectoryName(p);
-                    if (d != null) Directory.CreateDirectory(d);
-                    using var es = new MemoryStream(srcBytes);
-                    ExtractEntry(es, e.Full, p);
-                    fileList.Add(p);
-                }
+                siblingEntries = items.Where(e => GetParent(e.Full) == parent).ToList();
+                fileList = siblingEntries.Select(e => Path.Combine(tmp, e.Full)).ToList();
             }
             fileList.Sort(MauiMultimedia.Core.Utils.NaturalSortComparer.Instance);
             NavState.CurrentDirectoryFiles = fileList;
 
-            // 使用 MauiNav 创建 ContentPage 并导航到查看器
+            // 立即导航
             fi.FullPath = outPath;
             NavState.CurrentFilePath = outPath;
             NavState.ReturnUrl = Navigation.ToAbsoluteUri(Navigation.Uri).PathAndQuery;
             _ = MauiNav.NavigateToViewerAsync(v, fi);
+
+            // 后台继续提取同级文件（用户已在查看器中，不影响体验）
+            _ = ExtractBackgroundAsync(srcBytes, tmp, siblingEntries);
         }
         catch (Exception ex)
         {
@@ -458,6 +444,25 @@
     {
         var idx = full.LastIndexOf('/');
         return idx > 0 ? full[..idx] : "";
+    }
+
+    /// <summary>后台提取同级文件，不阻塞导航到查看器</summary>
+    private async Task ExtractBackgroundAsync(byte[] srcBytes, string tmp, List<Entry> entries)
+    {
+        await Task.Yield();
+        foreach (var e in entries)
+        {
+            try
+            {
+                var p = Path.Combine(tmp, e.Full);
+                if (File.Exists(p)) continue;
+                var d = Path.GetDirectoryName(p);
+                if (d != null) Directory.CreateDirectory(d);
+                using var s = new MemoryStream(srcBytes);
+                ExtractEntry(s, e.Full, p);
+            }
+            catch { }
+        }
     }
 
     private void CancelPassword()

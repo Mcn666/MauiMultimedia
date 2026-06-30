@@ -41,6 +41,8 @@ public partial class Home
     private readonly Stack<double> _parentScrollStack = new();
     private bool _skipRender;
 
+    private bool CanLockFiles => DeviceInfo.Current.Platform != DevicePlatform.Android;
+
     private enum WindowsQuickAccess
     {
         Desktop, Downloads, Documents, Pictures, Music, Videos

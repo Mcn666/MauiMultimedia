@@ -89,12 +89,12 @@ public partial class ImagePage : ComponentBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && !stitchMode)
         {
             await JS.InvokeVoidAsync("eval",
                 "document.querySelector('.image-viewport')?.focus()");
         }
-        if (!isLoading && imageWidth > 0)
+        if (!isLoading && imageWidth > 0 && !stitchMode)
         {
             var fz = await CalcFitZoomAsync();
             if (Math.Abs(fz - fitZoom) > 0.001f)
@@ -164,11 +164,8 @@ public partial class ImagePage : ComponentBase
         }
         if (widths.Count < 2) return;
 
-        // 剔除宽度异常值，主流宽度有 ≥2 张即可拼接
-        var sorted = widths.OrderBy(w => w).ToList();
-        int median = sorted[sorted.Count / 2];
-        int good = widths.Count(w => Math.Abs((float)w / median - 1f) <= 0.05f);
-        canStitch = good >= 2;
+        // ≥2 张即可拼接（不同宽度的各自按原生比例显示）
+        canStitch = true;
 
         // 通知 UI 拼接按钮已就绪
         if (canStitch)
@@ -245,66 +242,61 @@ public partial class ImagePage : ComponentBase
             return;
         }
 
-        // 剔除宽度异常值，保留主流宽度图片用于拼接
-        var sorted = widths.OrderBy(w => w).ToList();
-        int median = sorted[sorted.Count / 2];
-        var good = dims.Where(d => Math.Abs((float)d.w / median - 1f) <= 0.05f).ToList();
-
-        if (good.Count < 2)
-        {
-            stitchError = "图片宽度差异过大，无法拼接";
-            return;
-        }
-
-        // 如果有图片被剔除，给出提示
-        int excluded = dims.Count - good.Count;
-        if (excluded > 0)
-            stitchError = $"已排除 {excluded} 张宽度不一致的图片";
-
-        // 初始化所有项目（无 blob URL），立即渲染结构
-        stitchImages = good.Select(d => new StitchImageInfo { BlobUrl = "", Width = d.w, Height = d.h, FileName = Path.GetFileName(d.path) }).ToList();
+        // 接受所有宽度（竖页窄、跨页宽各自显示，浏览器自适应）
+        stitchImages = dims.Select(d => new StitchImageInfo { BlobUrl = "", Width = d.w, Height = d.h, FileName = Path.GetFileName(d.path) }).ToList();
         _stitchLoadedCount = 0;
         stitchError = null;
         StateHasChanged();
 
         // 分批加载 blob URL：先加载第一屏（12 张）
         _stitchCts = new CancellationTokenSource();
-        await LoadStitchBatchAsync(0, Math.Min(12, fileList.Count), _stitchCts.Token);
+        var cts = _stitchCts; // 局部引用，防止并发退出时被第二调用清空
+        try
+        {
+            await LoadStitchBatchAsync(0, Math.Min(12, fileList.Count), cts.Token);
+            if (!cts.IsCancellationRequested)
+                _ = LoadRemainingStitchBatchesAsync(12, cts.Token);
 
-        // 后台继续加载剩余批次
-        _ = LoadRemainingStitchBatchesAsync(12, _stitchCts.Token);
-
-        // 滚动到当前图片
-        await Task.Delay(50);
-        await JS.InvokeVoidAsync("eval", $@"
-            var c = document.querySelector('.v-stitch-container');
-            if (c) {{
-                var imgs = c.querySelectorAll('img');
-                if (imgs.length > {currentIndex})
-                    imgs[{currentIndex}].scrollIntoView({{block:'center'}});
-            }}
-        ");
+            await Task.Delay(50);
+            await JS.InvokeVoidAsync("eval", $@"
+                var c = document.querySelector('.v-stitch-container');
+                if (c) {{
+                    var imgs = c.querySelectorAll('img');
+                    if (imgs.length > {currentIndex})
+                        imgs[{currentIndex}].scrollIntoView({{block:'center'}});
+                }}
+            ");
+        }
+        catch (OperationCanceledException) { }
+        catch (NullReferenceException) { }
     }
 
     /// <summary>加载一批 blob URL</summary>
     private async Task LoadStitchBatchAsync(int start, int end, CancellationToken ct)
     {
-        if (stitchImages == null) return;
         for (int i = start; i < end && i < fileList.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            if (!string.IsNullOrEmpty(stitchImages[i].BlobUrl)) continue;
 
             try
             {
+                // 退出拼接后 stitchImages 被清空，跳过后续加载
+                if (stitchImages == null) return;
+                if (!string.IsNullOrEmpty(stitchImages[i].BlobUrl)) continue;
+
                 var path = fileList[i];
                 var stream = await FileLockService.OpenDecryptedReadStreamAsync(path);
                 await using var _ = stream.ConfigureAwait(false);
+                if (stitchImages == null) return;
+
                 var streamRef = new DotNetStreamReference(stream);
                 var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
                 var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, GetMimeType(ext));
+                if (stitchImages == null) { await RevokeBlobUrlAsync(blobUrl); return; }
+
                 stitchImages[i].BlobUrl = blobUrl;
                 _stitchLoadedCount++;
+                await InvokeAsync(StateHasChanged);
             }
             catch (OperationCanceledException) { throw; }
             catch
@@ -312,7 +304,13 @@ public partial class ImagePage : ComponentBase
                 Debug.WriteLine($"[Stitch] Failed to load: {fileList[i]}");
             }
         }
-        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>撤销单个 blob URL</summary>
+    private async Task RevokeBlobUrlAsync(string url)
+    {
+        if (!string.IsNullOrEmpty(url))
+            await JS.InvokeVoidAsync("eval", $"URL.revokeObjectURL('{url}')");
     }
 
     /// <summary>后台分批加载剩余图片</summary>
