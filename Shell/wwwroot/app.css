@@ -1100,11 +1100,6 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     flex: 0 0 28px;
 }
 
-/* 文件夹行的锁定按钮占位符，保持列对齐 */
-.col-lock-placeholder {
-    flex: 0 0 28px;
-}
-
 .col-alias {
     flex: 0 0 28px;
     text-align: center;
@@ -1124,7 +1119,7 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     opacity: 0.85 !important;
 }
 @media (hover: none) {
-    .col-alias, .col-lock { opacity: 0.85 !important; filter: none !important; }
+    .col-alias { opacity: 0.85 !important; filter: none !important; }
 }
 
 .grid-alias-btn {
@@ -1155,58 +1150,9 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     opacity: 0.85 !important;
 }
 @media (hover: none) {
-    .grid-alias-btn, .grid-lock-btn { opacity: 0.85 !important; filter: none !important; }
+    .grid-alias-btn { opacity: 0.85 !important; filter: none !important; }
 }
 
-/* ── 锁定按钮（列表视图）── */
-.col-lock {
-    flex: 0 0 28px;
-    text-align: center;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity .12s;
-    font-size: 13px;
-    user-select: none;
-    box-sizing: border-box;
-    filter: grayscale(0.3);
-}
-.col-lock.locked {
-    filter: none;
-    opacity: 0.85 !important;
-}
-.item-row:hover .col-lock,
-.item-row:focus-within .col-lock { opacity: 0.6; }
-.col-lock:hover { opacity: 1 !important; }
-
-/* ── 锁定按钮（网格视图）── */
-.grid-lock-btn {
-    position: absolute;
-    top: 30px; right: 4px;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity .12s;
-    z-index: 2;
-    user-select: none;
-    background: rgba(0,0,0,.35);
-    border-radius: 4px;
-    line-height: 1;
-    box-sizing: border-box;
-    filter: grayscale(0.3);
-}
-.grid-lock-btn.locked {
-    filter: none;
-    opacity: 0.85 !important;
-}
-.grid-item:hover .grid-lock-btn,
-.grid-item:focus-within .grid-lock-btn { opacity: 0.6; }
-.grid-lock-btn:hover { opacity: 1 !important; }
-.grid-lock-set { opacity: 0.7 !important; }
 
 /* ── 别名输入框 ── */
 .alias-input {

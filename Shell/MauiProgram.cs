@@ -23,7 +23,6 @@ namespace MauiMultimedia.Shell
             builder.Services.AddSingleton<AliasService>();
             builder.Services.AddSingleton<IMauiNavigation, MauiNavigationService>();
             builder.Services.AddSingleton<ViewerPageFactory>();
-            builder.Services.AddSingleton<IFileLockEncryptionService, FileLockEncryptionService>();
             builder.Services.AutoRegisterViewers();
 
 #if DEBUG

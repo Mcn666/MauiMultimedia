@@ -1,0 +1,72 @@
+/* ── 覆盖 Shell 全局约束 ── */
+.viewer-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── 视频容器 ── */
+.video-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 6px 8px;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.video-player {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    display: block;
+    outline: none;
+}
+
+/* ── 加载/错误状态 ── */
+.v-status {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.v-status--err {
+    color: #e74c3c;
+}
+
+.v-spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--spinner-border);
+    border-top: 3px solid var(--spinner-active);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── v-btn/v-pos/v-title 由 app.css 全局提供 ── */
+/* 仅覆盖小屏适配 */
+@media (max-width: 600px) {
+    .video-container {
+        margin: 4px 4px;
+        border-radius: 4px;
+    }
+    .v-title { font-size: 12px; max-width: 100px; }
+    .v-pos { font-size: 10px; }
+    .v-btn-nav { display: none; }
+}
+
+/* JS 检测到不支持 flex-gap 时回退 */
+html.no-flex-gap .v-status > * + * { margin-inline-start: 8px; }

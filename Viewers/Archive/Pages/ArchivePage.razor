@@ -15,7 +15,6 @@
 @inject IJSRuntime JS
 @inject IEnumerable<IFileViewer> Viewers
 @inject IFileSystemService FileSystem
-@inject IFileLockEncryptionService FileLockService
 
 <div class="viewer-page" style="height:100vh;display:flex;flex-direction:column;">
     <div class="v-toolbar">
@@ -143,7 +142,7 @@
         {
             if (!File.Exists(p)) { errorMessage = "文件不存在"; return; }
             // 一次性读取字节并缓存，后续提取复用避免重复 I/O
-            _archiveBytes = await FileLockService.ReadDecryptedBytesAsync(p);
+            _archiveBytes = await File.ReadAllBytesAsync(p);
             items = await Task.Run(() => Scan(new MemoryStream(_archiveBytes), archivePassword));
             nodes = Build(items);
         }
@@ -320,8 +319,8 @@
                 var dir = Path.GetDirectoryName(outPath);
                 if (dir != null) Directory.CreateDirectory(dir);
 
-                // 对于锁定文件，通过解密服务读取；否则直接打开
-                var archiveStream = await FileLockService.OpenDecryptedReadStreamAsync(filePath);
+                // 直接读取文件数据
+                var archiveStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 ExtractEntry(archiveStream, n.Full, outPath);
                 // outPath 是刚提取出来的文件（在 AppData 中，未被锁定）
                 using var innerStream = new FileStream(outPath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -364,7 +363,7 @@
 
             // 使用缓存的档案字节（避免重复读磁盘）
             var srcBytes = n.Source != null
-                ? await FileLockService.ReadDecryptedBytesAsync(n.Source)
+                ? await File.ReadAllBytesAsync(n.Source)
                 : _archiveBytes;
             if (srcBytes == null) { toast = "读取档案失败"; return; }
 

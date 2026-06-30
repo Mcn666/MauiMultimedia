@@ -13,7 +13,6 @@ public partial class ImagePage : ComponentBase
     [Inject] private IFileNavigationState NavState { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
-    [Inject] private IFileLockEncryptionService FileLockService { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -285,7 +284,7 @@ public partial class ImagePage : ComponentBase
                 if (!string.IsNullOrEmpty(stitchImages[i].BlobUrl)) continue;
 
                 var path = fileList[i];
-                var stream = await FileLockService.OpenDecryptedReadStreamAsync(path);
+                var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
                 await using var _ = stream.ConfigureAwait(false);
                 if (stitchImages == null) return;
 
@@ -381,7 +380,7 @@ public partial class ImagePage : ComponentBase
             {
                 try
                 {
-                    var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                    var bytes = await File.ReadAllBytesAsync(filePath);
                     var result = ImageProcessingService.DecodeImage(bytes, fileName);
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     ApplyDecoded(result.DataUri, result.Width, result.Height);
@@ -392,7 +391,7 @@ public partial class ImagePage : ComponentBase
                     imageSource = new Uri(filePath).AbsoluteUri;
                     try
                     {
-                        var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                        var bytes = await File.ReadAllBytesAsync(filePath);
                         var dims = ImageProcessingService.GetImageDimensions(bytes);
                         imageWidth = dims.width;
                         imageHeight = dims.height;
@@ -440,7 +439,7 @@ public partial class ImagePage : ComponentBase
             if (DecodeCache.Get(p).HasValue) continue; // 已缓存
             try
             {
-                var bytes = await FileLockService.ReadDecryptedBytesAsync(p);
+                var bytes = await File.ReadAllBytesAsync(p);
                 var result = await Task.Run(() => ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p)));
                 DecodeCache.Set(p, result.DataUri, result.Width, result.Height);
             }

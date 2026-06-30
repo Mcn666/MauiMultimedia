@@ -9,7 +9,6 @@
 @inject FileBrowserStateService BrowserState
 @inject AliasService Alias
 @inject ViewerPageFactory PageFactory
-@inject IFileLockEncryptionService FileLockService
 
 <div class="file-browser">
     <div class="browser-layout">
@@ -190,15 +189,6 @@
                     <span class="grid-alias-btn" @onclick:stopPropagation="true"
                           @onclick="() => OnItemRightClick(item)"
                           title="设置别名">✏️</span>
-                    @if (!item.IsFolder && CanLockFiles)
-                    {
-                        <span class="grid-lock-btn @(IsFileLocked(item) ? "locked" : "")"
-                              @onclick:stopPropagation="true"
-                              @onclick="() => OnLockClick(item)"
-                              title="@(IsFileLocked(item) ? "解锁文件，恢复为其他应用可访问" : "锁定文件，阻止其他应用访问")">
-                            @(IsFileLocked(item) ? "🔒" : "🔓")
-                        </span>
-                    }
                 </div>
             }
         </div>
@@ -215,7 +205,6 @@
                     修改时间 @GetSortArrow("date")
                 </span>
                 <span class="col-header-action" title="别名"></span>
-                <span class="col-header-action" title="锁定"></span>
             </div>
             <Virtualize Items="items" Context="item" ItemSize="44" OverscanCount="20">
                 <div class="item-row @GetItemRowClass(item)"
@@ -231,18 +220,6 @@
                     <span class="col-alias" @onclick:stopPropagation="true"
                           @onclick="() => OnItemRightClick(item)"
                           title="设置别名">✏️</span>
-                    @if (!item.IsFolder && CanLockFiles)
-                    {
-                        <span class="col-lock" @onclick:stopPropagation="true"
-                              @onclick="() => OnLockClick(item)"
-                              title="@(IsFileLocked(item) ? "解锁文件，恢复为其他应用可访问" : "锁定文件，阻止其他应用访问")">
-                            @(IsFileLocked(item) ? "🔒" : "🔓")
-                        </span>
-                    }
-                    else
-                    {
-                        <span class="col-lock-placeholder"></span>
-                    }
                 </div>
             </Virtualize>
         </div>

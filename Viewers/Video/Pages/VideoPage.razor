@@ -1,0 +1,38 @@
+@* @page "/videoviewer" — 已由 ContentPage 动态加载 *@
+
+<div class="viewer-page" @onkeydown="OnPageKeyDown" tabindex="0">
+    <div class="v-toolbar">
+        <button class="v-btn" @onclick="GoBack" title="返回 (Esc)">← 返回</button>
+        <button class="v-btn v-btn-nav" disabled="@(hasPrev ? null : true)" @onclick="GoPrev" title="上一个">←</button>
+
+        <span class="v-title" title="@filePath">@fileName</span>
+        <span class="v-pos">@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")</span>
+
+        <button class="v-btn v-btn-nav" disabled="@(hasNext ? null : true)" @onclick="GoNext" title="下一个">→</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="v-status"><div class="v-spinner"></div><span>正在加载...</span></div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="v-status v-status--err">⚠️ @errorMessage</div>
+    }
+    else
+    {
+        <div class="video-container">
+            <video id="@_videoElementId"
+                   class="video-player"
+                   controls
+                   preload="metadata"
+                   @ref="_videoRef">
+                您的浏览器不支持视频播放。
+            </video>
+        </div>
+    }
+</div>
+
+@code {
+    private ElementReference _videoRef;
+}

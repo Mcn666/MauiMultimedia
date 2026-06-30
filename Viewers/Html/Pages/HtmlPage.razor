@@ -7,7 +7,6 @@
 @inject IFileNavigationState NavState
 @inject IMauiNavigation MauiNav
 @inject IJSRuntime JS
-@inject IFileLockEncryptionService FileLockService
 
 <div class="v-page">
     <div class="v-toolbar">
@@ -112,7 +111,7 @@
                 MhtmlParser.ParseResult result = null!;
                 await Task.Run(async () =>
                 {
-                    var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                    var bytes = await File.ReadAllBytesAsync(filePath);
                     result = MhtmlParser.Parse(bytes);
                 });
 
@@ -124,7 +123,7 @@
             {
                 htmlContent = await Task.Run(async () =>
                 {
-                    var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+                    var bytes = await File.ReadAllBytesAsync(filePath);
                     var content = System.Text.Encoding.UTF8.GetString(bytes);
                     var dir = Path.GetDirectoryName(filePath);
                     if (dir != null)

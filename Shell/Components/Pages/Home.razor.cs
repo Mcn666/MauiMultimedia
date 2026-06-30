@@ -36,12 +36,9 @@ public partial class Home
     private CancellationTokenSource? scanCts;
     private List<FileScanCategory> scanCategories = new();
     private string? _activeFilePath;
-    private HashSet<string> _lockedFiles = new(StringComparer.OrdinalIgnoreCase);
     // 多级父目录滚动位置栈：进入子文件夹时入栈，返回时出栈恢复
     private readonly Stack<double> _parentScrollStack = new();
     private bool _skipRender;
-
-    private bool CanLockFiles => DeviceInfo.Current.Platform != DevicePlatform.Android;
 
     private enum WindowsQuickAccess
     {
@@ -90,9 +87,6 @@ public partial class Home
             "var el=document.querySelector('.alias-input');if(el)el.focus()");
     }
 
-    private bool IsFileLocked(FileSystemItem item)
-        => _lockedFiles.Contains(item.FullPath);
-
     private async Task SaveParentState()
     {
         try
@@ -101,49 +95,6 @@ public partial class Home
             _parentScrollStack.Push(scrollY);
         }
         catch { }
-    }
-
-    private async Task OnLockClick(FileSystemItem item)
-    {
-        try
-        {
-            if (_lockedFiles.Contains(item.FullPath))
-            {
-                await FileLockService.UnlockAsync(item.FullPath);
-                _lockedFiles.Remove(item.FullPath);
-            }
-            else
-            {
-                await FileLockService.LockAsync(item.FullPath);
-                _lockedFiles.Add(item.FullPath);
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"锁定操作失败：{ex.Message}";
-        }
-        StateHasChanged();
-    }
-
-    private async Task RefreshLockStatusAsync()
-    {
-        var paths = items
-            .Where(i => !i.IsFolder)
-            .Select(i => i.FullPath)
-            .ToList();
-
-        var locked = await Task.Run(() =>
-        {
-            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var path in paths)
-            {
-                if (FileLockService.IsLocked(path))
-                    result.Add(path);
-            }
-            return result;
-        });
-
-        _lockedFiles = locked;
     }
 
     private void ConfirmAlias()
@@ -440,8 +391,7 @@ public partial class Home
             await JS.InvokeVoidAsync("eval",
                 "requestAnimationFrame(() => window.scrollTo(0,0))");
 
-            // Phase 3：锁状态 + 子文件夹计数（后台不阻塞）
-            await RefreshLockStatusAsync();
+            // Phase 3：子文件夹计数（后台不阻塞）
             _ = LoadChildCountsAsync(items);
         }
         catch (Exception ex)
@@ -615,7 +565,6 @@ public partial class Home
             var results = await FileSystemService.ScanFilesByTypeAsync(currentPath, exts, ct);
             scanResults = results;
             items = scanResults;
-            await RefreshLockStatusAsync();
             isScanned = true;
         }
         catch (OperationCanceledException) { }

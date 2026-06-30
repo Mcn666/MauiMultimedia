@@ -4,7 +4,6 @@
 @inject NavigationManager Navigation
 @inject IFileNavigationState NavState
 @inject IMauiNavigation MauiNav
-@inject IFileLockEncryptionService FileLockService
 @inject IJSRuntime JS
 
 <div class="viewer-page">
@@ -156,7 +155,7 @@
         errorMessage = null;
         try
         {
-            var bytes = await FileLockService.ReadDecryptedBytesAsync(filePath);
+            var bytes = await File.ReadAllBytesAsync(filePath);
             var mime = ext switch
             {
                 ".gltf" => "model/gltf+json",
