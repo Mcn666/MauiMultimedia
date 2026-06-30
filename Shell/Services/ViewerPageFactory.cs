@@ -25,36 +25,48 @@ public class ViewerPageFactory
             ComponentType = viewer.ComponentType
         });
 
-#if ANDROID
+        // 配置各平台 WebView
         page.HandlerChanged += (_, _) =>
         {
-            var resources = Android.App.Application.Context.Resources;
-            if (resources != null)
-            {
-                int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
-                if (rid > 0)
-                {
-                    int hPx = resources.GetDimensionPixelSize(rid);
-                    float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
-                    int top = (int)(hPx / density);
-                    if (top > 0) page.Padding = new Thickness(0, top, 0, 0);
-                }
-            }
-
-            if (bwv.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
-            {
-                var dark2 = Preferences.Get("filebrowser-theme", "") switch
-                {
-                    "dark" => true, "light" => false, _ => Application.Current?.RequestedTheme == AppTheme.Dark
-                };
-                nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor(
-                    dark2 ? "#1a1a1a" : "#ffffff"));
-            }
-        };
+#if ANDROID
+            SetupAndroid(bwv, page, isDark);
 #endif
+        };
 
         page.Content = bwv;
         NavigationPage.SetHasNavigationBar(page, false);
         return page;
     }
+
+#if ANDROID
+    private static void SetupAndroid(BlazorWebView bwv, ContentPage page, bool isDark)
+    {
+        var resources = Android.App.Application.Context.Resources;
+        if (resources != null)
+        {
+            int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
+            if (rid > 0)
+            {
+                int hPx = resources.GetDimensionPixelSize(rid);
+                float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
+                int top = (int)(hPx / density);
+                if (top > 0) page.Padding = new Thickness(0, top, 0, 0);
+            }
+        }
+
+        if (bwv.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
+        {
+            // 主题色背景
+            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor(
+                isDark ? "#1a1a1a" : "#ffffff"));
+
+            // 允许混合内容（HTTP 视频从 HTTPS 页面加载）
+            if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.Lollipop)
+            {
+                nativeWv.Settings.MixedContentMode =
+                    Android.Webkit.MixedContentHandling.AlwaysAllow;
+            }
+        }
+    }
+#endif
 }

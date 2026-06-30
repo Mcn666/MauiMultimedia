@@ -23,6 +23,12 @@ namespace MauiMultimedia.Shell
             builder.Services.AddSingleton<AliasService>();
             builder.Services.AddSingleton<IMauiNavigation, MauiNavigationService>();
             builder.Services.AddSingleton<ViewerPageFactory>();
+            builder.Services.AddSingleton<IFileServerService>(sp =>
+            {
+                var svc = new FileServerService();
+                svc.Start();
+                return svc;
+            });
             builder.Services.AutoRegisterViewers();
 
 #if DEBUG

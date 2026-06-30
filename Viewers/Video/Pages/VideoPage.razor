@@ -11,11 +11,7 @@
         <button class="v-btn v-btn-nav" disabled="@(hasNext ? null : true)" @onclick="GoNext" title="下一个">→</button>
     </div>
 
-    @if (isLoading)
-    {
-        <div class="v-status"><div class="v-spinner"></div><span>正在加载...</span></div>
-    }
-    else if (!string.IsNullOrEmpty(errorMessage))
+    @if (!string.IsNullOrEmpty(errorMessage))
     {
         <div class="v-status v-status--err">⚠️ @errorMessage</div>
     }
@@ -26,13 +22,9 @@
                    class="video-player"
                    controls
                    preload="metadata"
-                   @ref="_videoRef">
+                   src="@_videoUrl">
                 您的浏览器不支持视频播放。
             </video>
         </div>
     }
 </div>
-
-@code {
-    private ElementReference _videoRef;
-}
