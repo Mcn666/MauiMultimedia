@@ -1,0 +1,12 @@
+{
+  "name": "maui-blazor-webview-es2019",
+  "version": "1.0.0",
+  "private": true,
+  "description": "构建期把官方 blazor.webview.js 转译到 es2018，让旧版 Android/iOS WebView 也能运行 MAUI Blazor Hybrid 应用",
+  "scripts": {
+    "transpile": "node transpile-blazor.mjs --out ./blazor.webview.improved.js"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2"
+  }
+}

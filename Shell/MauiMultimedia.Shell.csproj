@@ -86,8 +86,8 @@
       <Folder Include="wwwroot\scripts\" />
     </ItemGroup>
 
-    <!-- 构建时：收集查看器程序集名称并嵌入为资源 -->
-    <Target Name="GenerateViewerEmbed" BeforeTargets="AssignTargetPaths">
+  <!-- 构建时：收集查看器程序集名称并嵌入为资源 -->
+  <Target Name="GenerateViewerEmbed" BeforeTargets="AssignTargetPaths">
         <ItemGroup>
             <_ViewerRef Include="@(ProjectReference)" Condition="$([System.String]::new('%(FileName)').StartsWith('MauiMultimedia.Viewers.'))" />
         </ItemGroup>
@@ -96,5 +96,10 @@
             <EmbeddedResource Include="$(IntermediateOutputPath)viewer_assemblies.txt" LogicalName="viewer_assemblies.txt" />
         </ItemGroup>
     </Target>
+
+    <!-- 构建期：把官方 blazor.webview.js 转译到 es2018，兼容旧版 Android/iOS WebView。
+         逻辑抽到可移植工具包 maui-blazor-webview-es2019（详见其 README.md）。
+         单一事实源 = NuGet 官方文件，.NET 升级后重建即自动跟随；无 node 时跳过兜底。 -->
+    <Import Project="..\maui-blazor-webview-es2019\transpile-blazor.targets" />
 
 </Project>

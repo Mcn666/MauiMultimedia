@@ -1,0 +1,57 @@
+<!--
+  transpile-blazor.targets
+  可移植 MSBuild 目标：在任何 MAUI Blazor Hybrid 项目的 .csproj 里 <Import> 本文件，
+  即可在构建期把官方 blazor.webview.js 自动转译为 es2018 兼容版本。
+
+  使用方式（在 Shell/YourApp.csproj 末尾追加）：
+    <Import Project="..\maui-blazor-webview-es2019\transpile-blazor.targets" />
+
+  可覆盖的属性：
+    BlazorWebViewEs2019Script  : 转译脚本路径（默认本文件同目录的 transpile-blazor.mjs）
+    BlazorWebViewEs2019Output  : 输出 js 路径（默认 $(MSBuildProjectDirectory)\wwwroot\scripts\blazor.webview.improved.js）
+    NodeToolPath               : node 可执行文件（默认 node，需位于 PATH；CI 可显式指定）
+
+  行为：
+    - DesignTimeBuild 跳过（不拖慢 IDE）。
+    - 找不到 node → 跳过，使用已提交的 improved.js 兜底（不阻断构建）。
+    - esbuild 未安装 → 仅首次 npm install（避免每次构建联网）。
+    - 转译失败且输出不存在 → 由脚本以 exit 1 暴露（构建失败，避免发布破损文件）。
+-->
+<Project>
+
+  <PropertyGroup>
+    <BlazorWebViewEs2019Script Condition="'$(BlazorWebViewEs2019Script)' == ''">$(MSBuildThisFileDirectory)transpile-blazor.mjs</BlazorWebViewEs2019Script>
+    <BlazorWebViewEs2019Output Condition="'$(BlazorWebViewEs2019Output)' == ''">$(MSBuildProjectDirectory)\wwwroot\scripts\blazor.webview.improved.js</BlazorWebViewEs2019Output>
+    <NodeToolPath Condition="'$(NodeToolPath)' == ''">node</NodeToolPath>
+    <_EsbuildMarker>$(MSBuildThisFileDirectory)node_modules\esbuild\package.json</_EsbuildMarker>
+  </PropertyGroup>
+
+  <Target Name="TranspileBlazorWebViewJs"
+          BeforeTargets="BeforeBuild;BeforeRebuild"
+          Condition="'$(DesignTimeBuild)' != 'true' AND Exists('$(BlazorWebViewEs2019Script)')">
+
+    <!-- 探测 node 是否可用 -->
+    <Exec Command="&quot;$(NodeToolPath)&quot; --version"
+          ContinueOnError="true"
+          ConsoleToMSBuild="false"
+          StandardOutputImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="_NodeExit" />
+    </Exec>
+    <Message Condition="'$(_NodeExit)' != '0'"
+             Text="[transpile-blazor] 未找到 node（NodeToolPath=$(NodeToolPath)），跳过转译，使用已提交的 improved.js 兜底。如需启用请安装 Node.js 或设置 NodeToolPath。"
+             Importance="high" />
+
+    <!-- 仅当 esbuild 缺失时 npm install（避免每次构建联网） -->
+    <Exec Command="npm install --prefix &quot;$(MSBuildThisFileDirectory)&quot; --no-audit --no-fund"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          Condition="'$(_NodeExit)' == '0' AND !Exists('$(_EsbuildMarker)')"
+          ContinueOnError="true" />
+
+    <!-- 转译：把官方文件降级到 es2018 -->
+    <Exec Command="&quot;$(NodeToolPath)&quot; &quot;$(BlazorWebViewEs2019Script)&quot; --out &quot;$(BlazorWebViewEs2019Output)&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          Condition="'$(_NodeExit)' == '0'"
+          ContinueOnError="true" />
+  </Target>
+
+</Project>

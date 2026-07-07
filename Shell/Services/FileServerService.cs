@@ -252,7 +252,9 @@ public sealed class FileServerService : IFileServerService, IDisposable
             using var fs = new FileStream(filePath, FileMode.Open,
                 FileAccess.Read, FileShare.ReadWrite);
             fs.Seek(rangeStart, SeekOrigin.Begin);
-            await fs.CopyToAsync(stream, 81920, ct);
+            // 只发送声明的 contentLength 字节，而非从 rangeStart 到文件末尾的全部内容。
+            // 否则浏览器拖拽进度条 / 大视频会重复拉取整段尾部，浪费带宽且可能出错。
+            await CopyExactAsync(fs, stream, contentLength, ct);
         }
         else
         {
@@ -270,6 +272,22 @@ public sealed class FileServerService : IFileServerService, IDisposable
             using var fs = new FileStream(filePath, FileMode.Open,
                 FileAccess.Read, FileShare.ReadWrite);
             await fs.CopyToAsync(stream, 81920, ct);
+        }
+    }
+
+    // 精确复制 count 字节，避免 CopyToAsync 把流剩余部分一并写出
+    private static async Task CopyExactAsync(
+        Stream source, Stream destination, long count, CancellationToken ct)
+    {
+        var buffer = new byte[81920];
+        long remaining = count;
+        while (remaining > 0)
+        {
+            var toRead = (int)Math.Min(buffer.Length, remaining);
+            var read = await source.ReadAsync(buffer.AsMemory(0, toRead), ct);
+            if (read == 0) break;
+            await destination.WriteAsync(buffer.AsMemory(0, read), ct);
+            remaining -= read;
         }
     }
 

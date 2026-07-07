@@ -1,1 +1,1667 @@
-!function(e){"use strict";var _host=typeof window!=="undefined"?window:(typeof self!=="undefined"?self:globalThis);var _getDoc=function(){return typeof document!=="undefined"?document:null;};var _pm=typeof performance!=="undefined"&&performance.mark?function(n){performance.mark("blazor:"+n+":start");}:function(){};var _pme=typeof performance!=="undefined"&&performance.measure?function(n){performance.mark("blazor:"+n+":end");try{performance.measure("blazor:"+n+":duration","blazor:"+n+":start","blazor:"+n+":end");}catch(e){}}:function(){};var _domBatch=[],_rafPending=!1;var _scheduleDOMBatch=function(fn){_domBatch.push(fn);if(!_rafPending){_rafPending=!0;var raf=typeof requestAnimationFrame!=="undefined"?requestAnimationFrame:function(cb){setTimeout(cb,0);};raf(function(){var b=_domBatch.splice(0);_rafPending=!1;for(var i=0;i<b.length;i++){try{b[i]();}catch(e){console.error("Blazor DOM batch error:",e);}}});}};var _passiveEvents={touchstart:1,touchmove:1,touchend:1,touchcancel:1,wheel:1,mousewheel:1,scroll:1};var _isPassiveEvent=function(n){return!!_passiveEvents[n];};if(typeof Object.hasOwn==="undefined"){Object.hasOwn=function(o,k){return{}.hasOwnProperty.call(o,k);};};var t,n,r;var _cachedBaseURI=null;var _getBaseURI=function(){return _cachedBaseURI||(_cachedBaseURI=document.baseURI);};var _SVG_NS="http://www.w3.org/2000/svg";!function(e){const t=[],n="__jsObjectId",r="__dotNetObject",o="__byte[]",a="__dotNetStream",i="__jsStreamReferenceLength";let s,c;class l{constructor(e){this._jsObject=e,this._cachedFunctions=new Map}findFunction(e){const t=this._cachedFunctions.get(e);if(t)return t;let n,r=this._jsObject;if(e.split(".").forEach((t=>{if(!(t in r))throw new Error(`Could not find '${e}' ('${t}' was undefined).`);n=r,r=r[t]})),r instanceof Function)return r=r.bind(n),this._cachedFunctions.set(e,r),r;throw new Error(`The value '${e}' is not a function.`)}getWrappedObject(){return this._jsObject}}const u=0,d={[u]:new l(window)};d[0]._cachedFunctions.set("import",(e=>("string"==typeof e&&e.startsWith("./")&&(e=new URL(e.substring(2),document.baseURI).toString()),import(e))));let h,f=1;var _jsObjRegistry=typeof FinalizationRegistry!=="undefined"?new FinalizationRegistry(function(id){delete d[id];}):null;var _registerForGC=function(id,obj){if(_jsObjRegistry&&obj&&typeof obj==="object"){try{_jsObjRegistry.register(obj,id);}catch(e){}}};function m(e){t.push(e)}function p(e){if(e&&"object"==typeof e){d[f]=new l(e);const t={[n]:f};_registerForGC(f,e);return f++,t}throw new Error(`Cannot create a JSObjectReference from the value '${e}'.`)}function b(e){var t=-1;if(e instanceof ArrayBuffer)e=new Uint8Array(e);if(e instanceof Blob)t=e.size;else{if(!(e.buffer instanceof ArrayBuffer))throw new Error("Supplied value is not a typed array or blob.");if(void 0===e.byteLength)throw new Error("Cannot create a JSStreamReference.");t=e.byteLength}var r={[i]:t};try{var jr=p(e);r[n]=jr[n]}catch(ex){throw new Error("Cannot create a JSStreamReference.")}return r}function v(e,n){c=e;const r=n?JSON.parse(n,((e,n)=>t.reduce(((t,n)=>n(e,t)),n))):null;return c=void 0,r}function g(){if(void 0===s)throw new Error("No call dispatcher has been set.");if(null===s)throw new Error("There are multiple .NET runtimes present, so a default dispatcher could not be resolved. Use DotNetObject to invoke .NET instance methods.");return s}e.attachDispatcher=function(e){const t=new y(e);return void 0===s?s=t:s&&(s=null),t},e.attachReviver=m,e.invokeMethod=function(e,t,...n){return g().invokeDotNetStaticMethod(e,t,...n)},e.invokeMethodAsync=function(e,t,...n){return g().invokeDotNetStaticMethodAsync(e,t,...n)},e.createJSObjectReference=p,e.createJSStreamReference=b,e.disposeJSObjectReference=function(e){const t=e&&e[n];"number"==typeof t&&S(t)},function(e){e[e.Default=0]="Default",e[e.JSObjectReference=1]="JSObjectReference",e[e.JSStreamReference=2]="JSStreamReference",e[e.JSVoidResult=3]="JSVoidResult"}(h=e.JSCallResultType||(e.JSCallResultType={}));class y{constructor(e){this._dotNetCallDispatcher=e,this._byteArraysToBeRevived=new Map,this._pendingDotNetToJSStreams=new Map,this._pendingAsyncCalls={},this._nextAsyncCallId=1}getDotNetCallDispatcher(){return this._dotNetCallDispatcher}invokeJSFromDotNet(e,t,n,r){const o=v(this,t),a=A(E(e,r)(...o||[]),n);return null==a?null:R(this,a)}beginInvokeJSFromDotNet(e,t,n,r,o){const a=new Promise((e=>{const r=v(this,n);e(E(t,o)(...r||[]))}));e&&a.then((t=>R(this,[e,!0,A(t,r)]))).then((t=>this._dotNetCallDispatcher.endInvokeJSFromDotNet(e,!0,t)),(t=>this._dotNetCallDispatcher.endInvokeJSFromDotNet(e,!1,JSON.stringify([e,!1,w(t)]))))}endInvokeDotNetFromJS(e,t,n){const r=t?v(this,n):new Error(n);this.completePendingCall(parseInt(e,10),t,r)}invokeDotNetStaticMethod(e,t,...n){return this.invokeDotNetMethod(e,t,null,n)}invokeDotNetStaticMethodAsync(e,t,...n){return this.invokeDotNetMethodAsync(e,t,null,n)}invokeDotNetMethod(e,t,n,r){if(this._dotNetCallDispatcher.invokeDotNetFromJS){const o=R(this,r),a=this._dotNetCallDispatcher.invokeDotNetFromJS(e,t,n,o);return a?v(this,a):null}throw new Error("The current dispatcher does not support synchronous calls from JS to .NET. Use invokeDotNetMethodAsync instead.")}invokeDotNetMethodAsync(e,t,n,r){if(e&&n)throw new Error("For instance method calls, assemblyName should be null.");const o=this._nextAsyncCallId++,a=new Promise(((e,t)=>{this._pendingAsyncCalls[o]={resolve:e,reject:t}}));try{const a=R(this,r);this._dotNetCallDispatcher.beginInvokeDotNetFromJS(o,e,t,n,a)}catch(e){this.completePendingCall(o,!1,e)}return a}receiveByteArray(e,t){this._byteArraysToBeRevived.set(e,t)}processByteArray(e){const t=this._byteArraysToBeRevived.get(e);return t?(this._byteArraysToBeRevived.delete(e),t):null}supplyDotNetStream(e,t){if(this._pendingDotNetToJSStreams.has(e)){const n=this._pendingDotNetToJSStreams.get(e);this._pendingDotNetToJSStreams.delete(e),n.resolve(t)}else{const n=new D;n.resolve(t),this._pendingDotNetToJSStreams.set(e,n)}}getDotNetStreamPromise(e){let t;if(this._pendingDotNetToJSStreams.has(e))t=this._pendingDotNetToJSStreams.get(e).streamPromise,this._pendingDotNetToJSStreams.delete(e);else{const n=new D;this._pendingDotNetToJSStreams.set(e,n),t=n.streamPromise}return t}completePendingCall(e,t,n){if(!this._pendingAsyncCalls.hasOwnProperty(e))throw new Error(`There is no pending async call with ID ${e}.`);const r=this._pendingAsyncCalls[e];delete this._pendingAsyncCalls[e],t?r.resolve(n):r.reject(n)}}function w(e){return e instanceof Error?`${e.message}\n${e.stack}`:e?e.toString():"null"}function E(e,t){const n=d[t];if(n)return n.findFunction(e);throw new Error(`JS object instance with ID ${t} does not exist (has it been disposed?).`)}function S(e){delete d[e]}e.findJSFunction=E,e.disposeJSObjectReferenceById=S;class I{constructor(e,t){this._id=e,this._callDispatcher=t}invokeMethod(e,...t){return this._callDispatcher.invokeDotNetMethod(null,e,this._id,t)}invokeMethodAsync(e,...t){return this._callDispatcher.invokeDotNetMethodAsync(null,e,this._id,t)}dispose(){this._callDispatcher.invokeDotNetMethodAsync(null,"__Dispose",this._id,null).catch((e=>console.error(e)))}serializeAsArg(){return{[r]:this._id}}}e.DotNetObject=I,m((function(e,t){if(t&&"object"==typeof t){if(t.hasOwnProperty(r))return new I(t[r],c);if(t.hasOwnProperty(n)){const e=t[n],r=d[e];if(r)return r.getWrappedObject();throw new Error(`JS object instance with Id '${e}' does not exist. It may have been disposed.`)}if(t.hasOwnProperty(o)){const e=t[o],n=c.processByteArray(e);if(void 0===n)throw new Error(`Byte array index '${e}' does not exist.`);return n}if(t.hasOwnProperty(a)){const e=t[a],n=c.getDotNetStreamPromise(e);return new C(n)}}return t}));class C{constructor(e){this._streamPromise=e}stream(){return this._streamPromise}async arrayBuffer(){return new Response(await this.stream()).arrayBuffer()}}class D{constructor(){this.streamPromise=new Promise(((e,t)=>{this.resolve=e,this.reject=t}))}}function A(e,t){switch(t){case h.Default:return e;case h.JSObjectReference:return p(e);case h.JSStreamReference:return b(e);case h.JSVoidResult:return null;default:throw new Error(`Invalid JS call result type '${t}'.`)}}let N=0;function R(e,t){N=0,c=e;const n=JSON.stringify(t,k);return c=void 0,n}function k(e,t){if(t instanceof I)return t.serializeAsArg();if(t instanceof Uint8Array){c.getDotNetCallDispatcher().sendByteArray(N,t);const e={[o]:N};return N++,e}return t}}(t||(t={})),function(e){e[e.prependFrame=1]="prependFrame",e[e.removeFrame=2]="removeFrame",e[e.setAttribute=3]="setAttribute",e[e.removeAttribute=4]="removeAttribute",e[e.updateText=5]="updateText",e[e.stepIn=6]="stepIn",e[e.stepOut=7]="stepOut",e[e.updateMarkup=8]="updateMarkup",e[e.permutationListEntry=9]="permutationListEntry",e[e.permutationListEnd=10]="permutationListEnd"}(n||(n={})),function(e){e[e.element=1]="element",e[e.text=2]="text",e[e.attribute=3]="attribute",e[e.component=4]="component",e[e.region=5]="region",e[e.elementReferenceCapture=6]="elementReferenceCapture",e[e.markup=8]="markup",e[e.namedEvent=10]="namedEvent"}(r||(r={}));class o{constructor(e,t){this.componentId=e,this.fieldValue=t}static fromEvent(e,t){const n=t.target;if(n instanceof Element){const t=function(e){return e instanceof HTMLInputElement?e.type&&"checkbox"===e.type.toLowerCase()?{value:e.checked}:{value:e.value}:e instanceof HTMLSelectElement||e instanceof HTMLTextAreaElement?{value:e.value}:null}(n);if(t)return new o(e,t.value)}return null}}const a=new Map,i=new Map,s=[];function c(e){return a.get(e)}function l(e){const t=a.get(e);return(null==t?void 0:t.browserEventName)||e}function u(e,t){e.forEach((e=>a.set(e,t)))}function d(e){const t=[];for(let n=0;n<e.length;n++){const r=e[n];t.push({identifier:r.identifier,clientX:r.clientX,clientY:r.clientY,screenX:r.screenX,screenY:r.screenY,pageX:r.pageX,pageY:r.pageY})}return t}function h(e){return{detail:e.detail,screenX:e.screenX,screenY:e.screenY,clientX:e.clientX,clientY:e.clientY,offsetX:e.offsetX,offsetY:e.offsetY,pageX:e.pageX,pageY:e.pageY,movementX:e.movementX,movementY:e.movementY,button:e.button,buttons:e.buttons,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey,metaKey:e.metaKey,type:e.type}}u(["input","change"],{createEventArgs:function(e){const t=e.target;if(function(e){return-1!==f.indexOf(e.getAttribute("type"))}(t)){const e=function(e){const t=e.value,n=e.type;switch(n){case"date":case"month":case"week":return t;case"datetime-local":return 16===t.length?t+":00":t;case"time":return 5===t.length?t+":00":t}throw new Error(`Invalid element type '${n}'.`)}(t);return{value:e}}if(function(e){return e instanceof HTMLSelectElement&&"select-multiple"===e.type}(t)){const e=t;return{value:(function(os){var r=[];for(var i=0;i<os.length;i++){if(os[i].selected)r.push(os[i].value);}return r;})(e.options)}}{const e=function(e){return!!e&&"INPUT"===e.tagName&&"checkbox"===e.getAttribute("type")}(t);return{value:e?!!t.checked:t.value}}}}),u(["copy","cut","paste"],{createEventArgs:e=>({type:e.type})}),u(["drag","dragend","dragenter","dragleave","dragover","dragstart","drop"],{createEventArgs:e=>{return{...h(t=e),dataTransfer:t.dataTransfer?{dropEffect:t.dataTransfer.dropEffect,effectAllowed:t.dataTransfer.effectAllowed,files:(function(fs){var r=[];for(var i=0;i<fs.length;i++)r.push(fs[i].name);return r;})(t.dataTransfer.files),items:(function(is){var r=[];for(var i=0;i<is.length;i++)r.push({kind:is[i].kind,type:is[i].type});return r;})(t.dataTransfer.items),types:t.dataTransfer.types}:null};var t}}),u(["focus","blur","focusin","focusout"],{createEventArgs:e=>({type:e.type})}),u(["keydown","keyup","keypress"],{createEventArgs:e=>{return{key:(t=e).key,code:t.code,location:t.location,repeat:t.repeat,ctrlKey:t.ctrlKey,shiftKey:t.shiftKey,altKey:t.altKey,metaKey:t.metaKey,type:t.type,isComposing:t.isComposing};var t}}),u(["contextmenu","click","mouseover","mouseout","mousemove","mousedown","mouseup","mouseleave","mouseenter","dblclick"],{createEventArgs:e=>h(e)}),u(["error"],{createEventArgs:e=>{return{message:(t=e).message,filename:t.filename,lineno:t.lineno,colno:t.colno,type:t.type};var t}}),u(["loadstart","timeout","abort","load","loadend","progress"],{createEventArgs:e=>{return{lengthComputable:(t=e).lengthComputable,loaded:t.loaded,total:t.total,type:t.type};var t}}),u(["touchcancel","touchend","touchmove","touchenter","touchleave","touchstart"],{createEventArgs:e=>{return{detail:(t=e).detail,touches:d(t.touches),targetTouches:d(t.targetTouches),changedTouches:d(t.changedTouches),ctrlKey:t.ctrlKey,shiftKey:t.shiftKey,altKey:t.altKey,metaKey:t.metaKey,type:t.type};var t}}),u(["gotpointercapture","lostpointercapture","pointercancel","pointerdown","pointerenter","pointerleave","pointermove","pointerout","pointerover","pointerup"],{createEventArgs:e=>{return{...h(t=e),pointerId:t.pointerId,width:t.width,height:t.height,pressure:t.pressure,tiltX:t.tiltX,tiltY:t.tiltY,pointerType:t.pointerType,isPrimary:t.isPrimary};var t}}),u(["wheel","mousewheel"],{createEventArgs:e=>{return{...h(t=e),deltaX:t.deltaX,deltaY:t.deltaY,deltaZ:t.deltaZ,deltaMode:t.deltaMode};var t}}),u(["cancel","close","toggle"],{createEventArgs:()=>({})});const f=["date","datetime-local","month","time","week"],m=new Map;let p,b,v=0;const g={async add(e,t,n){if(!n)throw new Error("initialParameters must be an object, even if empty.");const r="__bl-dynamic-root:"+(++v).toString();m.set(r,e);const o=await E().invokeMethodAsync("AddRootComponent",t,r),a=new w(o,b[t]);return await a.setParameters(n),a}};class y{invoke(e){return this._callback(e)}setCallback(e){this._selfJSObjectReference||(this._selfJSObjectReference=t.createJSObjectReference(this)),this._callback=e}getJSObjectReference(){return this._selfJSObjectReference}dispose(){this._selfJSObjectReference&&t.disposeJSObjectReference(this._selfJSObjectReference)}}class w{constructor(e,t){this._jsEventCallbackWrappers=new Map,this._componentId=e;for(const e of t)"eventcallback"===e.type&&this._jsEventCallbackWrappers.set(e.name.toLowerCase(),new y)}setParameters(e){const t={},n=Object.entries(e||{}),r=n.length;for(const[e,r]of n){const n=this._jsEventCallbackWrappers.get(e.toLowerCase());n&&r?(n.setCallback(r),t[e]=n.getJSObjectReference()):t[e]=r}return E().invokeMethodAsync("SetRootComponentParameters",this._componentId,r,t)}async dispose(){if(null!==this._componentId){await E().invokeMethodAsync("RemoveRootComponent",this._componentId),this._componentId=null;for(const e of this._jsEventCallbackWrappers.values())e.dispose()}}}function E(){if(!p)throw new Error("Dynamic root components have not been enabled in this application.");return p}const S=new Map,I=[],C=new Map;function D(e,t,n){return N(e,t.eventHandlerId,(()=>A(e).invokeMethodAsync("DispatchEventAsync",t,n)))}function A(e){const t=S.get(e);if(!t)throw new Error(`No interop methods are registered for renderer ${e}`);return t}let N=(e,t,n)=>n();const R=x(["abort","blur","cancel","canplay","canplaythrough","change","close","cuechange","durationchange","emptied","ended","error","focus","load","loadeddata","loadedmetadata","loadend","loadstart","mouseenter","mouseleave","pointerenter","pointerleave","pause","play","playing","progress","ratechange","reset","scroll","seeked","seeking","stalled","submit","suspend","timeupdate","toggle","unload","volumechange","waiting","DOMNodeInsertedIntoDocument","DOMNodeRemovedFromDocument"]),k={submit:!0},T=x(["click","dblclick","mousedown","mousemove","mouseup"]);class _{constructor(e){this.browserRendererId=e,this.afterClickCallbacks=[];const t=++_.nextEventDelegatorId;this.eventsCollectionKey=`_blazorEvents_${t}`,this.eventInfoStore=new O(this.onGlobalEvent.bind(this))}setListener(e,t,n,r){const o=this.getEventHandlerInfosForElement(e,!0),a=o.getHandler(t);if(a)this.eventInfoStore.update(a.eventHandlerId,n);else{const a={element:e,eventName:t,eventHandlerId:n,renderingComponentId:r};this.eventInfoStore.add(a),o.setHandler(t,a)}}getHandler(e){return this.eventInfoStore.get(e)}removeListener(e){const t=this.eventInfoStore.remove(e);if(t){const e=t.element,n=this.getEventHandlerInfosForElement(e,!1);n&&n.removeHandler(t.eventName)}}notifyAfterClick(e){this.afterClickCallbacks.push(e),this.eventInfoStore.addGlobalListener("click")}setStopPropagation(e,t,n){this.getEventHandlerInfosForElement(e,!0).stopPropagation(t,n)}setPreventDefault(e,t,n){this.getEventHandlerInfosForElement(e,!0).preventDefault(t,n)}onGlobalEvent(e){if(!(e.target instanceof Element))return;this.dispatchGlobalEventToAllElements(e.type,e);const t=(n=e.type,i.get(n));var n;t&&t.forEach((t=>this.dispatchGlobalEventToAllElements(t,e))),"click"===e.type&&this.afterClickCallbacks.forEach((t=>t(e)))}dispatchGlobalEventToAllElements(e,t){const n=t.composedPath();let r=n.shift(),a=null,i=!1;const s=Object.hasOwn(R,e);let l=!1;for(;r;){const h=r,f=this.getEventHandlerInfosForElement(h,!1);if(f){const n=f.getHandler(e);if(n&&(u=h,d=t.type,!((u instanceof HTMLButtonElement||u instanceof HTMLInputElement||u instanceof HTMLTextAreaElement||u instanceof HTMLSelectElement)&&Object.hasOwn(T,d)&&u.disabled))){if(!i){const n=c(e);a=(null==n?void 0:n.createEventArgs)?n.createEventArgs(t):{},i=!0}Object.hasOwn(k,t.type)&&t.preventDefault(),D(this.browserRendererId,{eventHandlerId:n.eventHandlerId,eventName:e,eventFieldInfo:o.fromEvent(n.renderingComponentId,t)},a)}f.stopPropagation(e)&&(l=!0),f.preventDefault(e)&&t.preventDefault()}r=s||l?void 0:n.shift()}var u,d}getEventHandlerInfosForElement(e,t){return Object.hasOwn(e,this.eventsCollectionKey)?e[this.eventsCollectionKey]:t?e[this.eventsCollectionKey]=new L:null}}_.nextEventDelegatorId=0;class O{constructor(e){this.globalListener=e,this.infosByEventHandlerId={},this.countByEventName={},s.push(this.handleEventNameAliasAdded.bind(this))}add(e){if(this.infosByEventHandlerId[e.eventHandlerId])throw new Error(`Event ${e.eventHandlerId} is already tracked`);this.infosByEventHandlerId[e.eventHandlerId]=e,this.addGlobalListener(e.eventName)}get(e){return this.infosByEventHandlerId[e]}addGlobalListener(e){if(e=l(e),Object.hasOwn(this.countByEventName,e))this.countByEventName[e]++;else{this.countByEventName[e]=1;const t=Object.hasOwn(R,e);document.addEventListener(e,this.globalListener,t)}}update(e,t){if(Object.hasOwn(this.infosByEventHandlerId,t))throw new Error(`Event ${t} is already tracked`);const n=this.infosByEventHandlerId[e];delete this.infosByEventHandlerId[e],n.eventHandlerId=t,this.infosByEventHandlerId[t]=n}remove(e){const t=this.infosByEventHandlerId[e];if(t){delete this.infosByEventHandlerId[e];const n=l(t.eventName);0==--this.countByEventName[n]&&(delete this.countByEventName[n],document.removeEventListener(n,this.globalListener))}return t}handleEventNameAliasAdded(e,t){if(Object.hasOwn(this.countByEventName,e)){const n=this.countByEventName[e];delete this.countByEventName[e],document.removeEventListener(e,this.globalListener),this.addGlobalListener(t),this.countByEventName[t]+=n-1}}}class L{constructor(){this.handlers={},this.preventDefaultFlags=null,this.stopPropagationFlags=null}getHandler(e){return Object.hasOwn(this.handlers,e)?this.handlers[e]:null}setHandler(e,t){this.handlers[e]=t}removeHandler(e){delete this.handlers[e]}preventDefault(e,t){return void 0!==t&&(this.preventDefaultFlags=this.preventDefaultFlags||{},this.preventDefaultFlags[e]=t),!!this.preventDefaultFlags&&this.preventDefaultFlags[e]}stopPropagation(e,t){return void 0!==t&&(this.stopPropagationFlags=this.stopPropagationFlags||{},this.stopPropagationFlags[e]=t),!!this.stopPropagationFlags&&this.stopPropagationFlags[e]}}function x(e){const t={};return e.forEach((e=>{t[e]=!0})),t}const F=Symbol(),M=Symbol();function P(e,t){if(F in e)return e;const n=[];if(e.childNodes.length>0){if(!t)throw new Error("New logical elements must start empty, or allowExistingContents must be true");e.childNodes.forEach((t=>{const r=P(t,!0);r[M]=e,n.push(r)}))}return e[F]=n,e}function B(e){const t=W(e);for(;t.length;)J(e,0)}function j(e,t){const n=document.createComment("!");return H(n,e,t),n}function H(e,t,n){const r=e;let o=e;if(e instanceof Comment){const t=W(r);if((null==t?void 0:t.length)>0){const t=G(r),n=new Range;n.setStartBefore(e),n.setEndAfter(t),o=n.extractContents()}}const a=U(r);if(a){const e=W(a),t=Array.prototype.indexOf.call(e,r);e.splice(t,1),delete r[M]}const i=W(t);if(n<i.length){const e=i[n];e.parentNode.insertBefore(o,e),i.splice(n,0,r)}else Y(o,t),i.push(r);r[M]=t,F in r||(r[F]=[])}function J(e,t){const n=W(e).splice(t,1)[0];if(n instanceof Comment){const e=W(n);if(e)for(;e.length>0;)J(n,0)}const r=n;r.parentNode.removeChild(r)}function U(e){return e[M]||null}function $(e,t){return W(e)[t]}function z(e){const t=X(e);return"http://www.w3.org/2000/svg"===t.namespaceURI&&"foreignObject"!==t.tagName}function W(e){return e[F]}function K(e){const t=W(U(e));return t[Array.prototype.indexOf.call(t,e)+1]||null}function V(e,t){const n=W(e);t.forEach((e=>{e.moveRangeStart=n[e.fromSiblingIndex],e.moveRangeEnd=G(e.moveRangeStart)})),t.forEach((t=>{const r=document.createComment("marker");t.moveToBeforeMarker=r;const o=n[t.toSiblingIndex+1];o?o.parentNode.insertBefore(r,o):Y(r,e)})),t.forEach((e=>{const t=e.moveToBeforeMarker,n=t.parentNode,r=e.moveRangeStart,o=e.moveRangeEnd;let a=r;for(;a;){const e=a.nextSibling;if(n.insertBefore(a,t),a===o)break;a=e}n.removeChild(t)})),t.forEach((e=>{n[e.toSiblingIndex]=e.moveRangeStart}))}function X(e){if(e instanceof Element||e instanceof DocumentFragment)return e;if(e instanceof Comment)return e.parentNode;throw new Error("Not a valid logical element")}function Y(e,t){if(t instanceof Element||t instanceof DocumentFragment)t.appendChild(e);else{if(!(t instanceof Comment))throw new Error(`Cannot append node because the parent is not a valid logical element. Parent: ${t}`);{const n=K(t);n?n.parentNode.insertBefore(e,n):Y(e,U(t))}}}function G(e){if(e instanceof Element||e instanceof DocumentFragment)return e;const t=K(e);if(t)return t.previousSibling;{const t=U(e);return t instanceof Element||t instanceof DocumentFragment?t.lastChild:G(t)}}function q(e){return`_bl_${e}`}const Z="__internalId";t.attachReviver(((e,t)=>t&&"object"==typeof t&&Object.hasOwn(t,Z)&&"string"==typeof t[Z]?function(e){const t=`[${q(e)}]`;return document.querySelector(t)}(t[Z]):t));const Q="_blazorDeferredValue";function ee(e){return"select-multiple"===e.type}function te(e,t){e.value=t||""}function ne(e,t){e instanceof HTMLSelectElement?ee(e)?function(e,t){t||(t=[]);for(let n=0;n<e.options.length;n++)e.options[n].selected=-1!==t.indexOf(e.options[n].value)}(e,t):te(e,t):e.value=t}function re(e){const t=function(e){for(;e;){if(e instanceof HTMLSelectElement)return e;e=e.parentElement}return null}(e);if(!function(e){return!!e&&Q in e}(t))return!1;if(ee(t))e.selected=-1!==t._blazorDeferredValue.indexOf(e.value);else{if(t._blazorDeferredValue!==e.value)return!1;te(t,e.value),delete t._blazorDeferredValue}return!0}const oe=document.createElement("template"),ae=document.createElementNS("http://www.w3.org/2000/svg","g"),ie=new Set,se=Symbol(),ce=Symbol();class le{constructor(e){this.rootComponentIds=new Set,this.childComponentLocations={},this.eventDelegator=new _(e),this.eventDelegator.notifyAfterClick((e=>{we()&&function(e){if(0!==e.button||function(e){return e.ctrlKey||e.shiftKey||e.altKey||e.metaKey}(e))return;if(e.defaultPrevented)return;const t=function(e){const t=e.composedPath&&e.composedPath();if(t)for(let e=0;e<t.length;e++){const n=t[e];if(n instanceof HTMLAnchorElement||n instanceof SVGAElement)return n}return null}(e);if(t&&function(e){const t=e.getAttribute("target");return(!t||"_self"===t)&&e.hasAttribute("href")&&!e.hasAttribute("download")}(t)){const n=ye(t.getAttribute("href"));ve(n)&&(e.preventDefault(),Te(n,!0,!1))}}(e)}))}getRootComponentCount(){return this.rootComponentIds.size}attachRootComponentToLogicalElement(e,t,n){if(function(e){return e[se]}(t))throw new Error(`Root component '${e}' could not be attached because its target element is already associated with a root component`);n&&(t=j(t,W(t).length)),ue(t,!0),this.attachComponentToElement(e,t),this.rootComponentIds.add(e),ie.add(t)}updateComponent(e,t,n,r){var o;const a=this.childComponentLocations[t];if(!a)throw new Error(`No element is currently associated with component ${t}`);ie.delete(a)&&(B(a),a instanceof Comment&&(a.textContent="!"));const i=null===(o=X(a))||void 0===o?void 0:o.getRootNode(),s=i&&i.activeElement;this.applyEdits(e,t,a,0,n,r),s instanceof HTMLElement&&i&&i.activeElement!==s&&s.focus()}disposeComponent(e){if(this.rootComponentIds.delete(e)){const t=this.childComponentLocations[e];ue(t,!1),!0===t[ce]?ie.add(t):B(t)}delete this.childComponentLocations[e]}disposeEventHandler(e){this.eventDelegator.removeListener(e)}attachComponentToElement(e,t){this.childComponentLocations[e]=t}applyEdits(e,t,r,o,a,i){let s,c=0,l=o;const u=e.arrayBuilderSegmentReader,d=e.editReader,h=e.frameReader,f=u.values(a),m=u.offset(a),p=m+u.count(a);for(let a=m;a<p;a++){const u=e.diffReader.editsEntry(f,a),m=d.editType(u);switch(m){case n.prependFrame:{const n=d.newTreeIndex(u),o=e.referenceFramesEntry(i,n),a=d.siblingIndex(u);this.insertFrame(e,t,r,l+a,i,o,n);break}case n.removeFrame:J(r,l+d.siblingIndex(u));break;case n.setAttribute:{const n=d.newTreeIndex(u),o=e.referenceFramesEntry(i,n),a=$(r,l+d.siblingIndex(u));if(!(a instanceof Element))throw new Error("Cannot set attribute on non-element child");this.applyAttribute(e,t,a,o);break}case n.removeAttribute:{const e=$(r,l+d.siblingIndex(u));if(!(e instanceof Element))throw new Error("Cannot remove attribute from non-element child");{const t=d.removedAttributeName(u);this.setOrRemoveAttributeOrProperty(e,t,null)}break}case n.updateText:{const t=d.newTreeIndex(u),n=e.referenceFramesEntry(i,t),o=$(r,l+d.siblingIndex(u));if(!(o instanceof Text))throw new Error("Cannot set text content on non-text child");o.textContent=h.textContent(n);break}case n.updateMarkup:{const t=d.newTreeIndex(u),n=e.referenceFramesEntry(i,t),o=d.siblingIndex(u);J(r,l+o),this.insertMarkup(e,r,l+o,n);break}case n.stepIn:r=$(r,l+d.siblingIndex(u)),c++,l=0;break;case n.stepOut:r=U(r),c--,l=0===c?o:0;break;case n.permutationListEntry:s=s||[],s.push({fromSiblingIndex:l+d.siblingIndex(u),toSiblingIndex:l+d.moveToSiblingIndex(u)});break;case n.permutationListEnd:V(r,s),s=void 0;break;default:throw new Error(`Unknown edit type: ${m}`)}}}insertFrame(e,t,n,o,a,i,s){const c=e.frameReader,l=c.frameType(i);switch(l){case r.element:return this.insertElement(e,t,n,o,a,i,s),1;case r.text:return this.insertText(e,n,o,i),1;case r.attribute:throw new Error("Attribute frames should only be present as leading children of element frames.");case r.component:return this.insertComponent(e,n,o,i),1;case r.region:return this.insertFrameRange(e,t,n,o,a,s+1,s+c.subtreeLength(i));case r.elementReferenceCapture:if(n instanceof Element)return u=n,d=c.elementReferenceCaptureId(i),u.setAttribute(q(d),""),0;throw new Error("Reference capture frames can only be children of element frames.");case r.markup:return this.insertMarkup(e,n,o,i),1;case r.namedEvent:return 0;default:throw new Error(`Unknown frame type: ${l}`)}var u,d}insertElement(e,t,n,o,a,i,s){const c=e.frameReader,l=c.elementName(i),u="svg"===l||z(n)?document.createElementNS("http://www.w3.org/2000/svg",l):document.createElement(l),d=P(u);let h=!1;const f=s+c.subtreeLength(i);for(let i=s+1;i<f;i++){const s=e.referenceFramesEntry(a,i);if(c.frameType(s)!==r.attribute){H(u,n,o),h=!0,this.insertFrameRange(e,t,d,0,a,i,f);break}this.applyAttribute(e,t,u,s)}var m;h||H(u,n,o),(m=u)instanceof HTMLOptionElement?re(m):Q in m&&ne(m,m[Q])}insertComponent(e,t,n,r){const o=j(t,n),a=e.frameReader.componentId(r);this.attachComponentToElement(a,o)}insertText(e,t,n,r){const o=e.frameReader.textContent(r);H(document.createTextNode(o),t,n)}insertMarkup(e,t,n,r){const o=j(t,n),a=(i=e.frameReader.markupContent(r),z(t)?(ae.innerHTML=i||" ",ae):(oe.innerHTML=i||" ",oe.content.querySelectorAll("script").forEach((e=>{const t=document.createElement("script");t.textContent=e.textContent,e.getAttributeNames().forEach((n=>{t.setAttribute(n,e.getAttribute(n))})),e.parentNode.replaceChild(t,e)})),oe.content));var i;let s=0;for(;a.firstChild;)H(a.firstChild,o,s++)}applyAttribute(e,t,n,r){const o=e.frameReader,a=o.attributeName(r),i=o.attributeEventHandlerId(r);if(i){const e=he(a);return void this.eventDelegator.setListener(n,e,i,t)}const s=o.attributeValue(r);this.setOrRemoveAttributeOrProperty(n,a,s)}insertFrameRange(e,t,n,r,o,a,i){const s=r;for(let s=a;s<i;s++){const a=e.referenceFramesEntry(o,s);r+=this.insertFrame(e,t,n,r,o,a,s),s+=de(e,a)}return r-s}setOrRemoveAttributeOrProperty(e,t,n){(function(e,t,n){switch(t){case"value":return function(e,t){switch(t&&"INPUT"===e.tagName&&(t=function(e,t){switch(t.getAttribute("type")){case"time":return 8!==e.length||!e.endsWith("00")&&t.hasAttribute("step")?e:e.substring(0,5);case"datetime-local":return 19!==e.length||!e.endsWith("00")&&t.hasAttribute("step")?e:e.substring(0,16);default:return e}}(t,e)),e.tagName){case"INPUT":case"SELECT":case"TEXTAREA":return t&&e instanceof HTMLSelectElement&&ee(e)&&(t=JSON.parse(t)),ne(e,t),e[Q]=t,!0;case"OPTION":return t||""===t?e.setAttribute("value",t):e.removeAttribute("value"),re(e),!0;default:return!1}}(e,n);case"checked":return function(e,t){return"INPUT"===e.tagName&&(e.checked=null!==t,!0)}(e,n);default:return!1}})(e,t,n)||(t.startsWith("__internal_")?this.applyInternalAttribute(e,t.substring(11),n):null!==n?e.setAttribute(t,n):e.removeAttribute(t))}applyInternalAttribute(e,t,n){if(t.startsWith("stopPropagation_")){const r=he(t.substring(16));this.eventDelegator.setStopPropagation(e,r,null!==n)}else{if(!t.startsWith("preventDefault_"))throw new Error(`Unsupported internal attribute '${t}'`);{const r=he(t.substring(15));this.eventDelegator.setPreventDefault(e,r,null!==n)}}}}function ue(e,t){e[se]=t}function de(e,t){const n=e.frameReader;switch(n.frameType(t)){case r.component:case r.element:case r.region:return n.subtreeLength(t)-1;default:return 0}}function he(e){if(e.startsWith("on"))return e.substring(2);throw new Error(`Attribute should be an event name, but doesn't start with 'on'. Value: '${e}'`)}const fe={};let me,pe,be=!1;function ve(e){const t=(n=document.baseURI).substring(0,n.lastIndexOf("/"));var n;const r=e.charAt(t.length);return e.startsWith(t)&&(""===r||"/"===r||"?"===r||"#"===r)}function ge(e){var t;null===(t=document.getElementById(e))||void 0===t||t.scrollIntoView()}function ye(e){return pe=pe||document.createElement("a"),pe.href=e,pe.href}function we(){return void 0!==me}function Ee(){return me}let Se=!1,Ie=0,Ce=0;const De=new Map;let Ae=async function(e){var t,n,r;Le();const o=Pe();if(null==o?void 0:o.hasLocationChangingEventListeners){const a=null!==(n=null===(t=e.state)||void 0===t?void 0:t._index)&&void 0!==n?n:0,i=null===(r=e.state)||void 0===r?void 0:r.userState,s=a-Ie,c=location.href;if(await Oe(-s),!await xe(c,i,!1,o))return;await Oe(s)}await Fe(!0)},Ne=null;const Re={listenForNavigationEvents:function(e,t,n){var r,o;De.set(e,{rendererId:e,hasLocationChangingEventListeners:!1,locationChanged:t,locationChanging:n}),Se||(Se=!0,window.addEventListener("popstate",Me),Ie=null!==(o=null===(r=history.state)||void 0===r?void 0:r._index)&&void 0!==o?o:0)},enableNavigationInterception:function(e){if(void 0!==me&&me!==e)throw new Error("Only one interactive runtime may enable navigation interception at a time.");me=e},setHasLocationChangingListeners:function(e,t){const n=De.get(e);if(!n)throw new Error(`Renderer with ID '${e}' is not listening for navigation events`);n.hasLocationChangingEventListeners=t},endLocationChanging:function(e,t){Ne&&e===Ce&&(Ne(t),Ne=null)},navigateTo:function(e,t){ke(e,t,!0)},refresh:function(e){location.reload()},getBaseURI:()=>document.baseURI,getLocationHref:()=>location.href,scrollToElement:ge};function ke(e,t,n=!1){const r=ye(e);!t.forceLoad&&ve(r)?Be()?Te(r,!1,t.replaceHistoryEntry,t.historyEntryState,n):function(){throw new Error("No enhanced programmatic navigation handler has been attached")}():function(e,t){if(location.href===e){const t=e+"?";history.replaceState(null,"",t),location.replace(e)}else t?location.replace(e):location.href=e}(e,t.replaceHistoryEntry)}async function Te(e,t,n,r=void 0,o=!1){if(Le(),function(e){const t=new URL(e);return""!==t.hash&&location.origin===t.origin&&location.pathname===t.pathname&&location.search===t.search}(e))return _e(e,n,r),void function(e){const t=e.indexOf("#");t!==e.length-1&&ge(e.substring(t+1))}(e);const a=Pe();(o||!(null==a?void 0:a.hasLocationChangingEventListeners)||await xe(e,r,t,a))&&(be=!0,_e(e,n,r),await Fe(t))}function _e(e,t,n=void 0){t?history.replaceState({userState:n,_index:Ie},"",e):(Ie++,history.pushState({userState:n,_index:Ie},"",e))}function Oe(e){return new Promise((t=>{const n=Ae;Ae=()=>{Ae=n,t()},history.go(e)}))}function Le(){Ne&&(Ne(!1),Ne=null)}function xe(e,t,n,r){return new Promise((o=>{Le(),Ce++,Ne=o,r.locationChanging(Ce,e,t,n)}))}async function Fe(e,t){const n=location.href;await Promise.all(Array.from(De,(async([t,r])=>{var o,a;a=t,S.has(a)&&await r.locationChanged(n,null===(o=history.state)||void 0===o?void 0:o.userState,e)})))}async function Me(e){var t,n;Ae&&Be()&&await Ae(e),Ie=null!==(n=null===(t=history.state)||void 0===t?void 0:t._index)&&void 0!==n?n:0}function Pe(){const e=Ee();if(void 0!==e)return De.get(e)}function Be(){return we()||!0}const je={focus:function(e,t){if(e instanceof HTMLElement)e.focus({preventScroll:t});else{if(!(e instanceof SVGElement))throw new Error("Unable to focus an invalid element.");if(!e.hasAttribute("tabindex"))throw new Error("Unable to focus an SVG element that does not have a tabindex.");e.focus({preventScroll:t})}},focusBySelector:function(e){const t=document.querySelector(e);t&&(t.hasAttribute("tabindex")||(t.tabIndex=-1),t.focus({preventScroll:!0}))}},He={init:function(e,t,n,r=50){const o=Ue(t);(o||document.documentElement).style.overflowAnchor="none";const a=document.createRange();h(n.parentElement)&&(t.style.display="table-row",n.style.display="table-row");const i=new IntersectionObserver((function(r){r.forEach((r=>{var o;if(!r.isIntersecting)return;a.setStartAfter(t),a.setEndBefore(n);const i=a.getBoundingClientRect().height,s=null===(o=r.rootBounds)||void 0===o?void 0:o.height;r.target===t?e.invokeMethodAsync("OnSpacerBeforeVisible",r.intersectionRect.top-r.boundingClientRect.top,i,s):r.target===n&&n.offsetHeight>0&&e.invokeMethodAsync("OnSpacerAfterVisible",r.boundingClientRect.bottom-r.intersectionRect.bottom,i,s)}))}),{root:o,rootMargin:`${r}px`});i.observe(t),i.observe(n);const s=d(t),c=d(n),{observersByDotNetObjectId:l,id:u}=$e(e);function d(e){const t={attributes:!0},n=new MutationObserver(((n,r)=>{h(e.parentElement)&&(r.disconnect(),e.style.display="table-row",r.observe(e,t)),i.unobserve(e),i.observe(e)}));return n.observe(e,t),n}function h(e){return null!==e&&(e instanceof HTMLTableElement&&""===e.style.display||"table"===e.style.display||e instanceof HTMLTableSectionElement&&""===e.style.display||"table-row-group"===e.style.display)}l[u]={intersectionObserver:i,mutationObserverBefore:s,mutationObserverAfter:c}},dispose:function(e){const{observersByDotNetObjectId:t,id:n}=$e(e),r=t[n];r&&(r.intersectionObserver.disconnect(),r.mutationObserverBefore.disconnect(),r.mutationObserverAfter.disconnect(),e.dispose(),delete t[n])}},Je=Symbol();function Ue(e){return e&&e!==document.body&&e!==document.documentElement?"visible"!==getComputedStyle(e).overflowY?e:Ue(e.parentElement):null}function $e(e){var t;const n=e._callDispatcher,r=e._id;return null!==(t=n[Je])&&void 0!==t||(n[Je]={}),{observersByDotNetObjectId:n[Je],id:r}}const ze={getAndRemoveExistingTitle:function(){var e;const t=document.head?document.head.getElementsByTagName("title"):[];if(0===t.length)return null;let n=null;for(let r=t.length-1;r>=0;r--){const o=t[r],a=o.previousSibling;a instanceof Comment&&null!==U(a)||(null===n&&(n=o.textContent),null===(e=o.parentNode)||void 0===e||e.removeChild(o))}return n}},We={init:function(e,t){t._blazorInputFileNextFileId=0,t.addEventListener("click",(function(){t.value=""})),t.addEventListener("change",(function(){t._blazorFilesById={};const n=Array.prototype.map.call(t.files,(function(e){const n={id:++t._blazorInputFileNextFileId,lastModified:new Date(e.lastModified).toISOString(),name:e.name,size:e.size,contentType:e.type,readPromise:void 0,arrayBuffer:void 0,blob:e};return t._blazorFilesById[n.id]=n,n}));e.invokeMethodAsync("NotifyChange",n)}))},toImageFile:async function(e,t,n,r,o){const a=Ke(e,t),i=await new Promise((function(e){const t=new Image;t.onload=function(){URL.revokeObjectURL(t.src),e(t)},t.onerror=function(){t.onerror=null,URL.revokeObjectURL(t.src)},t.src=URL.createObjectURL(a.blob)})),s=await new Promise((function(e){var t;const a=Math.min(1,r/i.width),s=Math.min(1,o/i.height),c=Math.min(a,s),l=document.createElement("canvas");l.width=Math.round(i.width*c),l.height=Math.round(i.height*c),null===(t=l.getContext("2d"))||void 0===t||t.drawImage(i,0,0,l.width,l.height),l.toBlob(e,n)})),c={id:++e._blazorInputFileNextFileId,lastModified:a.lastModified,name:a.name,size:(null==s?void 0:s.size)||0,contentType:n,blob:s||a.blob};return e._blazorFilesById[c.id]=c,c},readFileData:async function(e,t){return Ke(e,t).blob}};function Ke(e,t){const n=e._blazorFilesById[t];if(!n)throw new Error(`There is no file with ID ${t}. The file list may have changed. See https://aka.ms/aspnet/blazor-input-file-multiple-selections.`);return n}const Ve=new Set,Xe={enableNavigationPrompt:function(e){0===Ve.size&&window.addEventListener("beforeunload",Ye),Ve.add(e)},disableNavigationPrompt:function(e){Ve.delete(e),0===Ve.size&&window.removeEventListener("beforeunload",Ye)}};function Ye(e){e.preventDefault(),e.returnValue=!0}const Ge=new Map,qe={navigateTo:function(e,t,n=!1){ke(e,t instanceof Object?t:{forceLoad:t,replaceHistoryEntry:n})},registerCustomEventType:function(e,t){if(!t)throw new Error("The options parameter is required.");if(a.has(e))throw new Error(`The event '${e}' is already registered.`);if(t.browserEventName){const n=i.get(t.browserEventName);n?n.push(e):i.set(t.browserEventName,[e]),s.length&&s.forEach((n=>n(e,t.browserEventName)))}a.set(e,t)},rootComponents:g,runtime:{},_internal:{navigationManager:Re,domWrapper:je,Virtualize:He,PageTitle:ze,InputFile:We,NavigationLock:Xe,getJSDataStreamChunk:async function(e,t,n){return e instanceof Blob?await async function(e,t,n){const r=e.slice(t,t+n),o=await r.arrayBuffer();return new Uint8Array(o)}(e,t,n):function(e,t,n){return new Uint8Array(e.buffer,e.byteOffset+t,n)}(e,t,n)},attachWebRendererInterop:function(e,n,r,o){var a,i;if(S.has(e))throw new Error(`Interop methods are already registered for renderer ${e}`);S.set(e,n),r&&o&&Object.keys(r).length>0&&function(e,n,r){if(p)throw new Error("Dynamic root components have already been enabled.");p=e,b=n;for(const[e,o]of Object.entries(r)){const r=t.findJSFunction(e,0);for(const e of o)r(e,n[e])}}(A(e),r,o),null===(i=null===(a=C.get(e))||void 0===a?void 0:a[0])||void 0===i||i.call(a),function(e){for(const t of I)t(e)}(e)}}};window.Blazor=qe;let Ze=!1;const Qe="function"==typeof TextDecoder?new TextDecoder("utf-8"):null,et=Qe?Qe.decode.bind(Qe):function(e){let t=0;const n=e.length,r=[],o=[];for(;t<n;){const n=e[t++];if(0===n)break;if(128&n){if(192==(224&n)){const o=63&e[t++];r.push((31&n)<<6|o)}else if(224==(240&n)){const o=63&e[t++],a=63&e[t++];r.push((31&n)<<12|o<<6|a)}else if(240==(248&n)){let o=(7&n)<<18|(63&e[t++])<<12|(63&e[t++])<<6|63&e[t++];o>65535&&(o-=65536,r.push(o>>>10&1023|55296),o=56320|1023&o),r.push(o)}}else r.push(n);r.length>1024&&(o.push(String.fromCharCode.apply(null,r)),r.length=0)}return o.push(String.fromCharCode.apply(null,r)),o.join("")},tt=Math.pow(2,32),nt=Math.pow(2,21)-1;function rt(e,t){return e[t]|e[t+1]<<8|e[t+2]<<16|e[t+3]<<24}function ot(e,t){return e[t]+(e[t+1]<<8)+(e[t+2]<<16)+(e[t+3]<<24>>>0)}function at(e,t){const n=ot(e,t+4);if(n>nt)throw new Error(`Cannot read uint64 with high order part ${n}, because the result would exceed Number.MAX_SAFE_INTEGER.`);return n*tt+ot(e,t)}class it{constructor(e){this.batchData=e,this._bdLen=e.length;const t=new ut(e);this.arrayRangeReader=new dt(e),this.arrayBuilderSegmentReader=new ht(e),this.diffReader=new st(e),this.editReader=new ct(e,t),this.frameReader=new lt(e,t)}updatedComponents(){return rt(this.batchData,this._bdLen-20)}referenceFrames(){return rt(this.batchData,this._bdLen-16)}disposedComponentIds(){return rt(this.batchData,this._bdLen-12)}disposedEventHandlerIds(){return rt(this.batchData,this._bdLen-8)}updatedComponentsEntry(e,t){const n=e+4*t;return rt(this.batchData,n)}referenceFramesEntry(e,t){return e+20*t}disposedComponentIdsEntry(e,t){const n=e+4*t;return rt(this.batchData,n)}disposedEventHandlerIdsEntry(e,t){const n=e+8*t;return at(this.batchData,n)}}class st{constructor(e){this.batchDataUint8=e}componentId(e){return rt(this.batchDataUint8,e)}edits(e){return e+4}editsEntry(e,t){return e+16*t}}class ct{constructor(e,t){this.batchDataUint8=e,this.stringReader=t}editType(e){return rt(this.batchDataUint8,e)}siblingIndex(e){return rt(this.batchDataUint8,e+4)}newTreeIndex(e){return rt(this.batchDataUint8,e+8)}moveToSiblingIndex(e){return rt(this.batchDataUint8,e+8)}removedAttributeName(e){const t=rt(this.batchDataUint8,e+12);return this.stringReader.readString(t)}}class lt{constructor(e,t){this.batchDataUint8=e,this.stringReader=t}frameType(e){return rt(this.batchDataUint8,e)}subtreeLength(e){return rt(this.batchDataUint8,e+4)}elementReferenceCaptureId(e){const t=rt(this.batchDataUint8,e+4);return this.stringReader.readString(t)}componentId(e){return rt(this.batchDataUint8,e+8)}elementName(e){const t=rt(this.batchDataUint8,e+8);return this.stringReader.readString(t)}textContent(e){const t=rt(this.batchDataUint8,e+4);return this.stringReader.readString(t)}markupContent(e){const t=rt(this.batchDataUint8,e+4);return this.stringReader.readString(t)}attributeName(e){const t=rt(this.batchDataUint8,e+4);return this.stringReader.readString(t)}attributeValue(e){const t=rt(this.batchDataUint8,e+8);return this.stringReader.readString(t)}attributeEventHandlerId(e){return at(this.batchDataUint8,e+12)}}class ut{constructor(e){this.batchDataUint8=e,this.stringTableStartIndex=rt(e,e.length-4)}readString(e){if(-1===e)return null;{const n=rt(this.batchDataUint8,this.stringTableStartIndex+4*e),r=function(e,t){let n=0,r=0;for(let o=0;o<4;o++){const a=e[t+o];if(n|=(127&a)<<r,a<128)break;r+=7}return n}(this.batchDataUint8,n),o=n+((t=r)<128?1:t<16384?2:t<2097152?3:4),a=new Uint8Array(this.batchDataUint8.buffer,this.batchDataUint8.byteOffset+o,r);return et(a)}var t}}class dt{constructor(e){this.batchDataUint8=e}count(e){return rt(this.batchDataUint8,e)}values(e){return e+4}}class ht{constructor(e){this.batchDataUint8=e}offset(e){return 0}count(e){return rt(this.batchDataUint8,e)}values(e){return e+4}}const ft="__bwv:";let mt=!1;function pt(e,t){Et("OnRenderCompleted",e,t)}function bt(e,t,n,r,o){Et("BeginInvokeDotNet",e?e.toString():null,t,n,r||0,o)}function vt(e,t,n){Et("EndInvokeJS",e,t,n)}function gt(e,t){const n=function(e){const t=new Array(e.length);for(let n=0;n<e.length;n++)t[n]=String.fromCharCode(e[n]);return btoa(t.join(""))}(t);Et("ReceiveByteArrayFromJS",e,n)}function yt(e,t,n){return Et("OnLocationChanged",e,t,n),Promise.resolve()}function wt(e,t,n,r){return Et("OnLocationChanging",e,t,n,r),Promise.resolve()}function Et(e,...t){const n=function(e,t){return mt?null:`${ft}${JSON.stringify([e,...t])}`}(e,t);n&&window.external.sendMessage(n)}var St,It;function Ct(t,n){const r=Dt(n);e.dispatcher.receiveByteArray(t,r)}function Dt(e){const t=atob(e),n=t.length,r=new Uint8Array(n);for(let e=0;e<n;e++)r[e]=t.charCodeAt(e);return r}!function(e){e[e.Default=0]="Default",e[e.Server=1]="Server",e[e.WebAssembly=2]="WebAssembly",e[e.WebView=3]="WebView"}(St||(St={})),function(e){e[e.Trace=0]="Trace",e[e.Debug=1]="Debug",e[e.Information=2]="Information",e[e.Warning=3]="Warning",e[e.Error=4]="Error",e[e.Critical=5]="Critical",e[e.None=6]="None"}(It||(It={}));class At{constructor(e=!0,t,n,r=0){this.singleRuntime=e,this.logger=t,this.webRendererId=r,this.afterStartedCallbacks=[],n&&this.afterStartedCallbacks.push(...n)}async importInitializersAsync(e,t){await Promise.all(e.map((e=>async function(e,n){const r=function(e){const t=document.baseURI;return t.endsWith("/")?`${t}${e}`:`${t}/${e}`}(n),o=await import(r);if(void 0!==o){if(e.singleRuntime){const{beforeStart:n,afterStarted:r,beforeWebAssemblyStart:i,afterWebAssemblyStarted:s,beforeServerStart:c,afterServerStarted:l}=o;let u=n;e.webRendererId===St.Server&&c&&(u=c),e.webRendererId===St.WebAssembly&&i&&(u=i);let d=r;return e.webRendererId===St.Server&&l&&(d=l),e.webRendererId===St.WebAssembly&&s&&(d=s),a(e,u,d,t)}return function(e,t,n){var o;const i=n[0],{beforeStart:s,afterStarted:c,beforeWebStart:l,afterWebStarted:u,beforeWebAssemblyStart:d,afterWebAssemblyStarted:h,beforeServerStart:f,afterServerStarted:m}=t,p=!(l||u||d||h||f||m||!s&&!c),b=p&&i.enableClassicInitializers;if(p&&!i.enableClassicInitializers)null===(o=e.logger)||void 0===o||o.log(It.Warning,`Initializer '${r}' will be ignored because multiple runtimes are available. Use 'before(Web|WebAssembly|Server)Start' and 'after(Web|WebAssembly|Server)Started' instead.`);else if(b)return a(e,s,c,n);if(function(e){e.webAssembly?e.webAssembly.initializers||(e.webAssembly.initializers={beforeStart:[],afterStarted:[]}):e.webAssembly={initializers:{beforeStart:[],afterStarted:[]}},e.circuit?e.circuit.initializers||(e.circuit.initializers={beforeStart:[],afterStarted:[]}):e.circuit={initializers:{beforeStart:[],afterStarted:[]}}}(i),d&&i.webAssembly.initializers.beforeStart.push(d),h&&i.webAssembly.initializers.afterStarted.push(h),f&&i.circuit.initializers.beforeStart.push(f),m&&i.circuit.initializers.afterStarted.push(m),u&&e.afterStartedCallbacks.push(u),l)return l(i)}(e,o,t)}function a(e,t,n,r){if(n&&e.afterStartedCallbacks.push(n),t)return t(...r)}}(this,e))))}async invokeAfterStartedCallbacks(e){const t=(n=this.webRendererId,null===(r=C.get(n))||void 0===r?void 0:r[1]);var n,r;t&&await t,await Promise.all(this.afterStartedCallbacks.map((t=>t(e))))}}let Nt=!1;async function Rt(){if(Nt)throw new Error("Blazor has already started.");Nt=!0,e.dispatcher=t.attachDispatcher({beginInvokeDotNetFromJS:bt,endInvokeJSFromDotNet:vt,sendByteArray:gt});const n=await async function(){const e=await fetch("_framework/blazor.modules.json",{method:"GET",credentials:"include",cache:"no-cache"}),t=await e.json(),n=new At;return await n.importInitializersAsync(t,[]),n}();(function(){const t={AttachToDocument:(e,t)=>{!function(e,t,n){const r="::before";let o=!1;if(e.endsWith("::after"))e=e.slice(0,-7),o=!0;else if(e.endsWith(r))throw new Error(`The '${r}' selector is not supported.`);const a=function(e){const t=m.get(e);if(t)return m.delete(e),t}(e)||document.querySelector(e);if(!a)throw new Error(`Could not find any element matching selector '${e}'.`);!function(e,t,n,r){let o=fe[e];o||(o=new le(e),fe[e]=o),o.attachRootComponentToLogicalElement(n,t,r)}(n,P(a,!0),t,o)}(t,e,St.WebView)},RenderBatch:(e,t)=>{try{const n=Dt(t);(function(e,t){const n=fe[e];if(!n)throw new Error(`There is no browser renderer with ID ${e}.`);const r=t.arrayRangeReader,o=t.updatedComponents(),a=r.values(o),i=r.count(o),s=t.referenceFrames(),c=r.values(s),l=t.diffReader;for(let e=0;e<i;e++){const r=t.updatedComponentsEntry(a,e),o=l.componentId(r),i=l.edits(r);n.updateComponent(t,o,i,c)}const u=t.disposedComponentIds(),d=r.values(u),h=r.count(u);for(let e=0;e<h;e++){const r=t.disposedComponentIdsEntry(d,e);n.disposeComponent(r)}const f=t.disposedEventHandlerIds(),m=r.values(f),p=r.count(f);for(let e=0;e<p;e++){const r=t.disposedEventHandlerIdsEntry(m,e);n.disposeEventHandler(r)}be&&(be=!1,window.scrollTo&&window.scrollTo(0,0))})(St.WebView,new it(n)),pt(e,null)}catch(t){pt(e,t.toString())}},NotifyUnhandledException:(e,t)=>{mt=!0,console.error(`${e}\n${t}`),function(){const e=document.querySelector("#blazor-error-ui");e&&(e.style.display="block"),Ze||(Ze=!0,document.querySelectorAll("#blazor-error-ui .reload").forEach((e=>{e.onclick=function(e){location.reload(),e.preventDefault()}})),document.querySelectorAll("#blazor-error-ui .dismiss").forEach((e=>{e.onclick=function(e){const t=document.querySelector("#blazor-error-ui");t&&(t.style.display="none"),e.preventDefault()}})))}()},BeginInvokeJS:e.dispatcher.beginInvokeJSFromDotNet.bind(e.dispatcher),EndInvokeDotNet:e.dispatcher.endInvokeDotNetFromJS.bind(e.dispatcher),SendByteArrayToJS:Ct,Navigate:Re.navigateTo,Refresh:Re.refresh,SetHasLocationChangingListeners:e=>{Re.setHasLocationChangingListeners(St.WebView,e)},EndLocationChanging:Re.endLocationChanging};window.external.receiveMessage((e=>{const n=function(e){if(mt||!e||!e.startsWith(ft))return null;const t=e.substring(6),[n,...r]=JSON.parse(t);return{messageType:n,args:r}}(e);if(n){if(!Object.hasOwn(t,n.messageType))throw new Error(`Unsupported IPC message type '${n.messageType}'`);t[n.messageType].apply(null,n.args)}}))})(),qe._internal.receiveWebViewDotNetDataStream=kt,Re.enableNavigationInterception(St.WebView),Re.listenForNavigationEvents(St.WebView,yt,wt),Et("AttachPage",Re.getBaseURI(),Re.getLocationHref()),await n.invokeAfterStartedCallbacks(qe)}function kt(t,n,r,o){!function(e,t,n,r,o){let a=Ge.get(t);if(!a){const n=new ReadableStream({start(e){Ge.set(t,e),a=e}});e.supplyDotNetStream(t,n)}o?(a.error(o),Ge.delete(t)):0===r?(a.close(),Ge.delete(t)):a.enqueue(n.length===r?n:n.subarray(0,r))}(e.dispatcher,t,n,r,o)}e.dispatcher=void 0,qe.start=Rt,window.DotNet=t,document&&document.currentScript&&"false"!==document.currentScript.getAttribute("autostart")&&Rt()}({});
+(function(){
+  if (typeof Object.hasOwn !== 'function') Object.hasOwn = function(o,p){ return Object.prototype.hasOwnProperty.call(o,p); };
+  if (typeof Promise.withResolvers !== 'function') Promise.withResolvers = function(){ var r,a,j,p=new Promise(function(res,rej){a=res;j=rej;}); return {promise:p,resolve:a,reject:j}; };
+  if (typeof Array.prototype.at !== 'function') Array.prototype.at = function(n){ n = Math.trunc(n) || 0; if (n < 0) n += this.length; return n < 0 || n >= this.length ? undefined : this[n]; };
+  if (typeof FinalizationRegistry === 'undefined') { window.FinalizationRegistry = function(){ this.register=function(){}; this.unregister=function(){}; }; }
+  if (typeof WeakRef === 'undefined') { window.WeakRef = function(o){ this.deref=function(){ return o; }; }; }
+})();
+(() => {
+  !function(e) {
+    "use strict";
+    var t, n, r;
+    !function(e2) {
+      const t2 = [], n2 = "__jsObjectId", r2 = "__dotNetObject", o2 = "__byte[]", a2 = "__dotNetStream", s2 = "__jsStreamReferenceLength";
+      let i2, c2, l2;
+      class u2 {
+        constructor(e3) {
+          this._jsObject = e3, this._cachedHandlers = /* @__PURE__ */ new Map();
+        }
+        resolveInvocationHandler(e3, t3) {
+          var n3;
+          const r3 = null === (n3 = this._cachedHandlers.get(e3)) || void 0 === n3 ? void 0 : n3[t3];
+          if (r3) return r3;
+          const [o3, a3] = I2(this._jsObject, e3), s3 = function(e4, t4, n4, r4) {
+            switch (n4) {
+              case l2.FunctionCall:
+                const n5 = e4[t4];
+                if (n5 instanceof Function) return n5.bind(e4);
+                throw new Error(`The value '${r4}' is not a function.`);
+              case l2.ConstructorCall:
+                const o4 = e4[t4];
+                if (o4 instanceof Function) {
+                  const t5 = o4.bind(e4);
+                  return (...e5) => new t5(...e5);
+                }
+                throw new Error(`The value '${r4}' is not a function.`);
+              case l2.GetValue:
+                if (!function(e5, t5) {
+                  if (!(t5 in e5)) return false;
+                  for (; void 0 !== e5; ) {
+                    const n6 = Object.getOwnPropertyDescriptor(e5, t5);
+                    if (n6) return !!n6.hasOwnProperty("value") || n6.hasOwnProperty("get") && "function" == typeof n6.get;
+                    e5 = Object.getPrototypeOf(e5);
+                  }
+                  return false;
+                }(e4, t4)) throw new Error(`The property '${r4}' is not defined or is not readable.`);
+                return () => e4[t4];
+              case l2.SetValue:
+                if (!function(e5, t5) {
+                  if (!(t5 in e5)) return Object.isExtensible(e5);
+                  for (; void 0 !== e5; ) {
+                    const n6 = Object.getOwnPropertyDescriptor(e5, t5);
+                    if (n6) return !(!n6.hasOwnProperty("value") || !n6.writable) || n6.hasOwnProperty("set") && "function" == typeof n6.set;
+                    e5 = Object.getPrototypeOf(e5);
+                  }
+                  return false;
+                }(e4, t4)) throw new Error(`The property '${r4}' is not writable.`);
+                return (...n6) => e4[t4] = n6[0];
+            }
+          }(o3, a3, t3, e3);
+          return this.addHandlerToCache(e3, s3, t3), s3;
+        }
+        getWrappedObject() {
+          return this._jsObject;
+        }
+        addHandlerToCache(e3, t3, n3) {
+          const r3 = this._cachedHandlers.get(e3);
+          r3 ? r3[n3] = t3 : this._cachedHandlers.set(e3, { [n3]: t3 });
+        }
+      }
+      !function(e3) {
+        e3[e3.FunctionCall = 1] = "FunctionCall", e3[e3.ConstructorCall = 2] = "ConstructorCall", e3[e3.GetValue = 3] = "GetValue", e3[e3.SetValue = 4] = "SetValue";
+      }(l2 = e2.JSCallType || (e2.JSCallType = {}));
+      const d2 = 0, h2 = { [d2]: new u2(window) };
+      h2[0]._cachedHandlers.set("import", { [l2.FunctionCall]: (e3) => ("string" == typeof e3 && e3.startsWith("./") && (e3 = new URL(e3.substring(2), document.baseURI).toString()), import(e3)) });
+      let f2, p2 = 1;
+      function m2(e3) {
+        t2.push(e3);
+      }
+      function b2(e3) {
+        if (null == e3) return { [n2]: -1 };
+        if (e3 && ("object" == typeof e3 || e3 instanceof Function)) {
+          h2[p2] = new u2(e3);
+          const t3 = { [n2]: p2 };
+          return p2++, t3;
+        }
+        throw new Error(`Cannot create a JSObjectReference from the value '${e3}'.`);
+      }
+      function v2(e3) {
+        let t3 = -1;
+        if (e3 instanceof ArrayBuffer && (e3 = new Uint8Array(e3)), e3 instanceof Blob) t3 = e3.size;
+        else {
+          if (!(e3.buffer instanceof ArrayBuffer)) throw new Error("Supplied value is not a typed array or blob.");
+          if (void 0 === e3.byteLength) throw new Error(`Cannot create a JSStreamReference from the value '${e3}' as it doesn't have a byteLength.`);
+          t3 = e3.byteLength;
+        }
+        const r3 = { [s2]: t3 };
+        try {
+          const t4 = b2(e3);
+          r3[n2] = t4[n2];
+        } catch (t4) {
+          throw new Error(`Cannot create a JSStreamReference from the value '${e3}'.`);
+        }
+        return r3;
+      }
+      function g2(e3, n3) {
+        c2 = e3;
+        const r3 = n3 ? JSON.parse(n3, (e4, n4) => t2.reduce((t3, n5) => n5(e4, t3), n4)) : null;
+        return c2 = void 0, r3;
+      }
+      function y2() {
+        if (void 0 === i2) throw new Error("No call dispatcher has been set.");
+        if (null === i2) throw new Error("There are multiple .NET runtimes present, so a default dispatcher could not be resolved. Use DotNetObject to invoke .NET instance methods.");
+        return i2;
+      }
+      e2.attachDispatcher = function(e3) {
+        const t3 = new w2(e3);
+        return void 0 === i2 ? i2 = t3 : i2 && (i2 = null), t3;
+      }, e2.attachReviver = m2, e2.invokeMethod = function(e3, t3, ...n3) {
+        return y2().invokeDotNetStaticMethod(e3, t3, ...n3);
+      }, e2.invokeMethodAsync = function(e3, t3, ...n3) {
+        return y2().invokeDotNetStaticMethodAsync(e3, t3, ...n3);
+      }, e2.createJSObjectReference = b2, e2.createJSStreamReference = v2, e2.disposeJSObjectReference = function(e3) {
+        const t3 = e3 && e3[n2];
+        "number" == typeof t3 && -1 !== t3 && C2(t3);
+      }, function(e3) {
+        e3[e3.Default = 0] = "Default", e3[e3.JSObjectReference = 1] = "JSObjectReference", e3[e3.JSStreamReference = 2] = "JSStreamReference", e3[e3.JSVoidResult = 3] = "JSVoidResult";
+      }(f2 = e2.JSCallResultType || (e2.JSCallResultType = {}));
+      class w2 {
+        constructor(e3) {
+          this._dotNetCallDispatcher = e3, this._byteArraysToBeRevived = /* @__PURE__ */ new Map(), this._pendingDotNetToJSStreams = /* @__PURE__ */ new Map(), this._pendingAsyncCalls = {}, this._nextAsyncCallId = 1;
+        }
+        getDotNetCallDispatcher() {
+          return this._dotNetCallDispatcher;
+        }
+        invokeJSFromDotNet(e3, t3, n3, r3, o3) {
+          const a3 = R2(this.processJSCall(r3, e3, o3, t3), n3);
+          return null == a3 ? null : k2(this, a3);
+        }
+        async beginInvokeJSFromDotNet(e3, t3, n3, r3, o3, a3) {
+          try {
+            const s3 = this.processJSCall(o3, t3, a3, n3);
+            if (e3) {
+              const t4 = k2(this, [e3, true, R2(await s3, r3)]);
+              this._dotNetCallDispatcher.endInvokeJSFromDotNet(e3, true, t4);
+            }
+          } catch (t4) {
+            if (e3) {
+              const n4 = JSON.stringify([e3, false, E2(t4)]);
+              this._dotNetCallDispatcher.endInvokeJSFromDotNet(e3, false, n4);
+            }
+          }
+        }
+        processJSCall(e3, t3, n3, r3) {
+          var o3;
+          const a3 = null !== (o3 = g2(this, r3)) && void 0 !== o3 ? o3 : [];
+          return S2(t3, e3, n3)(...a3);
+        }
+        endInvokeDotNetFromJS(e3, t3, n3) {
+          const r3 = t3 ? g2(this, n3) : new Error(n3);
+          this.completePendingCall(parseInt(e3, 10), t3, r3);
+        }
+        invokeDotNetStaticMethod(e3, t3, ...n3) {
+          return this.invokeDotNetMethod(e3, t3, null, n3);
+        }
+        invokeDotNetStaticMethodAsync(e3, t3, ...n3) {
+          return this.invokeDotNetMethodAsync(e3, t3, null, n3);
+        }
+        invokeDotNetMethod(e3, t3, n3, r3) {
+          if (this._dotNetCallDispatcher.invokeDotNetFromJS) {
+            const o3 = k2(this, r3), a3 = this._dotNetCallDispatcher.invokeDotNetFromJS(e3, t3, n3, o3);
+            return a3 ? g2(this, a3) : null;
+          }
+          throw new Error("The current dispatcher does not support synchronous calls from JS to .NET. Use invokeDotNetMethodAsync instead.");
+        }
+        invokeDotNetMethodAsync(e3, t3, n3, r3) {
+          if (e3 && n3) throw new Error(`For instance method calls, assemblyName should be null. Received '${e3}'.`);
+          const o3 = this._nextAsyncCallId++, a3 = new Promise((e4, t4) => {
+            this._pendingAsyncCalls[o3] = { resolve: e4, reject: t4 };
+          });
+          try {
+            const a4 = k2(this, r3);
+            this._dotNetCallDispatcher.beginInvokeDotNetFromJS(o3, e3, t3, n3, a4);
+          } catch (e4) {
+            this.completePendingCall(o3, false, e4);
+          }
+          return a3;
+        }
+        receiveByteArray(e3, t3) {
+          this._byteArraysToBeRevived.set(e3, t3);
+        }
+        processByteArray(e3) {
+          const t3 = this._byteArraysToBeRevived.get(e3);
+          return t3 ? (this._byteArraysToBeRevived.delete(e3), t3) : null;
+        }
+        supplyDotNetStream(e3, t3) {
+          if (this._pendingDotNetToJSStreams.has(e3)) {
+            const n3 = this._pendingDotNetToJSStreams.get(e3);
+            this._pendingDotNetToJSStreams.delete(e3), n3.resolve(t3);
+          } else {
+            const n3 = new N2();
+            n3.resolve(t3), this._pendingDotNetToJSStreams.set(e3, n3);
+          }
+        }
+        getDotNetStreamPromise(e3) {
+          let t3;
+          if (this._pendingDotNetToJSStreams.has(e3)) t3 = this._pendingDotNetToJSStreams.get(e3).streamPromise, this._pendingDotNetToJSStreams.delete(e3);
+          else {
+            const n3 = new N2();
+            this._pendingDotNetToJSStreams.set(e3, n3), t3 = n3.streamPromise;
+          }
+          return t3;
+        }
+        completePendingCall(e3, t3, n3) {
+          if (!this._pendingAsyncCalls.hasOwnProperty(e3)) throw new Error(`There is no pending async call with ID ${e3}.`);
+          const r3 = this._pendingAsyncCalls[e3];
+          delete this._pendingAsyncCalls[e3], t3 ? r3.resolve(n3) : r3.reject(n3);
+        }
+      }
+      function E2(e3) {
+        return e3 instanceof Error ? `${e3.message}
+${e3.stack}` : e3 ? e3.toString() : "null";
+      }
+      function S2(e3, t3, n3) {
+        const r3 = h2[t3];
+        if (r3) return r3.resolveInvocationHandler(e3, null != n3 ? n3 : l2.FunctionCall);
+        throw new Error(`JS object instance with ID ${t3} does not exist (has it been disposed?).`);
+      }
+      function C2(e3) {
+        delete h2[e3];
+      }
+      function I2(e3, t3) {
+        const n3 = t3.split(".");
+        let r3 = e3;
+        for (let e4 = 0; e4 < n3.length - 1; e4++) {
+          const o3 = n3[e4];
+          if (!r3 || "object" != typeof r3 || !(o3 in r3)) throw new Error(`Could not find '${t3}' ('${o3}' was undefined).`);
+          r3 = r3[o3];
+        }
+        return [r3, n3[n3.length - 1]];
+      }
+      e2.findJSFunction = S2, e2.disposeJSObjectReferenceById = C2, e2.findObjectMember = I2;
+      class D2 {
+        constructor(e3, t3) {
+          this._id = e3, this._callDispatcher = t3;
+        }
+        invokeMethod(e3, ...t3) {
+          return this._callDispatcher.invokeDotNetMethod(null, e3, this._id, t3);
+        }
+        invokeMethodAsync(e3, ...t3) {
+          return this._callDispatcher.invokeDotNetMethodAsync(null, e3, this._id, t3);
+        }
+        dispose() {
+          this._callDispatcher.invokeDotNetMethodAsync(null, "__Dispose", this._id, null).catch((e3) => console.error(e3));
+        }
+        serializeAsArg() {
+          return { [r2]: this._id };
+        }
+      }
+      e2.DotNetObject = D2, m2(function(e3, t3) {
+        if (t3 && "object" == typeof t3) {
+          if (t3.hasOwnProperty(r2)) return new D2(t3[r2], c2);
+          if (t3.hasOwnProperty(n2)) {
+            const e4 = t3[n2], r3 = h2[e4];
+            if (r3) return r3.getWrappedObject();
+            throw new Error(`JS object instance with Id '${e4}' does not exist. It may have been disposed.`);
+          }
+          if (t3.hasOwnProperty(o2)) {
+            const e4 = t3[o2], n3 = c2.processByteArray(e4);
+            if (void 0 === n3) throw new Error(`Byte array index '${e4}' does not exist.`);
+            return n3;
+          }
+          if (t3.hasOwnProperty(a2)) {
+            const e4 = t3[a2], n3 = c2.getDotNetStreamPromise(e4);
+            return new A2(n3);
+          }
+        }
+        return t3;
+      });
+      class A2 {
+        constructor(e3) {
+          this._streamPromise = e3;
+        }
+        stream() {
+          return this._streamPromise;
+        }
+        async arrayBuffer() {
+          return new Response(await this.stream()).arrayBuffer();
+        }
+      }
+      class N2 {
+        constructor() {
+          this.streamPromise = new Promise((e3, t3) => {
+            this.resolve = e3, this.reject = t3;
+          });
+        }
+      }
+      function R2(e3, t3) {
+        switch (t3) {
+          case f2.Default:
+            return e3;
+          case f2.JSObjectReference:
+            return b2(e3);
+          case f2.JSStreamReference:
+            return v2(e3);
+          case f2.JSVoidResult:
+            return null;
+          default:
+            throw new Error(`Invalid JS call result type '${t3}'.`);
+        }
+      }
+      let T2 = 0;
+      function k2(e3, t3) {
+        T2 = 0, c2 = e3;
+        const n3 = JSON.stringify(t3, O2);
+        return c2 = void 0, n3;
+      }
+      function O2(e3, t3) {
+        if (t3 instanceof D2) return t3.serializeAsArg();
+        if (t3 instanceof Uint8Array) {
+          c2.getDotNetCallDispatcher().sendByteArray(T2, t3);
+          const e4 = { [o2]: T2 };
+          return T2++, e4;
+        }
+        return t3;
+      }
+    }(t || (t = {})), function(e2) {
+      e2[e2.prependFrame = 1] = "prependFrame", e2[e2.removeFrame = 2] = "removeFrame", e2[e2.setAttribute = 3] = "setAttribute", e2[e2.removeAttribute = 4] = "removeAttribute", e2[e2.updateText = 5] = "updateText", e2[e2.stepIn = 6] = "stepIn", e2[e2.stepOut = 7] = "stepOut", e2[e2.updateMarkup = 8] = "updateMarkup", e2[e2.permutationListEntry = 9] = "permutationListEntry", e2[e2.permutationListEnd = 10] = "permutationListEnd";
+    }(n || (n = {})), function(e2) {
+      e2[e2.element = 1] = "element", e2[e2.text = 2] = "text", e2[e2.attribute = 3] = "attribute", e2[e2.component = 4] = "component", e2[e2.region = 5] = "region", e2[e2.elementReferenceCapture = 6] = "elementReferenceCapture", e2[e2.markup = 8] = "markup", e2[e2.namedEvent = 10] = "namedEvent";
+    }(r || (r = {}));
+    class o {
+      constructor(e2, t2) {
+        this.componentId = e2, this.fieldValue = t2;
+      }
+      static fromEvent(e2, t2) {
+        const n2 = t2.target;
+        if (n2 instanceof Element) {
+          const t3 = function(e3) {
+            return e3 instanceof HTMLInputElement ? e3.type && "checkbox" === e3.type.toLowerCase() ? { value: e3.checked } : { value: e3.value } : e3 instanceof HTMLSelectElement || e3 instanceof HTMLTextAreaElement ? { value: e3.value } : null;
+          }(n2);
+          if (t3) return new o(e2, t3.value);
+        }
+        return null;
+      }
+    }
+    const a = /* @__PURE__ */ new Map(), s = /* @__PURE__ */ new Map(), i = [];
+    function c(e2) {
+      return a.get(e2);
+    }
+    function l(e2) {
+      const t2 = a.get(e2);
+      return (t2 == null ? void 0 : t2.browserEventName) || e2;
+    }
+    function u(e2, t2) {
+      e2.forEach((e3) => a.set(e3, t2));
+    }
+    function d(e2) {
+      const t2 = [];
+      for (let n2 = 0; n2 < e2.length; n2++) {
+        const r2 = e2[n2];
+        t2.push({ identifier: r2.identifier, clientX: r2.clientX, clientY: r2.clientY, screenX: r2.screenX, screenY: r2.screenY, pageX: r2.pageX, pageY: r2.pageY });
+      }
+      return t2;
+    }
+    function h(e2) {
+      return { detail: e2.detail, screenX: e2.screenX, screenY: e2.screenY, clientX: e2.clientX, clientY: e2.clientY, offsetX: e2.offsetX, offsetY: e2.offsetY, pageX: e2.pageX, pageY: e2.pageY, movementX: e2.movementX, movementY: e2.movementY, button: e2.button, buttons: e2.buttons, ctrlKey: e2.ctrlKey, shiftKey: e2.shiftKey, altKey: e2.altKey, metaKey: e2.metaKey, type: e2.type };
+    }
+    u(["input", "change"], { createEventArgs: function(e2) {
+      const t2 = e2.target;
+      if (function(e3) {
+        return -1 !== f.indexOf(e3.getAttribute("type"));
+      }(t2)) {
+        const e3 = function(e4) {
+          const t3 = e4.value, n2 = e4.type;
+          switch (n2) {
+            case "date":
+            case "month":
+            case "week":
+              return t3;
+            case "datetime-local":
+              return 16 === t3.length ? t3 + ":00" : t3;
+            case "time":
+              return 5 === t3.length ? t3 + ":00" : t3;
+          }
+          throw new Error(`Invalid element type '${n2}'.`);
+        }(t2);
+        return { value: e3 };
+      }
+      if (function(e3) {
+        return e3 instanceof HTMLSelectElement && "select-multiple" === e3.type;
+      }(t2)) {
+        const e3 = t2;
+        return { value: Array.from(e3.options).filter((e4) => e4.selected).map((e4) => e4.value) };
+      }
+      {
+        const e3 = function(e4) {
+          return !!e4 && "INPUT" === e4.tagName && "checkbox" === e4.getAttribute("type");
+        }(t2);
+        return { value: e3 ? !!t2.checked : t2.value };
+      }
+    } }), u(["copy", "cut", "paste"], { createEventArgs: (e2) => ({ type: e2.type }) }), u(["drag", "dragend", "dragenter", "dragleave", "dragover", "dragstart", "drop"], { createEventArgs: (e2) => {
+      return { ...h(t2 = e2), dataTransfer: t2.dataTransfer ? { dropEffect: t2.dataTransfer.dropEffect, effectAllowed: t2.dataTransfer.effectAllowed, files: Array.from(t2.dataTransfer.files).map((e3) => e3.name), items: Array.from(t2.dataTransfer.items).map((e3) => ({ kind: e3.kind, type: e3.type })), types: t2.dataTransfer.types } : null };
+      var t2;
+    } }), u(["focus", "blur", "focusin", "focusout"], { createEventArgs: (e2) => ({ type: e2.type }) }), u(["keydown", "keyup", "keypress"], { createEventArgs: (e2) => {
+      return { key: (t2 = e2).key, code: t2.code, location: t2.location, repeat: t2.repeat, ctrlKey: t2.ctrlKey, shiftKey: t2.shiftKey, altKey: t2.altKey, metaKey: t2.metaKey, type: t2.type, isComposing: t2.isComposing };
+      var t2;
+    } }), u(["contextmenu", "click", "mouseover", "mouseout", "mousemove", "mousedown", "mouseup", "mouseleave", "mouseenter", "dblclick"], { createEventArgs: (e2) => h(e2) }), u(["error"], { createEventArgs: (e2) => {
+      return { message: (t2 = e2).message, filename: t2.filename, lineno: t2.lineno, colno: t2.colno, type: t2.type };
+      var t2;
+    } }), u(["loadstart", "timeout", "abort", "load", "loadend", "progress"], { createEventArgs: (e2) => {
+      return { lengthComputable: (t2 = e2).lengthComputable, loaded: t2.loaded, total: t2.total, type: t2.type };
+      var t2;
+    } }), u(["touchcancel", "touchend", "touchmove", "touchenter", "touchleave", "touchstart"], { createEventArgs: (e2) => {
+      return { detail: (t2 = e2).detail, touches: d(t2.touches), targetTouches: d(t2.targetTouches), changedTouches: d(t2.changedTouches), ctrlKey: t2.ctrlKey, shiftKey: t2.shiftKey, altKey: t2.altKey, metaKey: t2.metaKey, type: t2.type };
+      var t2;
+    } }), u(["gotpointercapture", "lostpointercapture", "pointercancel", "pointerdown", "pointerenter", "pointerleave", "pointermove", "pointerout", "pointerover", "pointerup"], { createEventArgs: (e2) => {
+      return { ...h(t2 = e2), pointerId: t2.pointerId, width: t2.width, height: t2.height, pressure: t2.pressure, tiltX: t2.tiltX, tiltY: t2.tiltY, pointerType: t2.pointerType, isPrimary: t2.isPrimary };
+      var t2;
+    } }), u(["wheel", "mousewheel"], { createEventArgs: (e2) => {
+      return { ...h(t2 = e2), deltaX: t2.deltaX, deltaY: t2.deltaY, deltaZ: t2.deltaZ, deltaMode: t2.deltaMode };
+      var t2;
+    } }), u(["cancel", "close", "toggle"], { createEventArgs: () => ({}) });
+    const f = ["date", "datetime-local", "month", "time", "week"], p = /* @__PURE__ */ new Map();
+    let m, b, v = 0;
+    const g = { async add(e2, t2, n2) {
+      if (!n2) throw new Error("initialParameters must be an object, even if empty.");
+      const r2 = "__bl-dynamic-root:" + (++v).toString();
+      p.set(r2, e2);
+      const o2 = await E().invokeMethodAsync("AddRootComponent", t2, r2), a2 = new w(o2, b[t2]);
+      return await a2.setParameters(n2), a2;
+    } };
+    class y {
+      invoke(e2) {
+        return this._callback(e2);
+      }
+      setCallback(e2) {
+        this._selfJSObjectReference || (this._selfJSObjectReference = t.createJSObjectReference(this)), this._callback = e2;
+      }
+      getJSObjectReference() {
+        return this._selfJSObjectReference;
+      }
+      dispose() {
+        this._selfJSObjectReference && t.disposeJSObjectReference(this._selfJSObjectReference);
+      }
+    }
+    class w {
+      constructor(e2, t2) {
+        this._jsEventCallbackWrappers = /* @__PURE__ */ new Map(), this._componentId = e2;
+        for (const e3 of t2) "eventcallback" === e3.type && this._jsEventCallbackWrappers.set(e3.name.toLowerCase(), new y());
+      }
+      setParameters(e2) {
+        const t2 = {}, n2 = Object.entries(e2 || {}), r2 = n2.length;
+        for (const [e3, r3] of n2) {
+          const n3 = this._jsEventCallbackWrappers.get(e3.toLowerCase());
+          n3 && r3 ? (n3.setCallback(r3), t2[e3] = n3.getJSObjectReference()) : t2[e3] = r3;
+        }
+        return E().invokeMethodAsync("SetRootComponentParameters", this._componentId, r2, t2);
+      }
+      async dispose() {
+        if (null !== this._componentId) {
+          await E().invokeMethodAsync("RemoveRootComponent", this._componentId), this._componentId = null;
+          for (const e2 of this._jsEventCallbackWrappers.values()) e2.dispose();
+        }
+      }
+    }
+    function E() {
+      if (!m) throw new Error("Dynamic root components have not been enabled in this application.");
+      return m;
+    }
+    const S = /* @__PURE__ */ new Map(), C = [], I = /* @__PURE__ */ new Map();
+    function D(e2) {
+      return S.has(e2);
+    }
+    function A(e2, t2, n2) {
+      return R(e2, t2.eventHandlerId, () => N(e2).invokeMethodAsync("DispatchEventAsync", t2, n2));
+    }
+    function N(e2) {
+      const t2 = S.get(e2);
+      if (!t2) throw new Error(`No interop methods are registered for renderer ${e2}`);
+      return t2;
+    }
+    let R = (e2, t2, n2) => n2();
+    const T = F(["abort", "blur", "cancel", "canplay", "canplaythrough", "change", "close", "cuechange", "durationchange", "emptied", "ended", "error", "focus", "load", "loadeddata", "loadedmetadata", "loadend", "loadstart", "mouseenter", "mouseleave", "pointerenter", "pointerleave", "pause", "play", "playing", "progress", "ratechange", "reset", "scroll", "seeked", "seeking", "stalled", "submit", "suspend", "timeupdate", "toggle", "unload", "volumechange", "waiting", "DOMNodeInsertedIntoDocument", "DOMNodeRemovedFromDocument"]), k = { submit: true }, O = F(["click", "dblclick", "mousedown", "mousemove", "mouseup"]);
+    const __ = class __ {
+      constructor(e2) {
+        this.browserRendererId = e2, this.afterClickCallbacks = [];
+        const t2 = ++__.nextEventDelegatorId;
+        this.eventsCollectionKey = `_blazorEvents_${t2}`, this.eventInfoStore = new L(this.onGlobalEvent.bind(this));
+      }
+      setListener(e2, t2, n2, r2) {
+        const o2 = this.getEventHandlerInfosForElement(e2, true), a2 = o2.getHandler(t2);
+        if (a2) this.eventInfoStore.update(a2.eventHandlerId, n2);
+        else {
+          const a3 = { element: e2, eventName: t2, eventHandlerId: n2, renderingComponentId: r2 };
+          this.eventInfoStore.add(a3), o2.setHandler(t2, a3);
+        }
+      }
+      getHandler(e2) {
+        return this.eventInfoStore.get(e2);
+      }
+      removeListener(e2) {
+        const t2 = this.eventInfoStore.remove(e2);
+        if (t2) {
+          const e3 = t2.element, n2 = this.getEventHandlerInfosForElement(e3, false);
+          n2 && n2.removeHandler(t2.eventName);
+        }
+      }
+      removeListenersForElement(e2) {
+        const t2 = this.getEventHandlerInfosForElement(e2, false);
+        if (t2) {
+          for (const e3 of t2.enumerateHandlers()) this.eventInfoStore.remove(e3.eventHandlerId);
+          delete e2[this.eventsCollectionKey];
+        }
+      }
+      notifyAfterClick(e2) {
+        this.afterClickCallbacks.push(e2), this.eventInfoStore.addGlobalListener("click");
+      }
+      setStopPropagation(e2, t2, n2) {
+        const r2 = this.getEventHandlerInfosForElement(e2, true), o2 = r2.stopPropagation(t2);
+        r2.stopPropagation(t2, n2), !o2 && n2 ? this.eventInfoStore.addGlobalListener(t2) : o2 && !n2 && this.eventInfoStore.decrementCountByEventName(t2);
+      }
+      setPreventDefault(e2, t2, n2) {
+        const r2 = this.getEventHandlerInfosForElement(e2, true), o2 = r2.preventDefault(t2);
+        r2.preventDefault(t2, n2), !o2 && n2 ? this.eventInfoStore.addActiveGlobalListener(t2) : o2 && !n2 && this.eventInfoStore.decrementCountByEventName(t2);
+      }
+      onGlobalEvent(e2) {
+        if (!(e2.target instanceof Element)) return;
+        if (!D(this.browserRendererId)) return;
+        this.dispatchGlobalEventToAllElements(e2.type, e2);
+        const t2 = (n2 = e2.type, s.get(n2));
+        var n2;
+        t2 && t2.forEach((t3) => this.dispatchGlobalEventToAllElements(t3, e2)), "click" === e2.type && this.afterClickCallbacks.forEach((t3) => t3(e2));
+      }
+      dispatchGlobalEventToAllElements(e2, t2) {
+        const n2 = t2.composedPath();
+        let r2 = n2.shift(), a2 = null, s2 = false;
+        const i2 = Object.prototype.hasOwnProperty.call(T, e2);
+        let l2 = false;
+        for (; r2; ) {
+          const h2 = r2, f2 = this.getEventHandlerInfosForElement(h2, false);
+          if (f2) {
+            const n3 = f2.getHandler(e2);
+            if (n3 && (u2 = h2, d2 = t2.type, !((u2 instanceof HTMLButtonElement || u2 instanceof HTMLInputElement || u2 instanceof HTMLTextAreaElement || u2 instanceof HTMLSelectElement) && Object.prototype.hasOwnProperty.call(O, d2) && u2.disabled))) {
+              if (!s2) {
+                const n4 = c(e2);
+                a2 = (n4 == null ? void 0 : n4.createEventArgs) ? n4.createEventArgs(t2) : {}, s2 = true;
+              }
+              Object.prototype.hasOwnProperty.call(k, t2.type) && t2.preventDefault(), A(this.browserRendererId, { eventHandlerId: n3.eventHandlerId, eventName: e2, eventFieldInfo: o.fromEvent(n3.renderingComponentId, t2) }, a2);
+            }
+            f2.stopPropagation(e2) && (l2 = true), f2.preventDefault(e2) && t2.preventDefault();
+          }
+          r2 = i2 || l2 ? void 0 : n2.shift();
+        }
+        var u2, d2;
+      }
+      getEventHandlerInfosForElement(e2, t2) {
+        return Object.prototype.hasOwnProperty.call(e2, this.eventsCollectionKey) ? e2[this.eventsCollectionKey] : t2 ? e2[this.eventsCollectionKey] = new x() : null;
+      }
+    };
+    __.nextEventDelegatorId = 0;
+    let _ = __;
+    class L {
+      constructor(e2) {
+        this.globalListener = e2, this.infosByEventHandlerId = {}, this.countByEventName = {}, i.push(this.handleEventNameAliasAdded.bind(this));
+      }
+      add(e2) {
+        if (this.infosByEventHandlerId[e2.eventHandlerId]) throw new Error(`Event ${e2.eventHandlerId} is already tracked`);
+        this.infosByEventHandlerId[e2.eventHandlerId] = e2, this.addGlobalListener(e2.eventName);
+      }
+      get(e2) {
+        return this.infosByEventHandlerId[e2];
+      }
+      addGlobalListener(e2) {
+        if (e2 = l(e2), Object.prototype.hasOwnProperty.call(this.countByEventName, e2)) this.countByEventName[e2]++;
+        else {
+          this.countByEventName[e2] = 1;
+          const t2 = Object.prototype.hasOwnProperty.call(T, e2);
+          document.addEventListener(e2, this.globalListener, t2);
+        }
+      }
+      addActiveGlobalListener(e2) {
+        e2 = l(e2), Object.prototype.hasOwnProperty.call(this.countByEventName, e2) ? (this.countByEventName[e2]++, document.removeEventListener(e2, this.globalListener)) : this.countByEventName[e2] = 1;
+        const t2 = Object.prototype.hasOwnProperty.call(T, e2);
+        document.addEventListener(e2, this.globalListener, { capture: t2, passive: false });
+      }
+      update(e2, t2) {
+        if (Object.prototype.hasOwnProperty.call(this.infosByEventHandlerId, t2)) throw new Error(`Event ${t2} is already tracked`);
+        const n2 = this.infosByEventHandlerId[e2];
+        delete this.infosByEventHandlerId[e2], n2.eventHandlerId = t2, this.infosByEventHandlerId[t2] = n2;
+      }
+      remove(e2) {
+        const t2 = this.infosByEventHandlerId[e2];
+        if (t2) {
+          delete this.infosByEventHandlerId[e2];
+          const n2 = l(t2.eventName);
+          this.decrementCountByEventName(n2);
+        }
+        return t2;
+      }
+      decrementCountByEventName(e2) {
+        0 == --this.countByEventName[e2] && (delete this.countByEventName[e2], document.removeEventListener(e2, this.globalListener));
+      }
+      handleEventNameAliasAdded(e2, t2) {
+        if (Object.prototype.hasOwnProperty.call(this.countByEventName, e2)) {
+          const n2 = this.countByEventName[e2];
+          delete this.countByEventName[e2], document.removeEventListener(e2, this.globalListener), this.addGlobalListener(t2), this.countByEventName[t2] += n2 - 1;
+        }
+      }
+    }
+    class x {
+      constructor() {
+        this.handlers = {}, this.preventDefaultFlags = null, this.stopPropagationFlags = null;
+      }
+      *enumerateHandlers() {
+        for (const e2 in this.handlers) Object.prototype.hasOwnProperty.call(this.handlers, e2) && (yield this.handlers[e2]);
+      }
+      getHandler(e2) {
+        return Object.prototype.hasOwnProperty.call(this.handlers, e2) ? this.handlers[e2] : null;
+      }
+      setHandler(e2, t2) {
+        this.handlers[e2] = t2;
+      }
+      removeHandler(e2) {
+        delete this.handlers[e2];
+      }
+      preventDefault(e2, t2) {
+        return void 0 !== t2 && (this.preventDefaultFlags = this.preventDefaultFlags || {}, this.preventDefaultFlags[e2] = t2), !!this.preventDefaultFlags && this.preventDefaultFlags[e2];
+      }
+      stopPropagation(e2, t2) {
+        return void 0 !== t2 && (this.stopPropagationFlags = this.stopPropagationFlags || {}, this.stopPropagationFlags[e2] = t2), !!this.stopPropagationFlags && this.stopPropagationFlags[e2];
+      }
+    }
+    function F(e2) {
+      const t2 = {};
+      return e2.forEach((e3) => {
+        t2[e3] = true;
+      }), t2;
+    }
+    const P = Symbol(), H = Symbol();
+    function B(e2, t2) {
+      if (P in e2) return e2;
+      const n2 = [];
+      if (e2.childNodes.length > 0) {
+        if (!t2) throw new Error("New logical elements must start empty, or allowExistingContents must be true");
+        e2.childNodes.forEach((t3) => {
+          const r2 = B(t3, true);
+          r2[H] = e2, n2.push(r2);
+        });
+      }
+      return e2[P] = n2, e2;
+    }
+    function M(e2) {
+      const t2 = K(e2);
+      for (; t2.length; ) U(e2, 0);
+    }
+    function j(e2, t2) {
+      const n2 = document.createComment("!");
+      return J(n2, e2, t2), n2;
+    }
+    function J(e2, t2, n2) {
+      const r2 = e2;
+      let o2 = e2;
+      if (e2 instanceof Comment) {
+        const t3 = K(r2);
+        if ((t3 == null ? void 0 : t3.length) > 0) {
+          const t4 = Z(r2), n3 = new Range();
+          n3.setStartBefore(e2), n3.setEndAfter(t4), o2 = n3.extractContents();
+        }
+      }
+      const a2 = z(r2);
+      if (a2) {
+        const e3 = K(a2), t3 = Array.prototype.indexOf.call(e3, r2);
+        e3.splice(t3, 1), delete r2[H];
+      }
+      const s2 = K(t2);
+      if (n2 < s2.length) {
+        const e3 = s2[n2];
+        e3.parentNode.insertBefore(o2, e3), s2.splice(n2, 0, r2);
+      } else q(o2, t2), s2.push(r2);
+      r2[H] = t2, P in r2 || (r2[P] = []);
+    }
+    function U(e2, t2) {
+      const n2 = K(e2).splice(t2, 1)[0];
+      if (n2 instanceof Comment) {
+        const e3 = K(n2);
+        if (e3) for (; e3.length > 0; ) U(n2, 0);
+      }
+      const r2 = n2;
+      r2.parentNode.removeChild(r2);
+    }
+    function z(e2) {
+      return e2[H] || null;
+    }
+    function $(e2, t2) {
+      return K(e2)[t2];
+    }
+    function W(e2) {
+      const t2 = G(e2);
+      return "http://www.w3.org/2000/svg" === t2.namespaceURI && "foreignObject" !== t2.tagName;
+    }
+    function K(e2) {
+      return e2[P];
+    }
+    function V(e2) {
+      const t2 = K(z(e2));
+      return t2[Array.prototype.indexOf.call(t2, e2) + 1] || null;
+    }
+    function* X(e2) {
+      const t2 = K(e2);
+      for (const e3 of t2) yield* X(e3);
+      yield e2;
+    }
+    function Y(e2, t2) {
+      const n2 = K(e2);
+      t2.forEach((e3) => {
+        e3.moveRangeStart = n2[e3.fromSiblingIndex], e3.moveRangeEnd = Z(e3.moveRangeStart);
+      }), t2.forEach((t3) => {
+        const r2 = document.createComment("marker");
+        t3.moveToBeforeMarker = r2;
+        const o2 = n2[t3.toSiblingIndex + 1];
+        o2 ? o2.parentNode.insertBefore(r2, o2) : q(r2, e2);
+      }), t2.forEach((e3) => {
+        const t3 = e3.moveToBeforeMarker, n3 = t3.parentNode, r2 = e3.moveRangeStart, o2 = e3.moveRangeEnd;
+        let a2 = r2;
+        for (; a2; ) {
+          const e4 = a2.nextSibling;
+          if (n3.insertBefore(a2, t3), a2 === o2) break;
+          a2 = e4;
+        }
+        n3.removeChild(t3);
+      }), t2.forEach((e3) => {
+        n2[e3.toSiblingIndex] = e3.moveRangeStart;
+      });
+    }
+    function G(e2) {
+      if (e2 instanceof Element || e2 instanceof DocumentFragment) return e2;
+      if (e2 instanceof Comment) return e2.parentNode;
+      throw new Error("Not a valid logical element");
+    }
+    function q(e2, t2) {
+      if (t2 instanceof Element || t2 instanceof DocumentFragment) t2.appendChild(e2);
+      else {
+        if (!(t2 instanceof Comment)) throw new Error(`Cannot append node because the parent is not a valid logical element. Parent: ${t2}`);
+        {
+          const n2 = V(t2);
+          n2 ? n2.parentNode.insertBefore(e2, n2) : q(e2, z(t2));
+        }
+      }
+    }
+    function Z(e2) {
+      if (e2 instanceof Element || e2 instanceof DocumentFragment) return e2;
+      const t2 = V(e2);
+      if (t2) return t2.previousSibling;
+      {
+        const t3 = z(e2);
+        return t3 instanceof Element || t3 instanceof DocumentFragment ? t3.lastChild : Z(t3);
+      }
+    }
+    function Q(e2) {
+      return `_bl_${e2}`;
+    }
+    const ee = "__internalId";
+    t.attachReviver((e2, t2) => t2 && "object" == typeof t2 && Object.prototype.hasOwnProperty.call(t2, ee) && "string" == typeof t2[ee] ? function(e3) {
+      const t3 = `[${Q(e3)}]`;
+      return document.querySelector(t3);
+    }(t2[ee]) : t2);
+    const te = "_blazorDeferredValue";
+    function ne(e2) {
+      return "select-multiple" === e2.type;
+    }
+    function re(e2, t2) {
+      e2.value = t2 || "";
+    }
+    function oe(e2, t2) {
+      e2 instanceof HTMLSelectElement ? ne(e2) ? function(e3, t3) {
+        t3 || (t3 = []);
+        for (let n2 = 0; n2 < e3.options.length; n2++) e3.options[n2].selected = -1 !== t3.indexOf(e3.options[n2].value);
+      }(e2, t2) : re(e2, t2) : e2.value = t2;
+    }
+    function ae(e2) {
+      const t2 = function(e3) {
+        for (; e3; ) {
+          if (e3 instanceof HTMLSelectElement) return e3;
+          e3 = e3.parentElement;
+        }
+        return null;
+      }(e2);
+      if (!function(e3) {
+        return !!e3 && te in e3;
+      }(t2)) return false;
+      if (ne(t2)) e2.selected = -1 !== t2._blazorDeferredValue.indexOf(e2.value);
+      else {
+        if (t2._blazorDeferredValue !== e2.value) return false;
+        re(t2, e2.value), delete t2._blazorDeferredValue;
+      }
+      return true;
+    }
+    const se = document.createElement("template"), ie = document.createElementNS("http://www.w3.org/2000/svg", "g"), ce = /* @__PURE__ */ new Set(), le = Symbol(), ue = Symbol();
+    class de {
+      constructor(e2) {
+        this.rootComponentIds = /* @__PURE__ */ new Set(), this.childComponentLocations = {}, this.eventDelegator = new _(e2), this.eventDelegator.notifyAfterClick((e3) => {
+          Se() && function(e4) {
+            if (0 !== e4.button || function(e5) {
+              return e5.ctrlKey || e5.shiftKey || e5.altKey || e5.metaKey;
+            }(e4)) return;
+            if (e4.defaultPrevented) return;
+            const t2 = function(e5) {
+              const t3 = e5.composedPath && e5.composedPath();
+              if (t3) for (let e6 = 0; e6 < t3.length; e6++) {
+                const n2 = t3[e6];
+                if (n2 instanceof HTMLAnchorElement || n2 instanceof SVGAElement) return n2;
+              }
+              return null;
+            }(e4);
+            if (t2 && function(e5) {
+              const t3 = e5.getAttribute("target");
+              return (!t3 || "_self" === t3) && e5.hasAttribute("href") && !e5.hasAttribute("download");
+            }(t2)) {
+              const n2 = Ee(t2.getAttribute("href"));
+              ye(n2) && (e4.preventDefault(), _e(n2, true, false));
+            }
+          }(e3);
+        });
+      }
+      getRootComponentCount() {
+        return this.rootComponentIds.size;
+      }
+      attachRootComponentToLogicalElement(e2, t2, n2) {
+        if (function(e3) {
+          return e3[le];
+        }(t2)) throw new Error(`Root component '${e2}' could not be attached because its target element is already associated with a root component`);
+        n2 && (t2 = j(t2, K(t2).length)), he(t2, true), this.attachComponentToElement(e2, t2), this.rootComponentIds.add(e2), ce.add(t2);
+      }
+      updateComponent(e2, t2, n2, r2) {
+        var _a;
+        const o2 = this.childComponentLocations[t2];
+        if (!o2) throw new Error(`No element is currently associated with component ${t2}`);
+        ce.delete(o2) && (this.detachEventHandlersFromElement(o2), M(o2), o2 instanceof Comment && (o2.textContent = "!"));
+        const a2 = (_a = G(o2)) == null ? void 0 : _a.getRootNode(), s2 = a2 && a2.activeElement;
+        this.applyEdits(e2, t2, o2, 0, n2, r2), s2 instanceof HTMLElement && a2 && a2.activeElement !== s2 && s2.focus();
+      }
+      disposeComponent(e2) {
+        if (this.rootComponentIds.delete(e2)) {
+          const t2 = this.childComponentLocations[e2];
+          he(t2, false), true === t2[ue] ? ce.add(t2) : M(t2);
+        }
+        delete this.childComponentLocations[e2];
+      }
+      disposeEventHandler(e2) {
+        this.eventDelegator.removeListener(e2);
+      }
+      attachComponentToElement(e2, t2) {
+        this.childComponentLocations[e2] = t2;
+      }
+      detachEventHandlersFromElement(e2) {
+        for (const t2 of X(e2)) t2 instanceof Element && this.eventDelegator.removeListenersForElement(t2);
+      }
+      applyEdits(e2, t2, r2, o2, a2, s2) {
+        let i2, c2 = 0, l2 = o2;
+        const u2 = e2.arrayBuilderSegmentReader, d2 = e2.editReader, h2 = e2.frameReader, f2 = u2.values(a2), p2 = u2.offset(a2), m2 = p2 + u2.count(a2);
+        for (let a3 = p2; a3 < m2; a3++) {
+          const u3 = e2.diffReader.editsEntry(f2, a3), p3 = d2.editType(u3);
+          switch (p3) {
+            case n.prependFrame: {
+              const n2 = d2.newTreeIndex(u3), o3 = e2.referenceFramesEntry(s2, n2), a4 = d2.siblingIndex(u3);
+              this.insertFrame(e2, t2, r2, l2 + a4, s2, o3, n2);
+              break;
+            }
+            case n.removeFrame:
+              U(r2, l2 + d2.siblingIndex(u3));
+              break;
+            case n.setAttribute: {
+              const n2 = d2.newTreeIndex(u3), o3 = e2.referenceFramesEntry(s2, n2), a4 = $(r2, l2 + d2.siblingIndex(u3));
+              if (!(a4 instanceof Element)) throw new Error("Cannot set attribute on non-element child");
+              this.applyAttribute(e2, t2, a4, o3);
+              break;
+            }
+            case n.removeAttribute: {
+              const e3 = $(r2, l2 + d2.siblingIndex(u3));
+              if (!(e3 instanceof Element)) throw new Error("Cannot remove attribute from non-element child");
+              {
+                const t3 = d2.removedAttributeName(u3);
+                this.setOrRemoveAttributeOrProperty(e3, t3, null);
+              }
+              break;
+            }
+            case n.updateText: {
+              const t3 = d2.newTreeIndex(u3), n2 = e2.referenceFramesEntry(s2, t3), o3 = $(r2, l2 + d2.siblingIndex(u3));
+              if (!(o3 instanceof Text)) throw new Error("Cannot set text content on non-text child");
+              o3.textContent = h2.textContent(n2);
+              break;
+            }
+            case n.updateMarkup: {
+              const t3 = d2.newTreeIndex(u3), n2 = e2.referenceFramesEntry(s2, t3), o3 = d2.siblingIndex(u3);
+              U(r2, l2 + o3), this.insertMarkup(e2, r2, l2 + o3, n2);
+              break;
+            }
+            case n.stepIn:
+              r2 = $(r2, l2 + d2.siblingIndex(u3)), c2++, l2 = 0;
+              break;
+            case n.stepOut:
+              r2 = z(r2), c2--, l2 = 0 === c2 ? o2 : 0;
+              break;
+            case n.permutationListEntry:
+              i2 = i2 || [], i2.push({ fromSiblingIndex: l2 + d2.siblingIndex(u3), toSiblingIndex: l2 + d2.moveToSiblingIndex(u3) });
+              break;
+            case n.permutationListEnd:
+              Y(r2, i2), i2 = void 0;
+              break;
+            default:
+              throw new Error(`Unknown edit type: ${p3}`);
+          }
+        }
+      }
+      insertFrame(e2, t2, n2, o2, a2, s2, i2) {
+        const c2 = e2.frameReader, l2 = c2.frameType(s2);
+        switch (l2) {
+          case r.element:
+            return this.insertElement(e2, t2, n2, o2, a2, s2, i2), 1;
+          case r.text:
+            return this.insertText(e2, n2, o2, s2), 1;
+          case r.attribute:
+            throw new Error("Attribute frames should only be present as leading children of element frames.");
+          case r.component:
+            return this.insertComponent(e2, n2, o2, s2), 1;
+          case r.region:
+            return this.insertFrameRange(e2, t2, n2, o2, a2, i2 + 1, i2 + c2.subtreeLength(s2));
+          case r.elementReferenceCapture:
+            if (n2 instanceof Element) return u2 = n2, d2 = c2.elementReferenceCaptureId(s2), u2.setAttribute(Q(d2), ""), 0;
+            throw new Error("Reference capture frames can only be children of element frames.");
+          case r.markup:
+            return this.insertMarkup(e2, n2, o2, s2), 1;
+          case r.namedEvent:
+            return 0;
+          default:
+            throw new Error(`Unknown frame type: ${l2}`);
+        }
+        var u2, d2;
+      }
+      insertElement(e2, t2, n2, o2, a2, s2, i2) {
+        const c2 = e2.frameReader, l2 = c2.elementName(s2), u2 = "svg" === l2 || W(n2) ? document.createElementNS("http://www.w3.org/2000/svg", l2) : document.createElement(l2), d2 = B(u2);
+        let h2 = false;
+        const f2 = i2 + c2.subtreeLength(s2);
+        for (let s3 = i2 + 1; s3 < f2; s3++) {
+          const i3 = e2.referenceFramesEntry(a2, s3);
+          if (c2.frameType(i3) !== r.attribute) {
+            J(u2, n2, o2), h2 = true, this.insertFrameRange(e2, t2, d2, 0, a2, s3, f2);
+            break;
+          }
+          this.applyAttribute(e2, t2, u2, i3);
+        }
+        var p2;
+        h2 || J(u2, n2, o2), (p2 = u2) instanceof HTMLOptionElement ? ae(p2) : te in p2 && oe(p2, p2[te]);
+      }
+      insertComponent(e2, t2, n2, r2) {
+        const o2 = j(t2, n2), a2 = e2.frameReader.componentId(r2);
+        this.attachComponentToElement(a2, o2);
+      }
+      insertText(e2, t2, n2, r2) {
+        const o2 = e2.frameReader.textContent(r2);
+        J(document.createTextNode(o2), t2, n2);
+      }
+      insertMarkup(e2, t2, n2, r2) {
+        const o2 = j(t2, n2), a2 = (s2 = e2.frameReader.markupContent(r2), W(t2) ? (ie.innerHTML = s2 || " ", ie) : (se.innerHTML = s2 || " ", se.content.querySelectorAll("script").forEach((e3) => {
+          const t3 = document.createElement("script");
+          t3.textContent = e3.textContent, e3.getAttributeNames().forEach((n3) => {
+            t3.setAttribute(n3, e3.getAttribute(n3));
+          }), e3.parentNode.replaceChild(t3, e3);
+        }), se.content));
+        var s2;
+        let i2 = 0;
+        for (; a2.firstChild; ) J(a2.firstChild, o2, i2++);
+      }
+      applyAttribute(e2, t2, n2, r2) {
+        const o2 = e2.frameReader, a2 = o2.attributeName(r2), s2 = o2.attributeEventHandlerId(r2);
+        if (s2) {
+          const e3 = pe(a2);
+          return void this.eventDelegator.setListener(n2, e3, s2, t2);
+        }
+        const i2 = o2.attributeValue(r2);
+        this.setOrRemoveAttributeOrProperty(n2, a2, i2);
+      }
+      insertFrameRange(e2, t2, n2, r2, o2, a2, s2) {
+        const i2 = r2;
+        for (let i3 = a2; i3 < s2; i3++) {
+          const a3 = e2.referenceFramesEntry(o2, i3);
+          r2 += this.insertFrame(e2, t2, n2, r2, o2, a3, i3), i3 += fe(e2, a3);
+        }
+        return r2 - i2;
+      }
+      setOrRemoveAttributeOrProperty(e2, t2, n2) {
+        (function(e3, t3, n3) {
+          switch (t3) {
+            case "value":
+              return function(e4, t4) {
+                switch (t4 && "INPUT" === e4.tagName && (t4 = function(e5, t5) {
+                  switch (t5.getAttribute("type")) {
+                    case "time":
+                      return 8 !== e5.length || !e5.endsWith("00") && t5.hasAttribute("step") ? e5 : e5.substring(0, 5);
+                    case "datetime-local":
+                      return 19 !== e5.length || !e5.endsWith("00") && t5.hasAttribute("step") ? e5 : e5.substring(0, 16);
+                    default:
+                      return e5;
+                  }
+                }(t4, e4)), e4.tagName) {
+                  case "INPUT":
+                  case "SELECT":
+                  case "TEXTAREA":
+                    return t4 && e4 instanceof HTMLSelectElement && ne(e4) && (t4 = JSON.parse(t4)), oe(e4, t4), e4[te] = t4, true;
+                  case "OPTION":
+                    return t4 || "" === t4 ? e4.setAttribute("value", t4) : e4.removeAttribute("value"), ae(e4), true;
+                  default:
+                    return false;
+                }
+              }(e3, n3);
+            case "checked":
+              return function(e4, t4) {
+                return "INPUT" === e4.tagName && (e4.checked = null !== t4, true);
+              }(e3, n3);
+            default:
+              return false;
+          }
+        })(e2, t2, n2) || (t2.startsWith("__internal_") ? this.applyInternalAttribute(e2, t2.substring(11), n2) : null !== n2 ? e2.setAttribute(t2, n2) : e2.removeAttribute(t2));
+      }
+      applyInternalAttribute(e2, t2, n2) {
+        if (t2.startsWith("stopPropagation_")) {
+          const r2 = pe(t2.substring(16));
+          this.eventDelegator.setStopPropagation(e2, r2, null !== n2);
+        } else {
+          if (!t2.startsWith("preventDefault_")) throw new Error(`Unsupported internal attribute '${t2}'`);
+          {
+            const r2 = pe(t2.substring(15));
+            this.eventDelegator.setPreventDefault(e2, r2, null !== n2);
+          }
+        }
+      }
+    }
+    function he(e2, t2) {
+      e2[le] = t2;
+    }
+    function fe(e2, t2) {
+      const n2 = e2.frameReader;
+      switch (n2.frameType(t2)) {
+        case r.component:
+        case r.element:
+        case r.region:
+          return n2.subtreeLength(t2) - 1;
+        default:
+          return 0;
+      }
+    }
+    function pe(e2) {
+      if (e2.startsWith("on")) return e2.substring(2);
+      throw new Error(`Attribute should be an event name, but doesn't start with 'on'. Value: '${e2}'`);
+    }
+    const me = {};
+    let be, ve, ge = false;
+    function ye(e2) {
+      const t2 = (n2 = document.baseURI).substring(0, n2.lastIndexOf("/"));
+      var n2;
+      const r2 = e2.charAt(t2.length);
+      return e2.startsWith(t2) && ("" === r2 || "/" === r2 || "?" === r2 || "#" === r2);
+    }
+    function we(e2) {
+      var _a;
+      (_a = document.getElementById(e2)) == null ? void 0 : _a.scrollIntoView();
+    }
+    function Ee(e2) {
+      return ve = ve || document.createElement("a"), ve.href = e2, ve.href;
+    }
+    function Se() {
+      return void 0 !== be;
+    }
+    function Ce() {
+      return be;
+    }
+    let Ie = false, De = 0, Ae = 0;
+    const Ne = /* @__PURE__ */ new Map();
+    let Re = async function(e2) {
+      var _a, _b, _c;
+      Fe();
+      const t2 = Me();
+      if (t2 == null ? void 0 : t2.hasLocationChangingEventListeners) {
+        const n2 = (_b = (_a = e2.state) == null ? void 0 : _a._index) != null ? _b : 0, r2 = (_c = e2.state) == null ? void 0 : _c.userState, o2 = n2 - De, a2 = location.href;
+        if (await xe(-o2), !await Pe(a2, r2, false, t2)) return;
+        await xe(o2);
+      }
+      await He(true);
+    }, Te = null;
+    const ke = { listenForNavigationEvents: function(e2, t2, n2) {
+      var _a, _b;
+      Ne.set(e2, { rendererId: e2, hasLocationChangingEventListeners: false, locationChanged: t2, locationChanging: n2 }), Ie || (Ie = true, window.addEventListener("popstate", Be), De = (_b = (_a = history.state) == null ? void 0 : _a._index) != null ? _b : 0);
+    }, enableNavigationInterception: function(e2) {
+      if (void 0 !== be && be !== e2) throw new Error("Only one interactive runtime may enable navigation interception at a time.");
+      be = e2;
+    }, setHasLocationChangingListeners: function(e2, t2) {
+      const n2 = Ne.get(e2);
+      if (!n2) throw new Error(`Renderer with ID '${e2}' is not listening for navigation events`);
+      n2.hasLocationChangingEventListeners = t2;
+    }, endLocationChanging: function(e2, t2) {
+      Te && e2 === Ae && (Te(t2), Te = null);
+    }, navigateTo: function(e2, t2) {
+      Oe(e2, t2, true);
+    }, refresh: function(e2) {
+      location.reload();
+    }, getBaseURI: () => document.baseURI, getLocationHref: () => location.href, scrollToElement: we };
+    function Oe(e2, t2, n2 = false) {
+      const r2 = Ee(e2);
+      !t2.forceLoad && ye(r2) ? _e(r2, false, t2.replaceHistoryEntry, t2.historyEntryState, n2) : function(e3, t3) {
+        if (location.href === e3) {
+          const t4 = e3 + "?";
+          history.replaceState(null, "", t4), location.replace(e3);
+        } else t3 ? location.replace(e3) : location.href = e3;
+      }(e2, t2.replaceHistoryEntry);
+    }
+    async function _e(e2, t2, n2, r2 = void 0, o2 = false) {
+      if (Fe(), function(e3, t3) {
+        const n3 = new URL(e3), r3 = new URL(t3);
+        return n3.origin === r3.origin && n3.pathname === r3.pathname && n3.search === r3.search && "" !== r3.hash;
+      }(location.href, e2)) return Le(e2, n2, r2), void function(e3) {
+        const t3 = e3.indexOf("#");
+        t3 !== e3.length - 1 && we(e3.substring(t3 + 1));
+      }(e2);
+      const a2 = Me();
+      (o2 || !(a2 == null ? void 0 : a2.hasLocationChangingEventListeners) || await Pe(e2, r2, t2, a2)) && (function(e3, t3) {
+        const n3 = new URL(e3), r3 = new URL(t3);
+        return n3.protocol === r3.protocol && n3.host === r3.host && n3.port === r3.port && n3.pathname === r3.pathname;
+      }(e2, location.href) || (ge = true), Le(e2, n2, r2), await He(t2));
+    }
+    function Le(e2, t2, n2 = void 0) {
+      t2 ? history.replaceState({ userState: n2, _index: De }, "", e2) : (De++, history.pushState({ userState: n2, _index: De }, "", e2));
+    }
+    function xe(e2) {
+      return new Promise((t2) => {
+        const n2 = Re;
+        Re = () => {
+          Re = n2, t2();
+        }, history.go(e2);
+      });
+    }
+    function Fe() {
+      Te && (Te(false), Te = null);
+    }
+    function Pe(e2, t2, n2, r2) {
+      return new Promise((o2) => {
+        Fe(), Ae++, Te = o2, r2.locationChanging(Ae, e2, t2, n2);
+      });
+    }
+    async function He(e2, t2) {
+      const n2 = location.href;
+      await Promise.all(Array.from(Ne, async ([t3, r2]) => {
+        var _a;
+        D(t3) && await r2.locationChanged(n2, (_a = history.state) == null ? void 0 : _a.userState, e2);
+      }));
+    }
+    async function Be(e2) {
+      var _a, _b;
+      Re && (Se(), 1) && await Re(e2), De = (_b = (_a = history.state) == null ? void 0 : _a._index) != null ? _b : 0;
+    }
+    function Me() {
+      const e2 = Ce();
+      if (void 0 !== e2) return Ne.get(e2);
+    }
+    const je = { focus: function(e2, t2) {
+      if (e2 instanceof HTMLElement) e2.focus({ preventScroll: t2 });
+      else {
+        if (!(e2 instanceof SVGElement)) throw new Error("Unable to focus an invalid element.");
+        if (!e2.hasAttribute("tabindex")) throw new Error("Unable to focus an SVG element that does not have a tabindex.");
+        e2.focus({ preventScroll: t2 });
+      }
+    }, focusBySelector: function(e2) {
+      const t2 = document.querySelector(e2);
+      t2 && (t2.hasAttribute("tabindex") || (t2.tabIndex = -1), t2.focus({ preventScroll: true }));
+    } }, Je = { init: function(e2, t2, n2, r2 = 50) {
+      const o2 = ze(t2);
+      (o2 || document.documentElement).style.overflowAnchor = "none";
+      const a2 = document.createRange();
+      h2(n2.parentElement) && (t2.style.display = "table-row", n2.style.display = "table-row");
+      const s2 = new IntersectionObserver(function(r3) {
+        r3.forEach((r4) => {
+          var _a;
+          if (!r4.isIntersecting) return;
+          a2.setStartAfter(t2), a2.setEndBefore(n2);
+          const o3 = a2.getBoundingClientRect().height, s3 = (_a = r4.rootBounds) == null ? void 0 : _a.height;
+          r4.target === t2 ? e2.invokeMethodAsync("OnSpacerBeforeVisible", r4.intersectionRect.top - r4.boundingClientRect.top, o3, s3) : r4.target === n2 && n2.offsetHeight > 0 && e2.invokeMethodAsync("OnSpacerAfterVisible", r4.boundingClientRect.bottom - r4.intersectionRect.bottom, o3, s3);
+        });
+      }, { root: o2, rootMargin: `${r2}px` });
+      s2.observe(t2), s2.observe(n2);
+      const i2 = d2(t2), c2 = d2(n2), { observersByDotNetObjectId: l2, id: u2 } = $e(e2);
+      function d2(e3) {
+        const t3 = { attributes: true }, n3 = new MutationObserver((n4, r3) => {
+          h2(e3.parentElement) && (r3.disconnect(), e3.style.display = "table-row", r3.observe(e3, t3)), s2.unobserve(e3), s2.observe(e3);
+        });
+        return n3.observe(e3, t3), n3;
+      }
+      function h2(e3) {
+        return null !== e3 && (e3 instanceof HTMLTableElement && "" === e3.style.display || "table" === e3.style.display || e3 instanceof HTMLTableSectionElement && "" === e3.style.display || "table-row-group" === e3.style.display);
+      }
+      l2[u2] = { intersectionObserver: s2, mutationObserverBefore: i2, mutationObserverAfter: c2 };
+    }, dispose: function(e2) {
+      const { observersByDotNetObjectId: t2, id: n2 } = $e(e2), r2 = t2[n2];
+      r2 && (r2.intersectionObserver.disconnect(), r2.mutationObserverBefore.disconnect(), r2.mutationObserverAfter.disconnect(), e2.dispose(), delete t2[n2]);
+    } }, Ue = Symbol();
+    function ze(e2) {
+      return e2 && e2 !== document.body && e2 !== document.documentElement ? "visible" !== getComputedStyle(e2).overflowY ? e2 : ze(e2.parentElement) : null;
+    }
+    function $e(e2) {
+      var _a;
+      const t2 = e2._callDispatcher, n2 = e2._id;
+      return (_a = t2[Ue]) != null ? _a : t2[Ue] = {}, { observersByDotNetObjectId: t2[Ue], id: n2 };
+    }
+    const We = { getAndRemoveExistingTitle: function() {
+      var _a;
+      const e2 = document.head ? document.head.getElementsByTagName("title") : [];
+      if (0 === e2.length) return null;
+      let t2 = null;
+      for (let n2 = e2.length - 1; n2 >= 0; n2--) {
+        const r2 = e2[n2], o2 = r2.previousSibling;
+        o2 instanceof Comment && null !== z(o2) || (null === t2 && (t2 = r2.textContent), (_a = r2.parentNode) == null ? void 0 : _a.removeChild(r2));
+      }
+      return t2;
+    } }, Ke = { init: function(e2, t2) {
+      t2._blazorInputFileNextFileId = 0, t2.addEventListener("click", function() {
+        t2.value = "";
+      }), t2.addEventListener("change", function() {
+        t2._blazorFilesById = {};
+        const n2 = Array.prototype.map.call(t2.files, function(e3) {
+          const n3 = { id: ++t2._blazorInputFileNextFileId, lastModified: new Date(e3.lastModified).toISOString(), name: e3.name, size: e3.size, contentType: e3.type, readPromise: void 0, arrayBuffer: void 0, blob: e3 };
+          return t2._blazorFilesById[n3.id] = n3, n3;
+        });
+        e2.invokeMethodAsync("NotifyChange", n2);
+      });
+    }, toImageFile: async function(e2, t2, n2, r2, o2) {
+      const a2 = Ve(e2, t2), s2 = await new Promise(function(e3) {
+        const t3 = new Image();
+        t3.onload = function() {
+          URL.revokeObjectURL(t3.src), e3(t3);
+        }, t3.onerror = function() {
+          t3.onerror = null, URL.revokeObjectURL(t3.src);
+        }, t3.src = URL.createObjectURL(a2.blob);
+      }), i2 = await new Promise(function(e3) {
+        var _a;
+        const t3 = Math.min(1, r2 / s2.width), a3 = Math.min(1, o2 / s2.height), i3 = Math.min(t3, a3), c3 = document.createElement("canvas");
+        c3.width = Math.round(s2.width * i3), c3.height = Math.round(s2.height * i3), (_a = c3.getContext("2d")) == null ? void 0 : _a.drawImage(s2, 0, 0, c3.width, c3.height), c3.toBlob(e3, n2);
+      }), c2 = { id: ++e2._blazorInputFileNextFileId, lastModified: a2.lastModified, name: a2.name, size: (i2 == null ? void 0 : i2.size) || 0, contentType: n2, blob: i2 || a2.blob };
+      return e2._blazorFilesById[c2.id] = c2, c2;
+    }, readFileData: async function(e2, t2) {
+      return Ve(e2, t2).blob;
+    } };
+    function Ve(e2, t2) {
+      const n2 = e2._blazorFilesById[t2];
+      if (!n2) throw new Error(`There is no file with ID ${t2}. The file list may have changed. See https://aka.ms/aspnet/blazor-input-file-multiple-selections.`);
+      return n2;
+    }
+    const Xe = /* @__PURE__ */ new Set(), Ye = { enableNavigationPrompt: function(e2) {
+      0 === Xe.size && window.addEventListener("beforeunload", Ge), Xe.add(e2);
+    }, disableNavigationPrompt: function(e2) {
+      Xe.delete(e2), 0 === Xe.size && window.removeEventListener("beforeunload", Ge);
+    } };
+    function Ge(e2) {
+      e2.preventDefault(), e2.returnValue = true;
+    }
+    const qe = /* @__PURE__ */ new Map(), Ze = { navigateTo: function(e2, t2, n2 = false) {
+      Oe(e2, t2 instanceof Object ? t2 : { forceLoad: t2, replaceHistoryEntry: n2 });
+    }, registerCustomEventType: function(e2, t2) {
+      if (!t2) throw new Error("The options parameter is required.");
+      if (a.has(e2)) throw new Error(`The event '${e2}' is already registered.`);
+      if (t2.browserEventName) {
+        const n2 = s.get(t2.browserEventName);
+        n2 ? n2.push(e2) : s.set(t2.browserEventName, [e2]), i.forEach((n3) => n3(e2, t2.browserEventName));
+      }
+      a.set(e2, t2);
+    }, rootComponents: g, runtime: {}, _internal: { navigationManager: ke, domWrapper: je, Virtualize: Je, PageTitle: We, InputFile: Ke, NavigationLock: Ye, getJSDataStreamChunk: async function(e2, t2, n2) {
+      return e2 instanceof Blob ? await async function(e3, t3, n3) {
+        const r2 = e3.slice(t3, t3 + n3), o2 = await r2.arrayBuffer();
+        return new Uint8Array(o2);
+      }(e2, t2, n2) : function(e3, t3, n3) {
+        return new Uint8Array(e3.buffer, e3.byteOffset + t3, n3);
+      }(e2, t2, n2);
+    }, attachWebRendererInterop: function(e2, n2, r2, o2) {
+      var _a, _b;
+      if (S.has(e2)) throw new Error(`Interop methods are already registered for renderer ${e2}`);
+      S.set(e2, n2), r2 && o2 && Object.keys(r2).length > 0 && function(e3, n3, r3) {
+        if (m) throw new Error("Dynamic root components have already been enabled.");
+        m = e3, b = n3;
+        for (const [e4, o3] of Object.entries(r3)) {
+          const r4 = t.findJSFunction(e4, 0);
+          for (const e5 of o3) r4(e5, n3[e5]);
+        }
+      }(N(e2), r2, o2), (_b = (_a = I.get(e2)) == null ? void 0 : _a[0]) == null ? void 0 : _b.call(_a), function(e3) {
+        for (const t2 of C) t2(e3);
+      }(e2);
+    } } };
+    window.Blazor = Ze;
+    let Qe = false;
+    const et = "function" == typeof TextDecoder ? new TextDecoder("utf-8") : null, tt = et ? et.decode.bind(et) : function(e2) {
+      let t2 = 0;
+      const n2 = e2.length, r2 = [], o2 = [];
+      for (; t2 < n2; ) {
+        const n3 = e2[t2++];
+        if (0 === n3) break;
+        if (128 & n3) {
+          if (192 == (224 & n3)) {
+            const o3 = 63 & e2[t2++];
+            r2.push((31 & n3) << 6 | o3);
+          } else if (224 == (240 & n3)) {
+            const o3 = 63 & e2[t2++], a2 = 63 & e2[t2++];
+            r2.push((31 & n3) << 12 | o3 << 6 | a2);
+          } else if (240 == (248 & n3)) {
+            let o3 = (7 & n3) << 18 | (63 & e2[t2++]) << 12 | (63 & e2[t2++]) << 6 | 63 & e2[t2++];
+            o3 > 65535 && (o3 -= 65536, r2.push(o3 >>> 10 & 1023 | 55296), o3 = 56320 | 1023 & o3), r2.push(o3);
+          }
+        } else r2.push(n3);
+        r2.length > 1024 && (o2.push(String.fromCharCode.apply(null, r2)), r2.length = 0);
+      }
+      return o2.push(String.fromCharCode.apply(null, r2)), o2.join("");
+    }, nt = Math.pow(2, 32), rt = Math.pow(2, 21) - 1;
+    function ot(e2, t2) {
+      return e2[t2] | e2[t2 + 1] << 8 | e2[t2 + 2] << 16 | e2[t2 + 3] << 24;
+    }
+    function at(e2, t2) {
+      return e2[t2] + (e2[t2 + 1] << 8) + (e2[t2 + 2] << 16) + (e2[t2 + 3] << 24 >>> 0);
+    }
+    function st(e2, t2) {
+      const n2 = at(e2, t2 + 4);
+      if (n2 > rt) throw new Error(`Cannot read uint64 with high order part ${n2}, because the result would exceed Number.MAX_SAFE_INTEGER.`);
+      return n2 * nt + at(e2, t2);
+    }
+    class it {
+      constructor(e2) {
+        this.batchData = e2;
+        const t2 = new dt(e2);
+        this.arrayRangeReader = new ht(e2), this.arrayBuilderSegmentReader = new ft(e2), this.diffReader = new ct(e2), this.editReader = new lt(e2, t2), this.frameReader = new ut(e2, t2);
+      }
+      updatedComponents() {
+        return ot(this.batchData, this.batchData.length - 20);
+      }
+      referenceFrames() {
+        return ot(this.batchData, this.batchData.length - 16);
+      }
+      disposedComponentIds() {
+        return ot(this.batchData, this.batchData.length - 12);
+      }
+      disposedEventHandlerIds() {
+        return ot(this.batchData, this.batchData.length - 8);
+      }
+      updatedComponentsEntry(e2, t2) {
+        const n2 = e2 + 4 * t2;
+        return ot(this.batchData, n2);
+      }
+      referenceFramesEntry(e2, t2) {
+        return e2 + 20 * t2;
+      }
+      disposedComponentIdsEntry(e2, t2) {
+        const n2 = e2 + 4 * t2;
+        return ot(this.batchData, n2);
+      }
+      disposedEventHandlerIdsEntry(e2, t2) {
+        const n2 = e2 + 8 * t2;
+        return st(this.batchData, n2);
+      }
+    }
+    class ct {
+      constructor(e2) {
+        this.batchDataUint8 = e2;
+      }
+      componentId(e2) {
+        return ot(this.batchDataUint8, e2);
+      }
+      edits(e2) {
+        return e2 + 4;
+      }
+      editsEntry(e2, t2) {
+        return e2 + 16 * t2;
+      }
+    }
+    class lt {
+      constructor(e2, t2) {
+        this.batchDataUint8 = e2, this.stringReader = t2;
+      }
+      editType(e2) {
+        return ot(this.batchDataUint8, e2);
+      }
+      siblingIndex(e2) {
+        return ot(this.batchDataUint8, e2 + 4);
+      }
+      newTreeIndex(e2) {
+        return ot(this.batchDataUint8, e2 + 8);
+      }
+      moveToSiblingIndex(e2) {
+        return ot(this.batchDataUint8, e2 + 8);
+      }
+      removedAttributeName(e2) {
+        const t2 = ot(this.batchDataUint8, e2 + 12);
+        return this.stringReader.readString(t2);
+      }
+    }
+    class ut {
+      constructor(e2, t2) {
+        this.batchDataUint8 = e2, this.stringReader = t2;
+      }
+      frameType(e2) {
+        return ot(this.batchDataUint8, e2);
+      }
+      subtreeLength(e2) {
+        return ot(this.batchDataUint8, e2 + 4);
+      }
+      elementReferenceCaptureId(e2) {
+        const t2 = ot(this.batchDataUint8, e2 + 4);
+        return this.stringReader.readString(t2);
+      }
+      componentId(e2) {
+        return ot(this.batchDataUint8, e2 + 8);
+      }
+      elementName(e2) {
+        const t2 = ot(this.batchDataUint8, e2 + 8);
+        return this.stringReader.readString(t2);
+      }
+      textContent(e2) {
+        const t2 = ot(this.batchDataUint8, e2 + 4);
+        return this.stringReader.readString(t2);
+      }
+      markupContent(e2) {
+        const t2 = ot(this.batchDataUint8, e2 + 4);
+        return this.stringReader.readString(t2);
+      }
+      attributeName(e2) {
+        const t2 = ot(this.batchDataUint8, e2 + 4);
+        return this.stringReader.readString(t2);
+      }
+      attributeValue(e2) {
+        const t2 = ot(this.batchDataUint8, e2 + 8);
+        return this.stringReader.readString(t2);
+      }
+      attributeEventHandlerId(e2) {
+        return st(this.batchDataUint8, e2 + 12);
+      }
+    }
+    class dt {
+      constructor(e2) {
+        this.batchDataUint8 = e2, this.stringTableStartIndex = ot(e2, e2.length - 4);
+      }
+      readString(e2) {
+        if (-1 === e2) return null;
+        {
+          const n2 = ot(this.batchDataUint8, this.stringTableStartIndex + 4 * e2), r2 = function(e3, t3) {
+            let n3 = 0, r3 = 0;
+            for (let o3 = 0; o3 < 4; o3++) {
+              const a3 = e3[t3 + o3];
+              if (n3 |= (127 & a3) << r3, a3 < 128) break;
+              r3 += 7;
+            }
+            return n3;
+          }(this.batchDataUint8, n2), o2 = n2 + ((t2 = r2) < 128 ? 1 : t2 < 16384 ? 2 : t2 < 2097152 ? 3 : 4), a2 = new Uint8Array(this.batchDataUint8.buffer, this.batchDataUint8.byteOffset + o2, r2);
+          return tt(a2);
+        }
+        var t2;
+      }
+    }
+    class ht {
+      constructor(e2) {
+        this.batchDataUint8 = e2;
+      }
+      count(e2) {
+        return ot(this.batchDataUint8, e2);
+      }
+      values(e2) {
+        return e2 + 4;
+      }
+    }
+    class ft {
+      constructor(e2) {
+        this.batchDataUint8 = e2;
+      }
+      offset(e2) {
+        return 0;
+      }
+      count(e2) {
+        return ot(this.batchDataUint8, e2);
+      }
+      values(e2) {
+        return e2 + 4;
+      }
+    }
+    const pt = "__bwv:";
+    let mt = false;
+    function bt(e2, t2) {
+      St("OnRenderCompleted", e2, t2);
+    }
+    function vt(e2, t2, n2, r2, o2) {
+      St("BeginInvokeDotNet", e2 ? e2.toString() : null, t2, n2, r2 || 0, o2);
+    }
+    function gt(e2, t2, n2) {
+      St("EndInvokeJS", e2, t2, n2);
+    }
+    function yt(e2, t2) {
+      const n2 = function(e3) {
+        const t3 = new Array(e3.length);
+        for (let n3 = 0; n3 < e3.length; n3++) t3[n3] = String.fromCharCode(e3[n3]);
+        return btoa(t3.join(""));
+      }(t2);
+      St("ReceiveByteArrayFromJS", e2, n2);
+    }
+    function wt(e2, t2, n2) {
+      return St("OnLocationChanged", e2, t2, n2), Promise.resolve();
+    }
+    function Et(e2, t2, n2, r2) {
+      return St("OnLocationChanging", e2, t2, n2, r2), Promise.resolve();
+    }
+    function St(e2, ...t2) {
+      const n2 = function(e3, t3) {
+        return mt ? null : `${pt}${JSON.stringify([e3, ...t3])}`;
+      }(e2, t2);
+      n2 && window.external.sendMessage(n2);
+    }
+    var Ct, It;
+    function Dt(t2, n2) {
+      const r2 = At(n2);
+      e.dispatcher.receiveByteArray(t2, r2);
+    }
+    function At(e2) {
+      const t2 = atob(e2), n2 = t2.length, r2 = new Uint8Array(n2);
+      for (let e3 = 0; e3 < n2; e3++) r2[e3] = t2.charCodeAt(e3);
+      return r2;
+    }
+    !function(e2) {
+      e2[e2.Default = 0] = "Default", e2[e2.Server = 1] = "Server", e2[e2.WebAssembly = 2] = "WebAssembly", e2[e2.WebView = 3] = "WebView";
+    }(Ct || (Ct = {})), function(e2) {
+      e2[e2.Trace = 0] = "Trace", e2[e2.Debug = 1] = "Debug", e2[e2.Information = 2] = "Information", e2[e2.Warning = 3] = "Warning", e2[e2.Error = 4] = "Error", e2[e2.Critical = 5] = "Critical", e2[e2.None = 6] = "None";
+    }(It || (It = {}));
+    class Nt {
+      constructor(e2 = true, t2, n2, r2 = 0) {
+        this.singleRuntime = e2, this.logger = t2, this.webRendererId = r2, this.afterStartedCallbacks = [], n2 && this.afterStartedCallbacks.push(...n2);
+      }
+      async importInitializersAsync(e2, t2) {
+        await Promise.all(e2.map((e3) => async function(e4, n2) {
+          let r2;
+          var o2;
+          n2.moduleExports || (o2 = n2.name, r2 = new URL(o2, document.baseURI).toString(), n2.moduleExports = await import(r2));
+          const a2 = n2.moduleExports;
+          if (void 0 !== a2) {
+            if (e4.singleRuntime) {
+              const { beforeStart: n3, afterStarted: r3, beforeWebAssemblyStart: o3, afterWebAssemblyStarted: i2, beforeServerStart: c2, afterServerStarted: l2 } = a2;
+              let u2 = n3;
+              e4.webRendererId === Ct.Server && c2 && (u2 = c2), e4.webRendererId === Ct.WebAssembly && o3 && (u2 = o3);
+              let d2 = r3;
+              return e4.webRendererId === Ct.Server && l2 && (d2 = l2), e4.webRendererId === Ct.WebAssembly && i2 && (d2 = i2), s2(e4, u2, d2, t2);
+            }
+            return function(e5, t3, n3) {
+              var _a;
+              const o3 = n3[0], { beforeStart: a3, afterStarted: i2, beforeWebStart: c2, afterWebStarted: l2, beforeWebAssemblyStart: u2, afterWebAssemblyStarted: d2, beforeServerStart: h2, afterServerStarted: f2 } = t3, p2 = !(c2 || l2 || u2 || d2 || h2 || f2 || !a3 && !i2), m2 = p2 && o3.enableClassicInitializers;
+              if (p2 && !o3.enableClassicInitializers) (_a = e5.logger) == null ? void 0 : _a.log(It.Warning, `Initializer '${r2}' will be ignored because multiple runtimes are available. Use 'before(Web|WebAssembly|Server)Start' and 'after(Web|WebAssembly|Server)Started' instead.`);
+              else if (m2) return s2(e5, a3, i2, n3);
+              if (function(e6) {
+                e6.webAssembly ? e6.webAssembly.initializers || (e6.webAssembly.initializers = { beforeStart: [], afterStarted: [] }) : e6.webAssembly = { initializers: { beforeStart: [], afterStarted: [] } }, e6.circuit ? e6.circuit.initializers || (e6.circuit.initializers = { beforeStart: [], afterStarted: [] }) : e6.circuit = { initializers: { beforeStart: [], afterStarted: [] } };
+              }(o3), u2 && o3.webAssembly.initializers.beforeStart.push(u2), d2 && o3.webAssembly.initializers.afterStarted.push(d2), h2 && o3.circuit.initializers.beforeStart.push(h2), f2 && o3.circuit.initializers.afterStarted.push(f2), l2 && e5.afterStartedCallbacks.push(l2), c2) return c2(o3);
+            }(e4, a2, t2);
+          }
+          function s2(e5, t3, n3, r3) {
+            if (n3 && e5.afterStartedCallbacks.push(n3), t3) return t3(...r3);
+          }
+        }(this, e3)));
+      }
+      async invokeAfterStartedCallbacks(e2) {
+        var _a;
+        const t2 = (n2 = this.webRendererId, (_a = I.get(n2)) == null ? void 0 : _a[1]);
+        var n2;
+        t2 && await t2, await Promise.all(this.afterStartedCallbacks.map((t3) => t3(e2)));
+      }
+    }
+    let Rt = false;
+    async function Tt() {
+      if (Rt) throw new Error("Blazor has already started.");
+      Rt = true, e.dispatcher = t.attachDispatcher({ beginInvokeDotNetFromJS: vt, endInvokeJSFromDotNet: gt, sendByteArray: yt });
+      const n2 = await async function() {
+        const e2 = await fetch("_framework/blazor.modules.json", { method: "GET", credentials: "include", cache: "no-cache" }), t2 = (await e2.json()).map((e3) => ({ name: e3 })), n3 = new Nt();
+        return await n3.importInitializersAsync(t2, []), n3;
+      }();
+      (function() {
+        const t2 = { AttachToDocument: (e2, t3) => {
+          !function(e3, t4, n3) {
+            const r2 = "::before";
+            let o2 = false;
+            if (e3.endsWith("::after")) e3 = e3.slice(0, -7), o2 = true;
+            else if (e3.endsWith(r2)) throw new Error(`The '${r2}' selector is not supported.`);
+            const a2 = function(e4) {
+              const t5 = p.get(e4);
+              if (t5) return p.delete(e4), t5;
+            }(e3) || document.querySelector(e3);
+            if (!a2) throw new Error(`Could not find any element matching selector '${e3}'.`);
+            !function(e4, t5, n4, r3) {
+              let o3 = me[e4];
+              o3 || (o3 = new de(e4), me[e4] = o3), o3.attachRootComponentToLogicalElement(n4, t5, r3);
+            }(n3, B(a2, true), t4, o2);
+          }(t3, e2, Ct.WebView);
+        }, RenderBatch: (e2, t3) => {
+          try {
+            const n3 = At(t3);
+            (function(e3, t4) {
+              const n4 = me[e3];
+              if (!n4) throw new Error(`There is no browser renderer with ID ${e3}.`);
+              const r2 = t4.arrayRangeReader, o2 = t4.updatedComponents(), a2 = r2.values(o2), s2 = r2.count(o2), i2 = t4.referenceFrames(), c2 = r2.values(i2), l2 = t4.diffReader;
+              for (let e4 = 0; e4 < s2; e4++) {
+                const r3 = t4.updatedComponentsEntry(a2, e4), o3 = l2.componentId(r3), s3 = l2.edits(r3);
+                n4.updateComponent(t4, o3, s3, c2);
+              }
+              const u2 = t4.disposedComponentIds(), d2 = r2.values(u2), h2 = r2.count(u2);
+              for (let e4 = 0; e4 < h2; e4++) {
+                const r3 = t4.disposedComponentIdsEntry(d2, e4);
+                n4.disposeComponent(r3);
+              }
+              const f2 = t4.disposedEventHandlerIds(), p2 = r2.values(f2), m2 = r2.count(f2);
+              for (let e4 = 0; e4 < m2; e4++) {
+                const r3 = t4.disposedEventHandlerIdsEntry(p2, e4);
+                n4.disposeEventHandler(r3);
+              }
+              ge && (ge = false, window.scrollTo && window.scrollTo(0, 0));
+            })(Ct.WebView, new it(n3)), bt(e2, null);
+          } catch (t4) {
+            bt(e2, t4.toString());
+          }
+        }, NotifyUnhandledException: (e2, t3) => {
+          mt = true, console.error(`${e2}
+${t3}`), function() {
+            const e3 = document.querySelector("#blazor-error-ui");
+            e3 && (e3.style.display = "block"), Qe || (Qe = true, document.querySelectorAll("#blazor-error-ui .reload").forEach((e4) => {
+              e4.onclick = function(e5) {
+                location.reload(), e5.preventDefault();
+              };
+            }), document.querySelectorAll("#blazor-error-ui .dismiss").forEach((e4) => {
+              e4.onclick = function(e5) {
+                const t4 = document.querySelector("#blazor-error-ui");
+                t4 && (t4.style.display = "none"), e5.preventDefault();
+              };
+            }));
+          }();
+        }, BeginInvokeJS: e.dispatcher.beginInvokeJSFromDotNet.bind(e.dispatcher), EndInvokeDotNet: e.dispatcher.endInvokeDotNetFromJS.bind(e.dispatcher), SendByteArrayToJS: Dt, Navigate: ke.navigateTo, Refresh: ke.refresh, SetHasLocationChangingListeners: (e2) => {
+          ke.setHasLocationChangingListeners(Ct.WebView, e2);
+        }, EndLocationChanging: ke.endLocationChanging };
+        window.external.receiveMessage((e2) => {
+          const n3 = function(e3) {
+            if (mt || !e3 || !e3.startsWith(pt)) return null;
+            const t3 = e3.substring(6), [n4, ...r2] = JSON.parse(t3);
+            return { messageType: n4, args: r2 };
+          }(e2);
+          if (n3) {
+            if (!Object.prototype.hasOwnProperty.call(t2, n3.messageType)) throw new Error(`Unsupported IPC message type '${n3.messageType}'`);
+            t2[n3.messageType].apply(null, n3.args);
+          }
+        });
+      })(), Ze._internal.receiveWebViewDotNetDataStream = kt, ke.enableNavigationInterception(Ct.WebView), ke.listenForNavigationEvents(Ct.WebView, wt, Et), St("AttachPage", ke.getBaseURI(), ke.getLocationHref()), await n2.invokeAfterStartedCallbacks(Ze);
+    }
+    function kt(t2, n2, r2, o2) {
+      !function(e2, t3, n3, r3, o3) {
+        let a2 = qe.get(t3);
+        if (!a2) {
+          const n4 = new ReadableStream({ start(e3) {
+            qe.set(t3, e3), a2 = e3;
+          } });
+          e2.supplyDotNetStream(t3, n4);
+        }
+        o3 ? (a2.error(o3), qe.delete(t3)) : 0 === r3 ? (a2.close(), qe.delete(t3)) : a2.enqueue(n3.length === r3 ? n3 : n3.subarray(0, r3));
+      }(e.dispatcher, t2, n2, r2, o2);
+    }
+    e.dispatcher = void 0, Ze.start = Tt, window.DotNet = t, document && document.currentScript && "false" !== document.currentScript.getAttribute("autostart") && Tt();
+  }({});
+})();
