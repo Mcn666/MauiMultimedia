@@ -119,9 +119,13 @@
                     obs.unobserve(el);
                     const path = el.getAttribute('data-thumb-path');
                     if (!path) continue;
+                    // 数据驱动：快照程序集/方法由查看器元数据提供（data-thumb-asm/-method），
+                    // Shell 不再硬编码扩展名→程序集路由（零侵入）。
+                    const asm = el.getAttribute('data-thumb-asm');
+                    const method = el.getAttribute('data-thumb-method');
+                    if (!asm || !method) { el.removeAttribute('data-thumb-path'); continue; }
                     try {
-                        const uri = await DotNet.invokeMethodAsync(
-                            'MauiMultimedia.Viewers.Image', 'generateSnapshot', path);
+                        const uri = await DotNet.invokeMethodAsync(asm, method, path);
                         if (uri) {
                             // 直接替换 DOM，不走 Blazor 重绘，彻底消除闪烁
                             const label = el.querySelector('.grid-thumb-label');
@@ -129,8 +133,13 @@
                                 + '" class="grid-thumb-img" alt="" loading="lazy" />'
                                 + (label ? label.outerHTML : '');
                             el.removeAttribute('data-thumb-path');
+                        } else {
+                            // 取帧失败（不支持的编码/平台）：移除标记，避免反复重试
+                            el.removeAttribute('data-thumb-path');
                         }
-                    } catch (err) { }
+                    } catch (err) {
+                        el.removeAttribute('data-thumb-path');
+                    }
                 }
             }, { rootMargin: '100px' });
             const scan = () => document.querySelectorAll('[data-thumb-path]')

@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    视频查看器的“原生取帧” companion 程序集：仅包含各平台原生实现
+    （Android/iOS/MacCatalyst/Windows），通过 [ModuleInitializer] 注册到
+    Video RCL 的 VideoSnapshotGenerator.Extractor。
+
+    保持为普通多目标类库（非 Razor、无 wwwroot、无 UseMaui），从而不会把
+    WebView 框架的静态资产（如 blazor.modules.json）带进 Shell，避免与 Shell
+    同名资产冲突——视频查看器整体仍完全自包含，Shell 零侵入。
+
+    注意：不用 UseMaui，故需显式按 TFM 包含 Platforms/* 下的源文件。
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst;net10.0-windows10.0.19041.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 关闭默认 Compile 收集：本项目仅按需按 TFM 显式包含平台源文件，
+         避免把 iOS/Mac 的源误编进 Android，或与默认 glob 重复。 -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RootNamespace>MauiMultimedia.Viewers.Video</RootNamespace>
+    <AssemblyName>MauiMultimedia.Viewers.Video.Native</AssemblyName>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+
+  <!-- 各平台原生取帧源文件，仅在其对应 TFM 下编译 -->
+  <ItemGroup>
+    <Compile Include="Platforms\Android\**\*.cs" Condition="'$(TargetFramework)' == 'net10.0-android'" />
+    <Compile Include="Platforms\iOS\**\*.cs" Condition="'$(TargetFramework)' == 'net10.0-ios'" />
+    <Compile Include="Platforms\MacCatalyst\**\*.cs" Condition="'$(TargetFramework)' == 'net10.0-maccatalyst'" />
+    <Compile Include="Platforms\Windows\**\*.cs" Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'" />
+  </ItemGroup>
+  <ItemGroup>
+    <AndroidJavaSource Remove="Platforms\iOS\**" />
+    <AndroidJavaSource Remove="Platforms\MacCatalyst\**" />
+    <AndroidJavaSource Remove="Platforms\Windows\**" />
+    <AndroidLibrary Remove="Platforms\iOS\**" />
+    <AndroidLibrary Remove="Platforms\MacCatalyst\**" />
+    <AndroidLibrary Remove="Platforms\Windows\**" />
+    <AndroidNativeLibrary Remove="Platforms\iOS\**" />
+    <AndroidNativeLibrary Remove="Platforms\MacCatalyst\**" />
+    <AndroidNativeLibrary Remove="Platforms\Windows\**" />
+    <EmbeddedResource Remove="Platforms\iOS\**" />
+    <EmbeddedResource Remove="Platforms\MacCatalyst\**" />
+    <EmbeddedResource Remove="Platforms\Windows\**" />
+    <JavaSourceJar Remove="Platforms\iOS\**" />
+    <JavaSourceJar Remove="Platforms\MacCatalyst\**" />
+    <JavaSourceJar Remove="Platforms\Windows\**" />
+    <None Remove="Platforms\iOS\**" />
+    <None Remove="Platforms\MacCatalyst\**" />
+    <None Remove="Platforms\Windows\**" />
+    <ProguardConfiguration Remove="Platforms\iOS\**" />
+    <ProguardConfiguration Remove="Platforms\MacCatalyst\**" />
+    <ProguardConfiguration Remove="Platforms\Windows\**" />
+    <TransformFile Remove="Platforms\iOS\**" />
+    <TransformFile Remove="Platforms\MacCatalyst\**" />
+    <TransformFile Remove="Platforms\Windows\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 取帧实现注册到 Video RCL 的 VideoSnapshotGenerator.Extractor -->
+    <ProjectReference Include="..\Video\MauiMultimedia.Viewers.Video.csproj" />
+    <ProjectReference Include="..\..\Core\MauiMultimedia.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Windows 取帧用 IShellItemImageFactory（Shell COM）取系统缩略图，
+       并用 System.Drawing 把 HBITMAP 编码为 JPEG。仅 Windows TFM 引用，
+       不影响 Android/iOS/Mac（那些 TFM 不编译 Windows 源文件）。 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -80,6 +80,7 @@
         <ProjectReference Include="..\Viewers\Model3D\MauiMultimedia.Viewers.Model3D.csproj" />
         <ProjectReference Include="..\Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
         <ProjectReference Include="..\Viewers\Video\MauiMultimedia.Viewers.Video.csproj" />
+        <ProjectReference Include="..\Viewers\Video.Native\MauiMultimedia.Viewers.Video.Native.csproj" />
     </ItemGroup>
 
     <ItemGroup>

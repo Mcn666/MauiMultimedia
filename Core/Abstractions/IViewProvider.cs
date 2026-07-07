@@ -46,4 +46,16 @@ public interface IViewProvider
     /// 文件扫描分类（可选），Shell 用此构建类型筛选面板。返回 null 表示不参与。
     /// </summary>
     FileScanCategory? ScanCategory { get; }
+
+    /// <summary>
+    /// 快照 JSInvokable 所在程序集名（简单名）。Shell 网格据此数据驱动地触发快照，
+    /// 避免硬编码扩展名→程序集路由（保持 Shell 通用、零侵入）。默认空表示不提供快照。
+    /// </summary>
+    string SnapshotAssembly => string.Empty;
+
+    /// <summary>
+    /// 快照 JSInvokable 方法名。默认空。各查看器通常在自己的程序集内以
+    /// "generateSnapshot" 暴露，按程序集名区分彼此。
+    /// </summary>
+    string SnapshotMethod => string.Empty;
 }

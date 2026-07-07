@@ -19,8 +19,18 @@ public class VideoProvider : IViewProvider
     public string? GetItemCssClass(FileSystemItem item) => "is-video-file";
     public string? GetIcon(FileSystemItem item) => "\U0001F3AC";
     public string? GetItemSnapshot(FileSystemItem item) => null;
-    public bool CanProvideSnapshot(FileSystemItem item) => false;
+
+    /// <summary>
+    /// 视频文件可生成首帧缩略图。取帧由各平台原生实现（Viewers/Video/Platforms/*）自包含于本查看器，
+    /// 通过 VideoSnapshotGenerator.Extractor 桥接；快照由本程序集的 generateSnapshot 暴露给 Shell 网格。
+    /// </summary>
+    public bool CanProvideSnapshot(FileSystemItem item) => CanHandle(item);
     public void RequestItemSnapshot(FileSystemItem item) { }
     public event Action? SnapshotsUpdated { add { } remove { } }
     public FileScanCategory? ScanCategory => _scanCategory;
+
+    // 快照 JSInvokable 在本查看器程序集内暴露，标识符 generateVideoSnapshot
+    // 与图片查看器的 generateSnapshot 区分，避免同名 JSInvokable 注册冲突。
+    public string SnapshotAssembly => "MauiMultimedia.Viewers.Video";
+    public string SnapshotMethod => "generateVideoSnapshot";
 }

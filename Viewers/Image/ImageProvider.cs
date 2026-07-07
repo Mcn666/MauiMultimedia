@@ -37,4 +37,8 @@ public class ImageProvider : IViewProvider
     public void RequestItemSnapshot(FileSystemItem item) { }
     public event Action? SnapshotsUpdated { add { } remove { } }
     public FileScanCategory? ScanCategory => _scanCategory;
+
+    // 快照 JSInvokable 在本查看器程序集内暴露，方法名与视频查看器一致（按程序集区分）。
+    public string SnapshotAssembly => "MauiMultimedia.Viewers.Image";
+    public string SnapshotMethod => "generateSnapshot";
 }

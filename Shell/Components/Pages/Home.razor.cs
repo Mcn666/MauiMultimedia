@@ -131,6 +131,18 @@ public partial class Home
         return false;
     }
 
+    /// <summary>
+    /// 解析负责该文件快照的查看器程序集与方法名，供网格数据驱动地触发快照，
+    /// 使 Shell 无需硬编码扩展名→程序集路由（零侵入）。
+    /// </summary>
+    private (string Assembly, string Method) GetSnapshotInvocation(FileSystemItem item)
+    {
+        foreach (var p in ViewProviders)
+            if (p.CanHandle(item) && p.CanProvideSnapshot(item))
+                return (p.SnapshotAssembly, p.SnapshotMethod);
+        return (string.Empty, string.Empty);
+    }
+
     private string GetItemRowClass(FileSystemItem item)
     {
         var cls = item.IsFolder ? "folder" : "file";
