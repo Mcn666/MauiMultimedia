@@ -25,6 +25,7 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     private string filePath = "";
     private string fileName = "";
     private string? _videoUrl;
+    private string? _currentToken;     // 当前视频对应的文件服务令牌，离开时注销
     private string? errorMessage;
     private List<string> fileList = new();
     private int currentIndex = -1;
@@ -93,8 +94,10 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
 
     private string BuildVideoUrl(string path)
     {
-        var encoded = Uri.EscapeDataString(path);
-        return $"{FileServer.BaseUrl}/file?path={encoded}";
+        // 通过文件服务注册令牌，URL 只携带令牌而非裸路径，
+        // WebView 内 JS 无法据此构造其他文件的访问 URL。
+        _currentToken = FileServer.RegisterFile(path);
+        return $"{FileServer.BaseUrl}/file?token={_currentToken}";
     }
 
     // ═══════════ 文件加载 ═══════════
@@ -118,7 +121,23 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
             errorMessage = "文件不存在";
             return;
         }
-        _videoUrl = BuildVideoUrl(filePath);
+
+        // 切换视频前先注销旧令牌，避免令牌堆积
+        if (_currentToken != null)
+        {
+            FileServer.UnregisterFile(_currentToken);
+            _currentToken = null;
+        }
+
+        try
+        {
+            _videoUrl = BuildVideoUrl(filePath);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"无法提供视频文件：{ex.Message}";
+            _videoUrl = null;
+        }
     }
 
     // ═══════════ 导航 ═══════════
@@ -177,6 +196,11 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopVideoAsync();
+        if (_currentToken != null)
+        {
+            FileServer.UnregisterFile(_currentToken);
+            _currentToken = null;
+        }
         if (_jsModule != null)
         {
             try { await _jsModule.DisposeAsync(); }

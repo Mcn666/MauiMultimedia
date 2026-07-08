@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -15,6 +16,10 @@ public sealed class FileServerService : IFileServerService, IDisposable
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private readonly object _lock = new();
+
+    // token → 规范化后的绝对路径。只有宿主（C#）能写入，
+    // WebView 内的 JS 拿不到令牌就无法访问任意文件。
+    private readonly ConcurrentDictionary<string, string> _tokenMap = new();
 
     public int Port { get; private set; }
     public bool IsRunning => Volatile.Read(ref _listener) != null;
@@ -51,6 +56,35 @@ public sealed class FileServerService : IFileServerService, IDisposable
     {
         Stop();
         _cts?.Dispose();
+        _tokenMap.Clear();
+    }
+
+    // ═══════════ 令牌注册（宿主侧 API） ═══════════
+
+    /// <inheritdoc/>
+    public string RegisterFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("文件路径不能为空", nameof(filePath));
+        if (!File.Exists(filePath))
+            throw new ArgumentException($"文件不存在：{filePath}", nameof(filePath));
+
+        // 规范化：解析相对段与 '..'，得到真实绝对路径，防止注册时混入穿越序列。
+        var canonical = Path.GetFullPath(filePath);
+        if (!File.Exists(canonical))
+            throw new ArgumentException($"文件不存在：{filePath}", nameof(filePath));
+
+        var token = Guid.NewGuid().ToString("N");
+        _tokenMap[token] = canonical;
+        Debug.WriteLine($"[FileServer] Registered token for {canonical}");
+        return token;
+    }
+
+    /// <inheritdoc/>
+    public void UnregisterFile(string token)
+    {
+        if (!string.IsNullOrEmpty(token))
+            _tokenMap.TryRemove(token, out _);
     }
 
     // ═══════════ 接受循环 ═══════════
@@ -85,8 +119,8 @@ public sealed class FileServerService : IFileServerService, IDisposable
                 var (method, queryPath, headers) = await ReadHttpRequestAsync(stream, ct);
                 if (string.IsNullOrEmpty(method)) return;
 
-                // 解析查询参数
-                var filePath = ParseQueryParam(queryPath, "path");
+                // 解析访问令牌
+                var token = ParseQueryParam(queryPath, "token");
 
                 // CORS 预检
                 if (method == "OPTIONS")
@@ -95,9 +129,26 @@ public sealed class FileServerService : IFileServerService, IDisposable
                     return;
                 }
 
-                if (method != "GET" || string.IsNullOrEmpty(filePath))
+                if (method != "GET" || string.IsNullOrEmpty(token))
                 {
                     await WriteErrorAsync(stream, 400, "Bad Request", ct);
+                    return;
+                }
+
+                // 只接受已注册的令牌；未知令牌一律拒绝，杜绝通过 ?path= 读取任意文件。
+                if (!_tokenMap.TryGetValue(token, out var registeredPath) ||
+                    string.IsNullOrEmpty(registeredPath))
+                {
+                    await WriteErrorAsync(stream, 403, "Forbidden", ct);
+                    return;
+                }
+
+                // 纵深防御：再次规范化并确认文件仍存在，防止符号链接/挂载点绕过。
+                string filePath;
+                try { filePath = Path.GetFullPath(registeredPath); }
+                catch
+                {
+                    await WriteErrorAsync(stream, 403, "Forbidden", ct);
                     return;
                 }
 

@@ -3,7 +3,7 @@ using MauiMultimedia.Core.Models;
 
 namespace MauiMultimedia.Viewers.Video;
 
-public class VideoProvider : IViewProvider
+public class VideoProvider : IItemPresenter, ISnapshotProvider
 {
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {

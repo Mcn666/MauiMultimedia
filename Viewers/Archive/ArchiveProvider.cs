@@ -3,7 +3,7 @@ using MauiMultimedia.Core.Models;
 
 namespace MauiMultimedia.Viewers.Archive;
 
-public class ArchiveProvider : IViewProvider
+public class ArchiveProvider : IItemPresenter, ISnapshotProvider
 {
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {

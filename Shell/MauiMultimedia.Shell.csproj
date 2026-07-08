@@ -79,8 +79,8 @@
         <ProjectReference Include="..\Viewers\Image\MauiMultimedia.Viewers.Image.csproj" />
         <ProjectReference Include="..\Viewers\Model3D\MauiMultimedia.Viewers.Model3D.csproj" />
         <ProjectReference Include="..\Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
-        <ProjectReference Include="..\Viewers\Video\MauiMultimedia.Viewers.Video.csproj" />
         <ProjectReference Include="..\Viewers\Video.Native\MauiMultimedia.Viewers.Video.Native.csproj" />
+        <ProjectReference Include="..\Viewers\Video\MauiMultimedia.Viewers.Video.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -90,7 +90,7 @@
   <!-- 构建时：收集查看器程序集名称并嵌入为资源 -->
   <Target Name="GenerateViewerEmbed" BeforeTargets="AssignTargetPaths">
         <ItemGroup>
-            <_ViewerRef Include="@(ProjectReference)" Condition="$([System.String]::new('%(FileName)').StartsWith('MauiMultimedia.Viewers.'))" />
+            <_ViewerRef Include="@(ProjectReference)" />
         </ItemGroup>
         <WriteLinesToFile File="$(IntermediateOutputPath)viewer_assemblies.txt" Lines="@(_ViewerRef->'%(FileName)')" Overwrite="true" />
         <ItemGroup>

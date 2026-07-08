@@ -3,7 +3,7 @@ using MauiMultimedia.Core.Models;
 
 namespace MauiMultimedia.Viewers.Model3D;
 
-public class Model3DProvider : IViewProvider
+public class Model3DProvider : IItemPresenter, ISnapshotProvider
 {
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {

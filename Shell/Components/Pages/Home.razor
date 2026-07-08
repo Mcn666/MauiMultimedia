@@ -4,7 +4,8 @@
 @using MauiMultimedia.Shell.Services
 @inject IFileSystemService FileSystemService
 @inject IJSRuntime JS
-@inject IEnumerable<IViewProvider> ViewProviders
+@inject IEnumerable<IItemPresenter> ItemPresenters
+@inject IEnumerable<ISnapshotProvider> SnapshotProviders
 @inject IEnumerable<IFileViewer> FileViewers
 @inject FileBrowserStateService BrowserState
 @inject AliasService Alias

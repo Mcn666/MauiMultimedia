@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <GenerateProgramFile>true</GenerateProgramFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\MauiMultimedia.Core.csproj" />
+    <ProjectReference Include="..\..\Viewers\Image\MauiMultimedia.Viewers.Image.csproj" />
+    <ProjectReference Include="..\..\Viewers\Video\MauiMultimedia.Viewers.Video.csproj" />
+    <ProjectReference Include="..\..\Viewers\Text\MauiMultimedia.Viewers.Text.csproj" />
+    <ProjectReference Include="..\..\Viewers\Html\MauiMultimedia.Viewers.Html.csproj" />
+    <ProjectReference Include="..\..\Viewers\Archive\MauiMultimedia.Viewers.Archive.csproj" />
+    <ProjectReference Include="..\..\Viewers\Model3D\MauiMultimedia.Viewers.Model3D.csproj" />
+  </ItemGroup>
+
+</Project>

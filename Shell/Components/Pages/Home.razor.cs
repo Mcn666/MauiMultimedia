@@ -64,7 +64,7 @@ public partial class Home
     private string GetItemIcon(FileSystemItem item)
     {
         if (item.IsFolder) return "\U0001F4C1";
-        foreach (var p in ViewProviders)
+        foreach (var p in ItemPresenters)
             if (p.CanHandle(item)) { var i = p.GetIcon(item); if (i != null) return i; }
         return "\U0001F4C4";
     }
@@ -119,14 +119,14 @@ public partial class Home
 
     private string? GetItemSnapshot(FileSystemItem item)
     {
-        foreach (var p in ViewProviders)
+        foreach (var p in SnapshotProviders)
             if (p.CanHandle(item)) return p.GetItemSnapshot(item);
         return null;
     }
 
     private bool CanProvideSnapshot(FileSystemItem item)
     {
-        foreach (var p in ViewProviders)
+        foreach (var p in SnapshotProviders)
             if (p.CanHandle(item) && p.CanProvideSnapshot(item)) return true;
         return false;
     }
@@ -137,7 +137,7 @@ public partial class Home
     /// </summary>
     private (string Assembly, string Method) GetSnapshotInvocation(FileSystemItem item)
     {
-        foreach (var p in ViewProviders)
+        foreach (var p in SnapshotProviders)
             if (p.CanHandle(item) && p.CanProvideSnapshot(item))
                 return (p.SnapshotAssembly, p.SnapshotMethod);
         return (string.Empty, string.Empty);
@@ -146,7 +146,7 @@ public partial class Home
     private string GetItemRowClass(FileSystemItem item)
     {
         var cls = item.IsFolder ? "folder" : "file";
-        foreach (var p in ViewProviders)
+        foreach (var p in ItemPresenters)
             if (p.CanHandle(item)) { var e = p.GetItemCssClass(item); if (e != null) cls += " " + e; }
         if (_activeFilePath != null && string.Equals(item.FullPath, _activeFilePath, StringComparison.OrdinalIgnoreCase))
             cls += " active-file";
@@ -190,7 +190,7 @@ public partial class Home
         }
 
         // 聚合各支持库的文件扫描分类（不合并相同标签）
-        scanCategories = ViewProviders
+        scanCategories = ItemPresenters
             .Select(p => p.ScanCategory)
             .Where(c => c != null)
             .Select(c => c!)
