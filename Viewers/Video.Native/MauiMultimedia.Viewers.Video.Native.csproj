@@ -64,7 +64,6 @@
   <ItemGroup>
     <!-- 取帧实现注册到 Video RCL 的 VideoSnapshotGenerator.Extractor -->
     <ProjectReference Include="..\Video\MauiMultimedia.Viewers.Video.csproj" />
-    <ProjectReference Include="..\..\Core\MauiMultimedia.Core.csproj" />
   </ItemGroup>
 
   <!-- Windows 取帧用 IShellItemImageFactory（Shell COM）取系统缩略图，

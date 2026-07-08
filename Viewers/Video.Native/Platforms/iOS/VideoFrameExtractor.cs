@@ -6,7 +6,7 @@ using CoreGraphics;
 using CoreMedia;
 using Foundation;
 using UIKit;
-using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Viewers.Video;
 
 namespace MauiMultimedia.Viewers.Video.Platforms.iOS;
 

@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace MauiMultimedia.Core.Abstractions;
+namespace MauiMultimedia.Viewers.Video;
 
 /// <summary>
 /// 视频首帧取帧能力。由各平台原生实现（Viewers/Video.Native/Platforms/*），
@@ -8,6 +8,7 @@ namespace MauiMultimedia.Core.Abstractions;
 /// 设置到被 JSInvokable 实际使用的 Video 程序集实例上。
 /// 这样避免跨程序集用 [ModuleInitializer] 设置静态字段时注册到错误程序集
 /// 实例的问题，且 Shell 对此完全无感知（零侵入）。
+/// 该接口随 Video 查看器自包含，不属于 Core 抽象层。
 /// </summary>
 public interface IVideoFrameExtractor
 {

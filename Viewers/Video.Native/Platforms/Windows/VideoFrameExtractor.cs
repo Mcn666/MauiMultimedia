@@ -5,7 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Viewers.Video;
 
 namespace MauiMultimedia.Viewers.Video.Platforms.Windows;
 

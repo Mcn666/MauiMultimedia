@@ -3,7 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Android.Graphics;
 using Android.Media;
-using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Viewers.Video;
 
 namespace MauiMultimedia.Viewers.Video.Platforms.Android;
 
