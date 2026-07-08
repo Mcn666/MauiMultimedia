@@ -8,11 +8,6 @@ namespace MauiMultimedia.Core.Abstractions;
 public interface IFileSystemService
 {
     /// <summary>
-    /// 列出指定路径下的所有文件和文件夹
-    /// </summary>
-    Task<List<FileSystemItem>> ListItemsAsync(string path);
-
-    /// <summary>
     /// 仅列出目录（快速，数量少时 <50ms）
     /// </summary>
     Task<List<FileSystemItem>> ListDirItemsAsync(string path);

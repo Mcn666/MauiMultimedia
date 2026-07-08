@@ -39,13 +39,15 @@ public partial class Home
     // 多级父目录滚动位置栈：进入子文件夹时入栈，返回时出栈恢复
     private readonly Stack<double> _parentScrollStack = new();
     private bool _skipRender;
+    // 导航重入锁：防止快速连点导致多个 LoadItemsAsync 并发改写共享 items 列表（状态撕裂）。
+    private readonly SemaphoreSlim _navLock = new(1, 1);
 
     private enum WindowsQuickAccess
     {
         Desktop, Downloads, Documents, Pictures, Music, Videos
     }
 
-    private async void NavigateToQuickAccess(WindowsQuickAccess qa)
+    private async Task NavigateToQuickAccess(WindowsQuickAccess qa)
     {
         var folder = qa switch
         {
@@ -58,7 +60,7 @@ public partial class Home
             _ => Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
         };
         currentPath = folder;
-        _ = LoadItemsAsync();
+        await LoadItemsAsync();
     }
 
     private string GetItemIcon(FileSystemItem item)
@@ -375,6 +377,9 @@ public partial class Home
 
     private async Task LoadItemsAsync()
     {
+        await _navLock.WaitAsync();
+        try
+        {
         isLoading = true;
         errorMessage = null;
         isRoot = FileSystemService.IsRootPath(currentPath);
@@ -424,6 +429,11 @@ public partial class Home
                 StateHasChanged();
             });
         }
+        }
+        finally
+        {
+            _navLock.Release();
+        }
     }
 
     private async Task LoadChildCountsAsync(List<FileSystemItem> folderItems)
@@ -455,13 +465,13 @@ public partial class Home
         await Task.WhenAll(tasks);
     }
 
-    private async void OnItemClick(FileSystemItem item)
+    private async Task OnItemClick(FileSystemItem item)
     {
         if (item.IsFolder)
         {
             await SaveParentState();
             currentPath = item.FullPath;
-            _ = LoadItemsAsync();
+            await LoadItemsAsync();
             return;
         }
 
@@ -469,7 +479,7 @@ public partial class Home
 
         if (viewers.Count == 1)
         {
-            _ = NavigateToViewer(viewers[0], item);
+            await NavigateToViewer(viewers[0], item);
         }
         else if (viewers.Count > 1)
         {

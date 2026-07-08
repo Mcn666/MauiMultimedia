@@ -13,6 +13,7 @@ public partial class ImagePage : ComponentBase
     [Inject] private IFileNavigationState NavState { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
+    [Inject] private IFileServerService FileServer { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -74,6 +75,10 @@ public partial class ImagePage : ComponentBase
     private bool isTouchPan;
 
     private IJSObjectReference? _jsModule;
+
+    // 解码失败回退时通过文件服务令牌暴露图片（避免 Android WebView 无法加载 file://），
+    // 切换图片或离开页面时注销，防止令牌堆积。
+    private string? _imageToken;
 
     private bool hasPrev => currentIndex > 0;
     private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
@@ -175,9 +180,10 @@ public partial class ImagePage : ComponentBase
         // ≥2 张即可拼接（不同宽度的各自按原生比例显示）
         canStitch = true;
 
-        // 通知 UI 拼接按钮已就绪
-        if (canStitch)
-            StateHasChanged();
+        // 通知 UI 拼接按钮已就绪。
+        // 必须在 UI 调度器上刷新：上面 Task.Yield() 之后代码跑在线程池线程，
+        // 直接 StateHasChanged() 会抛 InvalidOperationException（未关联 Dispatcher）。
+        await InvokeAsync(StateHasChanged);
     }
 
     private void ToggleDetails() => showDetails = !showDetails;
@@ -342,6 +348,12 @@ public partial class ImagePage : ComponentBase
         isLoading = true;
         errorMessage = null;
         imageSource = null;
+        // 回收上一张图片可能注册的回退令牌（若存在）
+        if (_imageToken != null)
+        {
+            try { FileServer.UnregisterFile(_imageToken); } catch { }
+            _imageToken = null;
+        }
         imageWidth = 0;
         imageHeight = 0;
         fileSizeDisplay = "";
@@ -395,9 +407,12 @@ public partial class ImagePage : ComponentBase
                 catch
                 {
                     Debug.WriteLine($"[Load] DecodeImage fallback for: {fileName}");
-                    imageSource = new Uri(filePath).AbsoluteUri;
                     try
                     {
+                        // 解码失败回退：通过本地文件服务令牌暴露图片，使 Android WebView 也能加载
+                        // （直接 file:// 在 Android WebView 中无法访问任意路径，会显示空白）。
+                        _imageToken = FileServer.RegisterFile(filePath);
+                        imageSource = $"{FileServer.BaseUrl}/file?token={_imageToken}";
                         var bytes = await File.ReadAllBytesAsync(filePath);
                         var dims = ImageProcessingService.GetImageDimensions(bytes);
                         imageWidth = dims.width;
@@ -405,7 +420,10 @@ public partial class ImagePage : ComponentBase
                     }
                     catch
                     {
-                        Debug.WriteLine($"[Load] Fallback get dimensions failed: {fileName}");
+                        _imageToken = null;
+                        imageSource = null;
+                        errorMessage = $"无法解码该图片：{fileName}";
+                        Debug.WriteLine($"[Load] Fallback failed for: {fileName}");
                     }
                 }
             });
@@ -753,6 +771,11 @@ public partial class ImagePage : ComponentBase
     private void GoBack()
     {
         stitchMode = false; stitchImages = null;
+        if (_imageToken != null)
+        {
+            try { FileServer.UnregisterFile(_imageToken); } catch { }
+            _imageToken = null;
+        }
         _ = MauiNav.GoBackAsync();
     }
 

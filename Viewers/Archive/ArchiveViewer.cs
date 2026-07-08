@@ -9,7 +9,7 @@ public class ArchiveViewer : IFileViewer
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".zip", ".tar", ".gz", ".tgz",
-        ".rar", ".7z", ".zst", ".xz", ".bz2"
+        ".rar", ".7z", ".bz2"
     };
 
     public string DisplayName => "压缩文件查看器";

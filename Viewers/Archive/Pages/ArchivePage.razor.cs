@@ -28,10 +28,12 @@ public partial class ArchivePage : ComponentBase, IDisposable
       ".py", ".java", ".cpp", ".c", ".h", ".sql", ".sh", ".bat", ".ps1",
       ".ini", ".cfg", ".conf", ".csproj", ".sln", ".slnx" };
     private static readonly HashSet<string> Arc = new(StringComparer.OrdinalIgnoreCase)
-    { ".zip", ".tar", ".gz", ".tgz", ".rar", ".7z", ".zst", ".xz", ".bz2" };
+    { ".zip", ".tar", ".gz", ".tgz", ".rar", ".7z", ".bz2" };
 
     private string filePath = "", fileName = "";
-    private static string? archivePassword;
+    // 改为实例字段：static 会导致跨实例共享密码（打开档案 A 的密码被复用到加密档案 B），
+    // 且密码常驻进程内存可被转储提取。导航返回/Dispose 时清空。
+    private string? archivePassword;
     private bool isLoading = true;
     private string? errorMessage;
     private string? toast;
@@ -266,7 +268,7 @@ public partial class ArchivePage : ComponentBase, IDisposable
 
                 // 直接读取文件数据
                 var archiveStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                ExtractEntry(archiveStream, n.Full, outPath);
+                ExtractEntry(archiveStream, n.Full, outPath, archivePassword);
                 // outPath 是刚提取出来的文件（在 AppData 中，未被锁定）
                 using var innerStream = new FileStream(outPath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var inner = ReadArchiveEntries(innerStream);
@@ -288,7 +290,7 @@ public partial class ArchivePage : ComponentBase, IDisposable
     }
 
     /// <summary>读取压缩文件的条目列表</summary>
-    private static List<Entry> ReadArchiveEntries(Stream stream) => Scan(stream, archivePassword);
+    private List<Entry> ReadArchiveEntries(Stream stream) => Scan(stream, archivePassword);
 
     private async Task Open(TreeItem n)
     {
@@ -317,7 +319,7 @@ public partial class ArchivePage : ComponentBase, IDisposable
             var dir = Path.GetDirectoryName(outPath);
             if (dir != null) Directory.CreateDirectory(dir);
             using (var fs = new MemoryStream(srcBytes))
-                ExtractEntry(fs, n.Full, outPath);
+                ExtractEntry(fs, n.Full, outPath, archivePassword);
 
             // 构建同级文件路径列表（仅路径，不提取，加快响应）
             List<string> fileList;
@@ -361,14 +363,14 @@ public partial class ArchivePage : ComponentBase, IDisposable
         }
     }
 
-    /// <summary>从指定档案中提取一个条目到目标路径</summary>
-    private static void ExtractEntry(Stream archiveStream, string entryName, string outPath)
+    /// <summary>从指定档案中提取一个条目到目标路径（调用方负责确保目录已创建）</summary>
+    private static void ExtractEntry(Stream archiveStream, string entryName, string outPath, string? password)
     {
         EnsureEncoding();
         var encoding = Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
         var opts = new ReaderOptions
         {
-            Password = archivePassword,
+            Password = password,
             ArchiveEncoding = new SharpCompress.Common.ArchiveEncoding { Default = encoding }
         };
         using var archive = ArchiveFactory.OpenArchive(archiveStream, opts);
@@ -377,8 +379,38 @@ public partial class ArchivePage : ComponentBase, IDisposable
             if (entry.IsDirectory) continue;
             if ((entry.Key ?? "") == entryName)
             {
+                var dir = Path.GetDirectoryName(outPath);
+                if (dir != null) Directory.CreateDirectory(dir);
                 entry.WriteToFile(outPath, new ExtractionOptions { Overwrite = true });
                 return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 单次打开档案并遍历，提取所有命中的条目（O(n) 单次遍历）。
+    /// 取代原先「每个条目重开整个档案」的做法，消除含大量条目归档的 O(n²) I/O 与卡顿。
+    /// </summary>
+    private static void ExtractEntries(Stream archiveStream, IEnumerable<(string entryName, string outPath)> wanted, string? password)
+    {
+        EnsureEncoding();
+        var encoding = Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        var opts = new ReaderOptions
+        {
+            Password = password,
+            ArchiveEncoding = new SharpCompress.Common.ArchiveEncoding { Default = encoding }
+        };
+        var wantDict = wanted.ToDictionary(x => x.entryName, x => x.outPath, StringComparer.OrdinalIgnoreCase);
+        using var archive = ArchiveFactory.OpenArchive(archiveStream, opts);
+        foreach (var entry in archive.Entries)
+        {
+            if (entry.IsDirectory) continue;
+            var key = entry.Key ?? "";
+            if (wantDict.TryGetValue(key, out var outPath))
+            {
+                var dir = Path.GetDirectoryName(outPath);
+                if (dir != null) Directory.CreateDirectory(dir);
+                entry.WriteToFile(outPath, new ExtractionOptions { Overwrite = true });
             }
         }
     }
@@ -390,23 +422,18 @@ public partial class ArchivePage : ComponentBase, IDisposable
         return idx > 0 ? full[..idx] : "";
     }
 
-    /// <summary>后台提取同级文件，不阻塞导航到查看器</summary>
+    /// <summary>后台提取同级文件，不阻塞导航到查看器（仅打开档案一次）</summary>
     private async Task ExtractBackgroundAsync(byte[] srcBytes, string tmp, List<Entry> entries)
     {
         await Task.Yield();
-        foreach (var e in entries)
+        try
         {
-            try
-            {
-                var p = Path.Combine(tmp, e.Full);
-                if (File.Exists(p)) continue;
-                var d = Path.GetDirectoryName(p);
-                if (d != null) Directory.CreateDirectory(d);
-                using var s = new MemoryStream(srcBytes);
-                ExtractEntry(s, e.Full, p);
-            }
-            catch { }
+            // 一次性提取所有同级条目：仅打开档案一次并单次遍历写入，避免 O(n²) 重复开档。
+            var wanted = entries.Select(e => (e.Full, Path.Combine(tmp, e.Full)));
+            using var s = new MemoryStream(srcBytes);
+            ExtractEntries(s, wanted, archivePassword);
         }
+        catch { }
     }
 
     private void CancelPassword()
@@ -429,9 +456,11 @@ public partial class ArchivePage : ComponentBase, IDisposable
     {
         try
         {
-            var cacheDir = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive");
-            if (Directory.Exists(cacheDir))
-                Directory.Delete(cacheDir, true);
+            // 仅删除当前档案对应的子目录，避免误删其他（嵌套/多）归档已提取的文件。
+            var archiveSubDir = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
+                Path.GetFileNameWithoutExtension(fileName));
+            if (Directory.Exists(archiveSubDir))
+                Directory.Delete(archiveSubDir, true);
         }
         catch { }
         _ = MauiNav.GoBackAsync();
@@ -444,7 +473,11 @@ public partial class ArchivePage : ComponentBase, IDisposable
                msg.Contains("encrypted", StringComparison.OrdinalIgnoreCase);
     }
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+        // 离开页面时清空密码，避免实例残留于内存且被后续实例复用。
+        archivePassword = null;
+    }
 
     private static string Sz(long b) { double d = b; if (d < 1024) return $"{d:F0} B"; d /= 1024; if (d < 1024) return $"{d:F1} KB"; return $"{d / 1024:F1} MB"; }
     private static string Dt(DateTime d) => d == DateTime.MinValue ? "" : d.ToString("yyyy/MM/dd HH:mm");

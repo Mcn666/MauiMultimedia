@@ -23,43 +23,6 @@ public class FileSystemService : IFileSystemService
 #endif
         return _userRoot;
     }
-    public async Task<List<FileSystemItem>> ListItemsAsync(string path)
-    {
-        return await Task.Run(() =>
-        {
-            var items = new List<FileSystemItem>();
-
-            try
-            {
-                // 枚举并排序目录
-                var dirs = Directory.EnumerateDirectories(path)
-                    .Select(dir => SafeCreateItem(dir, isFolder: true))
-                    .Where(item => item != null)
-                    .OrderBy(item => item!.Name)
-                    .Cast<FileSystemItem>()
-                    .ToList();
-
-                items.AddRange(dirs);
-
-                // 枚举并排序文件
-                var files = Directory.EnumerateFiles(path)
-                    .Select(file => SafeCreateItem(file, isFolder: false))
-                    .Where(item => item != null)
-                    .OrderBy(item => item!.Name)
-                    .Cast<FileSystemItem>()
-                    .ToList();
-
-                items.AddRange(files);
-            }
-            catch (UnauthorizedAccessException) { }
-            catch (DirectoryNotFoundException) { }
-            catch (PathTooLongException) { }
-            catch (IOException) { }
-
-            return items;
-        }).ConfigureAwait(false);
-    }
-
     public Task<List<FileSystemItem>> ListDirItemsAsync(string path)
     {
         return Task.Run(() =>
