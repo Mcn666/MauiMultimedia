@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <!-- 视频查看器通过本地 HTTP 文件服务（http://127.0.0.1:{port}）向 WebView 流式提供视频。
+       Android 9 (API 28) 起默认禁止明文(HTTP)流量，需在此显式放行，否则 WebView 无法连接本地服务，
+       视频在 Android 上始终无法加载。仅对本机回环地址放行，不影响对外 HTTPS 通信。 -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">127.0.0.1</domain>
+    <domain includeSubdomains="false">localhost</domain>
+    <domain includeSubdomains="false">[::1]</domain>
+  </domain-config>
+</network-security-config>
