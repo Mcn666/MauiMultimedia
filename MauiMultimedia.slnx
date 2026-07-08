@@ -11,4 +11,5 @@
   <Project Path="Viewers/Video.Native/MauiMultimedia.Viewers.Video.Native.csproj" />
   <Project Path="Viewers/Video/MauiMultimedia.Viewers.Video.csproj" />
   <Project Path="Viewers\Archive\MauiMultimedia.Viewers.Archive.csproj" />
+  <Project Path="Tests\MauiMultimedia.Tests\MauiMultimedia.Tests.csproj" />
 </Solution>

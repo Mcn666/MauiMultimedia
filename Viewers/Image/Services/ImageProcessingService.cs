@@ -1,4 +1,5 @@
 using SkiaSharp;
+using System.Diagnostics;
 
 namespace MauiMultimedia.Viewers.Image.Services;
 
@@ -115,44 +116,79 @@ public static class ImageProcessingService
     /// </summary>
     public static string GenerateThumbnail(string filePath, int maxSize = 180)
     {
+        // 中间解码上限（最长边）：先缩到此处再释放全尺寸位图，避免超大图一次性占满内存
+        const int safeCap = 1024;
+        // 超过该像素数的图跳过缩略图生成，防止极端大图 OOM 拖垮整个 app
+        const long maxMegapixels = 100_000_000L;
+
         using var codec = SKCodec.Create(filePath);
         if (codec == null) return "";
         var origin = codec.EncodedOrigin;
 
         int origW = codec.Info.Width;
         int origH = codec.Info.Height;
+        if ((long)origW * origH > maxMegapixels) return "";
 
-        // 计算目标缩略尺寸
-        float scale = Math.Min(maxSize / (float)origW, maxSize / (float)origH);
-        scale = Math.Min(scale, 1f); // 不放大
+        try
+        {
+            // 计算目标缩略尺寸
+            float scale = Math.Min(maxSize / (float)origW, maxSize / (float)origH);
+            scale = Math.Min(scale, 1f); // 不放大
 
-        // 让 codec 给出它原生支持的最佳缩放尺寸
-        var scaled = codec.GetScaledDimensions(scale);
-        int decodeW = Math.Max(1, scaled.Width);
-        int decodeH = Math.Max(1, scaled.Height);
+            // 让 codec 给出它原生支持的最佳缩放尺寸
+            var scaled = codec.GetScaledDimensions(scale);
+            int decodeW = Math.Max(1, scaled.Width);
+            int decodeH = Math.Max(1, scaled.Height);
 
-        // 按缩放尺寸分配缓冲区，一次性解码到目标大小
-        var info = new SKImageInfo(decodeW, decodeH, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        using var bitmap = new SKBitmap(info);
-        var result = codec.GetPixels(info, bitmap.GetPixels());
+            // 解码上限保护：若解码尺寸仍过大（如 PNG 不支持原生下采样、返回原尺寸），
+            // 收紧到 safeCap 以内，后续靠 Downscale 立即释放全尺寸位图。
+            if (decodeW > safeCap || decodeH > safeCap)
+            {
+                float capScale = Math.Min(safeCap / (float)origW, safeCap / (float)origH);
+                capScale = Math.Min(capScale, 1f);
+                var capScaled = codec.GetScaledDimensions(capScale);
+                decodeW = Math.Max(1, capScaled.Width);
+                decodeH = Math.Max(1, capScaled.Height);
+            }
 
-        // GetPixels 可能返回 Success 或 IncompleteInput（对完整文件都是 Success）
-        if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+            // 按缩放尺寸分配缓冲区，一次性解码到目标大小
+            var info = new SKImageInfo(decodeW, decodeH, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+            using var bitmap = new SKBitmap(info);
+            var result = codec.GetPixels(info, bitmap.GetPixels());
+
+            // GetPixels 可能返回 Success 或 IncompleteInput（对完整文件都是 Success）
+            if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+                return "";
+
+            // EXIF 方向校正：TopLeft 无需旋转，直接复用 bitmap，避免多分配一张全尺寸位图
+            using var oriented = (origin == SKEncodedOrigin.TopLeft)
+                ? null
+                : ApplyOrientation(bitmap, origin);
+            var source = oriented ?? bitmap;
+
+            // 关键：先缩到 safeCap 以内并立即释放全尺寸位图，
+            // 避免 bitmap + oriented + final 等多张全尺寸位图同时驻留造成尖峰。
+            using var capped = (source.Width > safeCap || source.Height > safeCap)
+                ? Downscale(source, safeCap)
+                : source.Copy();
+
+            // 若仍需更小，再缩到最终目标
+            using var final = (capped.Width > maxSize || capped.Height > maxSize)
+                ? Downscale(capped, maxSize)
+                : capped.Copy();
+
+            // 用较高品质编码，避免缩略图压缩伪影
+            using var image = SKImage.FromBitmap(final);
+            using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+            var base64 = Convert.ToBase64String(encoded.ToArray());
+            return $"data:image/jpeg;base64,{base64}";
+        }
+        catch (Exception ex)
+        {
+            // 解码失败（含极端大图导致的 OOM）不崩溃，仅跳过该缩略图
+            Debug.WriteLine($"[ImageProc] 缩略图生成失败: {ex.GetType().Name}: {ex.Message}");
             return "";
-
-        // EXIF 方向校正
-        using var oriented = ApplyOrientation(bitmap, origin);
-
-        // 如果 codec 缩放后仍略大于目标，再缩一次
-        using var final = (oriented.Width > maxSize || oriented.Height > maxSize)
-            ? Downscale(oriented, maxSize)
-            : oriented.Copy();
-
-        // 用较高品质编码，避免缩略图压缩伪影
-        using var image = SKImage.FromBitmap(final);
-        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 85);
-        var base64 = Convert.ToBase64String(encoded.ToArray());
-        return $"data:image/jpeg;base64,{base64}";
+        }
     }
 
     /// <summary>
@@ -234,6 +270,11 @@ public static class ImageProcessingService
     /// </summary>
     public static string GenerateThumbnail(byte[] fileData, int maxSize = 180)
     {
+        // 中间解码上限（最长边）：先缩到此处再释放全尺寸位图，避免超大图一次性占满内存
+        const int safeCap = 1024;
+        // 超过该像素数的图跳过缩略图生成，防止极端大图 OOM 拖垮整个 app
+        const long maxMegapixels = 100_000_000L;
+
         using var stream = new MemoryStream(fileData);
         using var codec = SKCodec.Create(stream);
         if (codec == null) return "";
@@ -241,30 +282,62 @@ public static class ImageProcessingService
 
         int origW = codec.Info.Width;
         int origH = codec.Info.Height;
+        if ((long)origW * origH > maxMegapixels) return "";
 
-        float scale = Math.Min(maxSize / (float)origW, maxSize / (float)origH);
-        scale = Math.Min(scale, 1f);
+        try
+        {
+            float scale = Math.Min(maxSize / (float)origW, maxSize / (float)origH);
+            scale = Math.Min(scale, 1f);
 
-        var scaled = codec.GetScaledDimensions(scale);
-        int decodeW = Math.Max(1, scaled.Width);
-        int decodeH = Math.Max(1, scaled.Height);
+            var scaled = codec.GetScaledDimensions(scale);
+            int decodeW = Math.Max(1, scaled.Width);
+            int decodeH = Math.Max(1, scaled.Height);
 
-        var info = new SKImageInfo(decodeW, decodeH, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        using var bitmap = new SKBitmap(info);
-        var result = codec.GetPixels(info, bitmap.GetPixels());
+            // 解码上限保护：若解码尺寸仍过大（如 PNG 不支持原生下采样、返回原尺寸），
+            // 收紧到 safeCap 以内，后续靠 Downscale 立即释放全尺寸位图。
+            if (decodeW > safeCap || decodeH > safeCap)
+            {
+                float capScale = Math.Min(safeCap / (float)origW, safeCap / (float)origH);
+                capScale = Math.Min(capScale, 1f);
+                var capScaled = codec.GetScaledDimensions(capScale);
+                decodeW = Math.Max(1, capScaled.Width);
+                decodeH = Math.Max(1, capScaled.Height);
+            }
 
-        if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+            var info = new SKImageInfo(decodeW, decodeH, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+            using var bitmap = new SKBitmap(info);
+            var result = codec.GetPixels(info, bitmap.GetPixels());
+
+            if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+                return "";
+
+            // EXIF 方向校正：TopLeft 无需旋转，直接复用 bitmap，避免多分配一张全尺寸位图
+            using var oriented = (origin == SKEncodedOrigin.TopLeft)
+                ? null
+                : ApplyOrientation(bitmap, origin);
+            var source = oriented ?? bitmap;
+
+            // 关键：先缩到 safeCap 以内并立即释放全尺寸位图，
+            // 避免 bitmap + oriented + final 等多张全尺寸位图同时驻留造成尖峰。
+            using var capped = (source.Width > safeCap || source.Height > safeCap)
+                ? Downscale(source, safeCap)
+                : source.Copy();
+
+            using var final = (capped.Width > maxSize || capped.Height > maxSize)
+                ? Downscale(capped, maxSize)
+                : capped.Copy();
+
+            using var image = SKImage.FromBitmap(final);
+            using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+            var base64 = Convert.ToBase64String(encoded.ToArray());
+            return $"data:image/jpeg;base64,{base64}";
+        }
+        catch (Exception ex)
+        {
+            // 解码失败（含极端大图导致的 OOM）不崩溃，仅跳过该缩略图
+            Debug.WriteLine($"[ImageProc] 缩略图生成失败: {ex.GetType().Name}: {ex.Message}");
             return "";
-
-        using var oriented = ApplyOrientation(bitmap, origin);
-        using var final = (oriented.Width > maxSize || oriented.Height > maxSize)
-            ? Downscale(oriented, maxSize)
-            : oriented.Copy();
-
-        using var image = SKImage.FromBitmap(final);
-        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 85);
-        var base64 = Convert.ToBase64String(encoded.ToArray());
-        return $"data:image/jpeg;base64,{base64}";
+        }
     }
 
     // ── 内部方法 ──────────────────────────────────────────

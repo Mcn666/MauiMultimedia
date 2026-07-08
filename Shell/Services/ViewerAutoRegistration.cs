@@ -7,10 +7,12 @@ namespace MauiMultimedia.Shell.Services;
 /// <summary>
 /// 自动扫描并注册所有 IFileViewer、IItemPresenter 与 ISnapshotProvider 实现。
 /// 构建时由 Shell.csproj 的 GenerateViewerEmbed 目标把所有 ProjectReference 写入
-/// viewer_assemblies.txt 并嵌入为资源；运行时强制加载其中列出的程序集，再扫描全部已加载
-/// 程序集以发现接口实现。
+/// viewer_assemblies.txt 并嵌入为资源；运行时强制加载其中列出的程序集，再扫描这些程序集
+/// （外加宿主自身 Shell）以发现接口实现。
 /// 不依赖任何命名空间约定——新增/移除查看器库只需在 .csproj 增删对应的 ProjectReference，
 /// 无需任何手工注册代码，也不会因重命名命名空间而静默失效。
+/// 只扫描“确定包含查看器”的程序集，避免对框架/MAUI 等数百个程序集物化反射元数据
+/// （既拖慢启动，又徒增常驻内存）。
 /// </summary>
 public static class ViewerAutoRegistration
 {
@@ -20,9 +22,13 @@ public static class ViewerAutoRegistration
         var presenterType = typeof(IItemPresenter);
         var snapshotType = typeof(ISnapshotProvider);
 
-        // 从嵌入资源读取程序集名称并强制加载（保证查看器进入 AppDomain，供下方扫描发现）。
-        // 清单由 Shell.csproj 自动从所有 ProjectReference 生成，因此“增删 ProjectReference = 增删登记”。
+        // 要扫描的程序集集合：先加入宿主 Shell 自身，再强制加载清单列出的查看器程序集。
+        // 清单由 csproj 自动从所有 ProjectReference 生成，已精确覆盖全部查看器，
+        // 因此无需遍历整个 AppDomain（那样会对数百个框架程序集物化反射元数据）。
+        var assembliesToScan = new HashSet<Assembly>();
         var shellAsm = typeof(ViewerAutoRegistration).Assembly;
+        assembliesToScan.Add(shellAsm);
+
         try
         {
             using var stream = shellAsm.GetManifestResourceStream("viewer_assemblies.txt");
@@ -33,21 +39,23 @@ public static class ViewerAutoRegistration
                 while ((line = reader.ReadLine()) != null)
                 {
                     var name = line.Trim();
-                    if (name.Length > 0)
+                    if (name.Length == 0) continue;
+                    try
                     {
-                        try { Assembly.Load(new AssemblyName(name)); } catch { }
+                        // 强制加载清单程序集，保证其进入 AppDomain 并被下方扫描发现。
+                        var asm = Assembly.Load(new AssemblyName(name));
+                        assembliesToScan.Add(asm);
                     }
+                    catch { }
                 }
             }
         }
         catch { }
 
-        // 扫描所有已加载程序集，发现实现了查看器接口的具体类型（不依赖命名空间前缀）
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        // 仅扫描已确定的程序集集合（宿主 + 清单查看器），不碰框架程序集。
+        foreach (var asm in assembliesToScan)
         {
             if (asm.IsDynamic) continue;
-            var n = asm.GetName().Name;
-            if (n == null) continue;
 
             Type[] types;
             try { types = asm.GetTypes(); }
