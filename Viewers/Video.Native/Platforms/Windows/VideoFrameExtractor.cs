@@ -56,9 +56,9 @@ public class VideoFrameExtractor : IVideoFrameExtractor
 
                     try
                     {
-                        using var bmp = Image.FromHbitmap(hBitmap);
+                        using var bmp = System.Drawing.Image.FromHbitmap(hBitmap);
                         using var ms = new MemoryStream();
-                        bmp.Save(ms, ImageFormat.Jpeg);
+                        bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
                         var bytes = ms.ToArray();
                         Debug.WriteLine($"[VideoSnap:Win] 取帧成功 {bytes.Length} 字节 path={nativePath}");
                         return bytes;

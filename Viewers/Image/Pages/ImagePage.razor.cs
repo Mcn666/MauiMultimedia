@@ -73,6 +73,8 @@ public partial class ImagePage : ComponentBase
     // 触摸状态（部分在新方法区声明以匹配类型变化）
     private bool isTouchPan;
 
+    private IJSObjectReference? _jsModule;
+
     private bool hasPrev => currentIndex > 0;
     private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
 
@@ -88,10 +90,17 @@ public partial class ImagePage : ComponentBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !stitchMode)
+        if (firstRender)
         {
-            await JS.InvokeVoidAsync("eval",
-                "document.querySelector('.image-viewport')?.focus()");
+            try
+            {
+                var asm = typeof(ImagePage).Assembly.GetName().Name!;
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>("import",
+                    $"./_content/{asm}/Pages/ImagePage.razor.js");
+                if (!stitchMode)
+                    await _jsModule.InvokeVoidAsync("focusViewport");
+            }
+            catch { }
         }
         if (!isLoading && imageWidth > 0 && !stitchMode)
         {
@@ -186,9 +195,8 @@ public partial class ImagePage : ComponentBase
         {
             var urls = stitchImages.Select(si => si.BlobUrl)
                 .Where(u => !string.IsNullOrEmpty(u)).ToArray();
-            if (urls.Length > 0)
-                await JS.InvokeVoidAsync("eval",
-                    urls.Select(u => $"URL.revokeObjectURL('{u}')").Aggregate((a, b) => a + ";" + b));
+            if (urls.Length > 0 && _jsModule != null)
+                await _jsModule.InvokeVoidAsync("revokeBlobUrls", urls);
         }
     }
 
@@ -257,14 +265,8 @@ public partial class ImagePage : ComponentBase
                 _ = LoadRemainingStitchBatchesAsync(12, cts.Token);
 
             await Task.Delay(50);
-            await JS.InvokeVoidAsync("eval", $@"
-                var c = document.querySelector('.v-stitch-container');
-                if (c) {{
-                    var imgs = c.querySelectorAll('img');
-                    if (imgs.length > {currentIndex})
-                        imgs[{currentIndex}].scrollIntoView({{block:'center'}});
-                }}
-            ");
+            if (_jsModule != null)
+                await _jsModule.InvokeVoidAsync("scrollStitchIntoView", currentIndex);
         }
         catch (OperationCanceledException) { }
         catch (NullReferenceException) { }
@@ -309,7 +311,12 @@ public partial class ImagePage : ComponentBase
     private async Task RevokeBlobUrlAsync(string url)
     {
         if (!string.IsNullOrEmpty(url))
-            await JS.InvokeVoidAsync("eval", $"URL.revokeObjectURL('{url}')");
+        {
+            if (_jsModule != null)
+                await _jsModule.InvokeVoidAsync("revokeBlobUrls", new object[] { url });
+            else
+                await JS.InvokeVoidAsync("eval", $"URL.revokeObjectURL('{url}')");
+        }
     }
 
     /// <summary>后台分批加载剩余图片</summary>
@@ -456,9 +463,11 @@ public partial class ImagePage : ComponentBase
     {
         try
         {
-            var dims = await JS.InvokeAsync<double[]>("eval",
-                "(() => { var v = document.querySelector('.image-viewport'); " +
-                "return [v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1]; })()");
+            var dims = _jsModule != null
+                ? await _jsModule.InvokeAsync<double[]>("getViewportMetrics")
+                : await JS.InvokeAsync<double[]>("eval",
+                    "(() => { var v = document.querySelector('.image-viewport'); " +
+                    "return [v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1]; })()");
             vpWidth = (float)dims[0];
             vpHeight = (float)dims[1];
             _dpr = (float)dims[2];
@@ -754,12 +763,32 @@ public partial class ImagePage : ComponentBase
     /// <summary>等待当前 img-slide 的 animationend 事件</summary>
     private Task WaitSlideAnimation()
     {
+        if (_jsModule != null)
+            return _jsModule.InvokeAsync<object>("waitAnimationEnd").AsTask();
         return JS.InvokeAsync<object>("eval", @"
             new Promise(r => {
                 var el = document.querySelector('.img-slide');
                 if (!el) { r(); return; }
                 el.addEventListener('animationend', () => r(), {once:true});
             })").AsTask();
+    }
+
+    private async Task SetSlideTransformAsync(string transform)
+    {
+        if (_jsModule != null)
+            await _jsModule.InvokeVoidAsync("setSlideTransform", transform);
+        else
+            await JS.InvokeVoidAsync("eval",
+                $"document.querySelector('.img-slide')?.style.setProperty('transform','{transform}')");
+    }
+
+    private async Task ClearSlideTransformAsync()
+    {
+        if (_jsModule != null)
+            await _jsModule.InvokeVoidAsync("clearSlideTransform");
+        else
+            await JS.InvokeVoidAsync("eval",
+                "document.querySelector('.img-slide')?.style.removeProperty('transform')");
     }
 
     private async Task GoPrev()
@@ -775,8 +804,7 @@ public partial class ImagePage : ComponentBase
         await WaitSlideAnimation();
 
         // 定位到左侧外（-100%），为滑入做准备
-        await JS.InvokeVoidAsync("eval",
-            @"document.querySelector('.img-slide').style.transform = 'translateX(-100%)'");
+        await SetSlideTransformAsync("-100%");
         _slideAniClass = "";
 
         // Phase 2: 切换图片
@@ -794,8 +822,7 @@ public partial class ImagePage : ComponentBase
         await WaitSlideAnimation();
 
         // 清理
-        await JS.InvokeVoidAsync("eval",
-            @"document.querySelector('.img-slide')?.style.removeProperty('transform')");
+        await ClearSlideTransformAsync();
         _slideAniClass = "";
         StateHasChanged();
         _isAnimating = false;
@@ -814,8 +841,7 @@ public partial class ImagePage : ComponentBase
         await WaitSlideAnimation();
 
         // 定位到右侧外（+100%），为滑入做准备
-        await JS.InvokeVoidAsync("eval",
-            @"document.querySelector('.img-slide').style.transform = 'translateX(100%)'");
+        await SetSlideTransformAsync("100%");
         _slideAniClass = "";
 
         // Phase 2: 切换图片
@@ -833,8 +859,7 @@ public partial class ImagePage : ComponentBase
         await WaitSlideAnimation();
 
         // 清理
-        await JS.InvokeVoidAsync("eval",
-            @"document.querySelector('.img-slide')?.style.removeProperty('transform')");
+        await ClearSlideTransformAsync();
         _slideAniClass = "";
         StateHasChanged();
         _isAnimating = false;
