@@ -1,134 +1,127 @@
-@* @page "/imageviewer" — 保留注释，实际已由 ContentPage 动态加载 *@
+@* ImagePage.razor v2 — 8 层 z-index 组件化架构 *@
 
-<div class="viewer-page">
-    <div class="v-toolbar">
-        <button class="v-btn" @onclick="GoBack" title="返回 (Esc)">← 返回</button>
-        <button class="v-btn v-btn-nav" disabled="@(hasPrev ? null : true)" @onclick="GoPrev" title="上一个 (←)">←</button>
+<div class="viewer-page @(showToolbar ? "chrome-toolbar" : "") @(showFilmstrip ? "chrome-filmstrip" : "")"
+     @onclick="OnPageClick">
+    @* z=0 *@
+    <div class="viewport-bg"></div>
 
-        <span class="v-title" title="@filePath">@fileName</span>
-        <span class="v-pos">@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")</span>
-
-        <button class="v-btn v-btn-nav" disabled="@(hasNext ? null : true)" @onclick="GoNext" title="下一个 (→)">→</button>
-
-        <span class="v-sep"></span>
-
-        <span class="v-zoom">@GetDisplayZoom()</span>
-        <button class="v-btn v-btn-icon" @onclick="ZoomOut" disabled="@((stitchMode ? _stitchZoom <= 0.1f : displayZoom <= MinZoom) ? true : null)" title="缩小 (-)">−</button>
-        <button class="v-btn v-btn-icon" @onclick="ZoomIn" disabled="@((stitchMode ? _stitchZoom >= 5.0f : displayZoom >= MaxZoom) ? true : null)" title="放大 (+)">+</button>
-        <button class="v-btn v-btn-sm @(zoomFitMode && !stitchMode ? "v-btn-active" : "")"
-                @onclick="ToggleFitActual"
-                title="@GetFitToggleTitle()">@GetFitToggleText()</button>
-
-        <span class="v-sep"></span>
-        @if (canStitch)
-        {
-            <button class="v-btn v-btn-sm v-stitch-btn @(stitchMode ? "v-btn-active" : "")" @onclick="ToggleStitch" title="拼接模式">📐 拼接</button>
-            <span class="v-sep"></span>
-        }
-        <button class="v-btn v-btn-sm v-detail-btn" @onclick="ToggleDetails" title="图片详情">ℹ️</button>
-    </div>
-
-    @if (isLoading)
+    @if (!stitchMode)
     {
-        <div class="v-status"><div class="v-spinner"></div><span>正在加载...</span></div>
-    }
-    else if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="v-status v-status--err">⚠️ @errorMessage</div>
-    }
-    else if (stitchMode && stitchImages != null)
-    {
-        <div class="v-stitch-container">
-            @if (_stitchLoadedCount < stitchImages.Count)
-            {
-                <div class="v-stitch-progress">⏳ 加载中 @_stitchLoadedCount/@stitchImages.Count ...</div>
-            }
-            @foreach (var si in stitchImages)
-            {
-                <div class="v-stitch-item">
-                    <img src="@(string.IsNullOrEmpty(si.BlobUrl) ? "" : si.BlobUrl)" alt="" class="v-stitch-img" loading="lazy"
-                         style="max-width:100%; width:@((int)(si.Width * _stitchZoom))px; aspect-ratio:@si.Width/@si.Height;" />
-                    <span class="v-stitch-label">@si.FileName</span>
-                </div>
-            }
-        </div>
-    }
-    else if (stitchMode && stitchError != null)
-    {
-        <div class="v-status v-status--err">⚠️ @stitchError</div>
+        @* z=1: Image Viewport *@
+        <ImageViewport ImageSource="@imageSource"
+                       FileName="@fileName"
+                       ZoomFitMode="@zoomFitMode"
+                       DisplayZoom="@displayZoom"
+                       ZoomReady="@(_zoomComputed || stitchMode)"
+                       PanX="@panX" PanY="@panY"
+                       HasPrev="@hasPrev"
+                       HasNext="@hasNext"
+                       ViewportWidth="@vpWidth"
+                       OnNavPrev="GoPrev"
+                       OnNavNext="GoNext"
+                       OnWheel="OnWheel"
+                       OnKeyDown="OnKeyDown"
+                       OnDoubleClick="OnDoubleClick"
+                       OnPointerDown="OnPointerDown"
+                       OnPointerMove="OnPointerMove"
+                       OnPointerUp="OnPointerUp" />
+
+        @* z=2: Loading / Error *@
+        <ImageLoading IsLoading="isLoading" ErrorMessage="@errorMessage" />
+
+        @* z=3: Info HUD *@
+        <ImageHUD Resolution="@(imageWidth > 0 ? $"{imageWidth}x{imageHeight}" : "")"
+                 FileSize="@fileSizeDisplay"
+                 Format="@imageFormat"
+                 Faded="@(!showHUD)" />
+
+        @* z=4: Gesture Layer *@
+        <GestureLayer />
+
+        @* z=5: Filmstrip *@
+        <ImageFilmstrip @ref="filmstripRef"
+                        Items="@_filmstripThumbnails"
+                        CurrentIndex="@currentIndex"
+                        Hidden="@(!showFilmstrip)"
+                        OnItemClick="OnFilmstripClick" />
     }
     else
     {
-            <div class="image-viewport @(zoomFitMode ? "fit" : "free")"
-                 tabindex="0"
-                 @onwheel="OnWheel"
-                 @onkeydown="OnKeyDown"
-                 @ondblclick="OnDoubleClick"
-                 @onpointerdown="OnPointerDown"
-                 @onpointermove="OnPointerMove"
-                 @onpointerup="OnPointerUp"
-                 @onpointercancel="OnPointerUp"
-                 @onpointerleave="OnPointerUp"
-                 @ontouchstart:preventDefault="true"
-                 @ontouchstart="OnTouchStart"
-                 @ontouchmove="OnTouchMove"
-                 @ontouchend="OnTouchEnd">
-
-                <div class="img-slide @_slideAniClass">
-                    <div class="img-wrap" style="@GetZoomStyle()">
-                        <img src="@imageSource" alt="@fileName" class="img-display" />
+        @* Stitch mode renders differently *@
+        @if (stitchImages != null)
+        {
+            <div style="position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;">
+                <div class="v-stitch-container" @onscroll="OnStitchScroll">
+                    <div class="v-stitch-content" style="position:relative; width:100%; height:@(_stitchTotalHeight)px;">
+                        @for (int i = _stitchVisibleStart; stitchImages != null && i <= _stitchVisibleEnd && i < stitchImages.Count; i++)
+                        {
+                            var si = stitchImages[i];
+                            var w = (_stitchContentWidth > 0 ? _stitchContentWidth : (vpWidth > 0 ? vpWidth : 800)) * _stitchZoom;
+                            var h = si.Width > 0 ? w * si.Height / si.Width : w * 0.75;
+                            var top = _stitchTop.Length > i ? _stitchTop[i] : 0;
+                            <div style="position:absolute; top:@(top)px; left:50%; transform:translateX(-50%); width:@(w)px; height:@(h)px;" @key="i">
+                                <img class="v-stitch-img" alt="@si.FileName"
+                                     src="@GetStitchSrc(i)"
+                                     style="display:block; width:100%; height:100%; object-fit:contain;" />
+                                <span class="v-stitch-label">@si.FileName</span>
+                            </div>
+                        }
                     </div>
+                    @if (_stitchLoadedCount < stitchImages!.Count)
+                    {
+                        <div class="v-stitch-progress">Loading @_stitchLoadedCount/@stitchImages!.Count ...</div>
+                    }
                 </div>
 
-                <div class="img-info">
-                    <span>@(imageWidth > 0 ? $"{imageWidth}×{imageHeight}" : "")</span>
-                    <span class="i-sep">|</span>
-                    <span>@fileSizeDisplay</span>
-                    <span class="i-sep">|</span>
-                    <span>@imageFormat</span>
-                </div>
+                <StitchToolbar PositionText="@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")"
+                               ZoomDisplay="@GetDisplayZoom()"
+                               Hidden="@(!showToolbar)"
+                               ZoomOutDisabled="@(_stitchZoom <= 0.1f)"
+                               ZoomInDisabled="@(_stitchZoom >= 5.0f)"
+                               Gap="@_stitchGap"
+                               OnExit="ToggleStitch"
+                               OnZoomOut="ZoomOut"
+                               OnZoomIn="ZoomIn"
+                               OnGapUp="StitchGapUp"
+                               OnGapDown="StitchGapDown" />
             </div>
+        }
+        else if (stitchError != null)
+        {
+            <div class="error-overlay">@stitchError</div>
+        }
     }
 
-    @* 详情面板 *@
+    @* z=6: Toolbar *@
+    <ImageToolbar FilePath="@filePath"
+                 FileName="@fileName"
+                 PositionText="@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")"
+                 ZoomDisplay="@GetDisplayZoom()"
+                 FitToggleText="@GetFitToggleText()"
+                 FitToggleTitle="@GetFitToggleTitle()"
+                 Hidden="@(!showToolbar || stitchMode)"
+                 ZoomFitMode="@IsToolbarZoomFit"
+                 StitchMode="@stitchMode"
+                 ShowStitch="@canStitch"
+                 ZoomOutDisabled="@((stitchMode ? _stitchZoom <= 0.1f : displayZoom <= MinZoom))"
+                 ZoomInDisabled="@((stitchMode ? _stitchZoom >= 5.0f : displayZoom >= MaxZoom))"
+                 OnGoBack="GoBack"
+                 OnZoomOut="ZoomOut"
+                 OnZoomIn="ZoomIn"
+                 OnToggleFit="ToggleFitActual"
+                 OnToggleStitch="ToggleStitch"
+                 OnToggleDetails="ToggleDetails" />
+
+    @* z=7: Detail Panel *@
     @if (showDetails)
     {
-        <div class="v-detail-overlay" @onclick="CloseDetails"></div>
-        <div class="v-detail-panel">
-            <div class="v-detail-header">
-                <span>📄 图片详情</span>
-                <button class="v-detail-close" @onclick="CloseDetails">✕</button>
-            </div>
-            <div class="v-detail-body">
-                <div class="v-detail-row">
-                    <span class="v-detail-label">文件名</span>
-                    <span class="v-detail-value">@fileName</span>
-                </div>
-                <div class="v-detail-row">
-                    <span class="v-detail-label">路径</span>
-                    <span class="v-detail-value v-detail-path" title="@filePath">@filePath</span>
-                </div>
-                <div class="v-detail-row">
-                    <span class="v-detail-label">尺寸</span>
-                    <span class="v-detail-value">@(imageWidth > 0 ? $"{imageWidth} × {imageHeight}" : "-")</span>
-                </div>
-                <div class="v-detail-row">
-                    <span class="v-detail-label">大小</span>
-                    <span class="v-detail-value">@fileSizeDisplay</span>
-                </div>
-                <div class="v-detail-row">
-                    <span class="v-detail-label">格式</span>
-                    <span class="v-detail-value">@imageFormat</span>
-                </div>
-                <div class="v-detail-row">
-                    <span class="v-detail-label">创建时间</span>
-                    <span class="v-detail-value">@(_fileCreationTime ?? "-")</span>
-                </div>
-                <div class="v-detail-row">
-                    <span class="v-detail-label">修改时间</span>
-                    <span class="v-detail-value">@(_fileLastWriteTime ?? "-")</span>
-                </div>
-            </div>
-        </div>
+        <DetailPanel FileName="@fileName"
+                     FilePath="@filePath"
+                     Resolution="@(imageWidth > 0 ? $"{imageWidth} x {imageHeight}" : "-")"
+                     FileSize="@fileSizeDisplay"
+                     Format="@imageFormat"
+                     CreatedTime="@(_fileCreationTime ?? "-")"
+                     ModifiedTime="@(_fileLastWriteTime ?? "-")"
+                     OnClose="CloseDetails" />
     }
 </div>

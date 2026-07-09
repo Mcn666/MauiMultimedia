@@ -7,6 +7,7 @@ using MauiMultimedia.Core.Abstractions;
 using System.Linq;
 using System.Text;
 using System.Globalization;
+using System.Threading;
 using MauiMultimedia.Core.Models;
 
 namespace MauiMultimedia.Viewers.Archive.Pages;
@@ -41,8 +42,6 @@ public partial class ArchivePage : ComponentBase, IDisposable
     private List<TreeItem> nodes = new();
     private List<Entry> items = new();
     private HashSet<string> open = new(StringComparer.OrdinalIgnoreCase);
-    /// <summary>加密的档案字节缓存，避免每次提取都重新读磁盘</summary>
-    private byte[]? _archiveBytes;
     private HashSet<string> loaded = new(StringComparer.OrdinalIgnoreCase);
 
     private bool IsArchive(string name)
@@ -88,9 +87,10 @@ public partial class ArchivePage : ComponentBase, IDisposable
         try
         {
             if (!File.Exists(p)) { errorMessage = "文件不存在"; return; }
-            // 一次性读取字节并缓存，后续提取复用避免重复 I/O
-            _archiveBytes = await File.ReadAllBytesAsync(p);
-            items = await Task.Run(() => Scan(new MemoryStream(_archiveBytes), archivePassword));
+            // 读取整包字节用于扫描条目；扫描完成后即离开作用域，由 GC 回收，
+            // 避免数百 MB 的整包缓冲长期驻留内存（老旧设备易触发 GC 卡顿）。
+            var archiveBytes = await File.ReadAllBytesAsync(p);
+            items = await Task.Run(() => Scan(new MemoryStream(archiveBytes), archivePassword));
             nodes = Build(items);
         }
         catch (Exception ex)
@@ -292,7 +292,14 @@ public partial class ArchivePage : ComponentBase, IDisposable
     /// <summary>读取压缩文件的条目列表</summary>
     private List<Entry> ReadArchiveEntries(Stream stream) => Scan(stream, archivePassword);
 
-    private async Task Open(TreeItem n)
+    /// <summary>从档案文件路径读取条目列表（不把整包字节驻留内存）</summary>
+    private List<Entry> ReadArchiveEntriesFromPath(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return Scan(fs, archivePassword);
+    }
+
+    private void Open(TreeItem n)
     {
         try
         {
@@ -308,17 +315,12 @@ public partial class ArchivePage : ComponentBase, IDisposable
             var tmp = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
                 Path.GetFileNameWithoutExtension(fileName));
 
-            // 使用缓存的档案字节（避免重复读磁盘）
-            var srcBytes = n.Source != null
-                ? await File.ReadAllBytesAsync(n.Source)
-                : _archiveBytes;
-            if (srcBytes == null) { toast = "读取档案失败"; return; }
-
-            // 只提取当前点击的文件，立即导航
+            // 仅提取当前点击的文件，立即导航（直接从档案文件读取，不再把整包字节驻留内存）
+            var srcPath = n.Source ?? filePath;
             var outPath = Path.Combine(tmp, n.Full);
             var dir = Path.GetDirectoryName(outPath);
             if (dir != null) Directory.CreateDirectory(dir);
-            using (var fs = new MemoryStream(srcBytes))
+            using (var fs = new FileStream(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 ExtractEntry(fs, n.Full, outPath, archivePassword);
 
             // 构建同级文件路径列表（仅路径，不提取，加快响应）
@@ -326,7 +328,7 @@ public partial class ArchivePage : ComponentBase, IDisposable
             List<Entry> siblingEntries;
             if (n.Source != null)
             {
-                var all = ReadArchiveEntries(new MemoryStream(srcBytes));
+                var all = ReadArchiveEntriesFromPath(srcPath);
                 siblingEntries = all;
                 fileList = all.Select(e => Path.Combine(tmp, e.Full)).ToList();
             }
@@ -345,8 +347,9 @@ public partial class ArchivePage : ComponentBase, IDisposable
             NavState.ReturnUrl = Navigation.ToAbsoluteUri(Navigation.Uri).PathAndQuery;
             _ = MauiNav.NavigateToViewerAsync(v, fi);
 
-            // 后台继续提取同级文件（用户已在查看器中，不影响体验）
-            _ = ExtractBackgroundAsync(srcBytes, tmp, siblingEntries);
+            // 后台以低优先级解压同级文件：避免与新打开的图片/视频查看器抢占 CPU 与磁盘，
+            // 否则在老旧设备上会出现导航后翻页明显卡顿（解压仍会完成，翻页最终可用）。
+            _ = ExtractBackgroundAsync(srcPath, tmp, siblingEntries);
         }
         catch (Exception ex)
         {
@@ -402,6 +405,7 @@ public partial class ArchivePage : ComponentBase, IDisposable
         };
         var wantDict = wanted.ToDictionary(x => x.entryName, x => x.outPath, StringComparer.OrdinalIgnoreCase);
         using var archive = ArchiveFactory.OpenArchive(archiveStream, opts);
+        var written = 0;
         foreach (var entry in archive.Entries)
         {
             if (entry.IsDirectory) continue;
@@ -411,6 +415,8 @@ public partial class ArchivePage : ComponentBase, IDisposable
                 var dir = Path.GetDirectoryName(outPath);
                 if (dir != null) Directory.CreateDirectory(dir);
                 entry.WriteToFile(outPath, new ExtractionOptions { Overwrite = true });
+                // 每写若干文件让出一次时间片，进一步降低对前台查看器的干扰
+                if ((++written % 16) == 0) Thread.Sleep(0);
             }
         }
     }
@@ -423,17 +429,22 @@ public partial class ArchivePage : ComponentBase, IDisposable
     }
 
     /// <summary>后台提取同级文件，不阻塞导航到查看器（仅打开档案一次）</summary>
-    private async Task ExtractBackgroundAsync(byte[] srcBytes, string tmp, List<Entry> entries)
+    private Task ExtractBackgroundAsync(string srcPath, string tmp, List<Entry> entries)
     {
-        await Task.Yield();
-        try
+        return Task.Run(() =>
         {
-            // 一次性提取所有同级条目：仅打开档案一次并单次遍历写入，避免 O(n²) 重复开档。
-            var wanted = entries.Select(e => (e.Full, Path.Combine(tmp, e.Full)));
-            using var s = new MemoryStream(srcBytes);
-            ExtractEntries(s, wanted, archivePassword);
-        }
-        catch { }
+            try
+            {
+                // 降低工作线程优先级：解压同级文件不再与刚打开的图片/视频查看器抢占 CPU，
+                // 导航后翻页在老旧设备上不再明显卡顿（解压仍会完成，翻页最终可用）。
+                Thread.CurrentThread.Priority = ThreadPriority.BelowNormal;
+                // 直接从档案文件读取，避免再次把整包字节载入内存。
+                var wanted = entries.Select(e => (e.Full, Path.Combine(tmp, e.Full)));
+                using var s = new FileStream(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                ExtractEntries(s, wanted, archivePassword);
+            }
+            catch { }
+        });
     }
 
     private void CancelPassword()

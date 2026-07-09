@@ -1,0 +1,14 @@
+<div class="img-hud @(Faded ? "faded" : "")">
+    <span>@Resolution</span>
+    <span class="hud-sep">|</span>
+    <span>@FileSize</span>
+    <span class="hud-sep">|</span>
+    <span>@Format</span>
+</div>
+
+@code {
+    [Parameter] public string Resolution { get; set; } = "";
+    [Parameter] public string FileSize { get; set; } = "";
+    [Parameter] public string Format { get; set; } = "";
+    [Parameter] public bool Faded { get; set; }
+}

@@ -1,0 +1,31 @@
+<div class="stitch-toolbar @(Hidden ? "hidden" : "")">
+    <div class="stitch-tbar-left">
+        <button class="tbar-btn" @onclick="OnExit" title="离开拼接 (Esc)">← 返回</button>
+        <span class="toolbar-file-name">@PositionText</span>
+    </div>
+    <div class="stitch-tbar-right">
+        <span class="tbar-zoom-display">@ZoomDisplay</span>
+        <button class="tbar-btn tbar-btn-icon" disabled="@ZoomOutDisabled" @onclick="OnZoomOut">-</button>
+        <button class="tbar-btn tbar-btn-icon" disabled="@ZoomInDisabled" @onclick="OnZoomIn">+</button>
+
+        <span class="toolbar-sep"></span>
+
+        <button class="tbar-btn tbar-btn-icon" @onclick="OnGapDown" title="减小间距">◀▶</button>
+        <span style="font-size:11px;color:rgba(255,255,255,0.5);min-width:20px;text-align:center;">@Gap</span>
+        <button class="tbar-btn tbar-btn-icon" @onclick="OnGapUp" title="增大间距">▶◀</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string PositionText { get; set; } = "";
+    [Parameter] public string ZoomDisplay { get; set; } = "";
+    [Parameter] public bool Hidden { get; set; }
+    [Parameter] public bool ZoomOutDisabled { get; set; }
+    [Parameter] public bool ZoomInDisabled { get; set; }
+    [Parameter] public int Gap { get; set; } = 4;
+    [Parameter] public EventCallback OnExit { get; set; }
+    [Parameter] public EventCallback OnZoomOut { get; set; }
+    [Parameter] public EventCallback OnZoomIn { get; set; }
+    [Parameter] public EventCallback OnGapUp { get; set; }
+    [Parameter] public EventCallback OnGapDown { get; set; }
+}

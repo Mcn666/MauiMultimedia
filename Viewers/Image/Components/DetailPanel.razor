@@ -1,0 +1,48 @@
+<div class="detail-overlay" @onclick="OnClose"></div>
+<div class="detail-panel">
+    <div class="detail-header">
+        <span>Image Details</span>
+        <button class="detail-close" @onclick="OnClose">✕</button>
+    </div>
+    <div class="detail-body">
+        <div class="detail-row">
+            <span class="detail-label">File Name</span>
+            <span class="detail-value">@FileName</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Path</span>
+            <span class="detail-value detail-path" title="@FilePath">@FilePath</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Resolution</span>
+            <span class="detail-value">@Resolution</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">File Size</span>
+            <span class="detail-value">@FileSize</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Format</span>
+            <span class="detail-value">@Format</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Created</span>
+            <span class="detail-value">@CreatedTime</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Modified</span>
+            <span class="detail-value">@ModifiedTime</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string FileName { get; set; } = "";
+    [Parameter] public string FilePath { get; set; } = "";
+    [Parameter] public string Resolution { get; set; } = "";
+    [Parameter] public string FileSize { get; set; } = "";
+    [Parameter] public string Format { get; set; } = "";
+    [Parameter] public string CreatedTime { get; set; } = "";
+    [Parameter] public string ModifiedTime { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+}

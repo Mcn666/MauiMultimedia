@@ -1,0 +1,48 @@
+<div class="image-toolbar @(Hidden ? "hidden" : "")">
+    <div class="toolbar-left">
+        <button class="tbar-btn" @onclick="OnGoBack" title="返回 (Esc)">← 返回</button>
+
+        <span class="toolbar-file-name" title="@FilePath">@FileName</span>
+        <span class="toolbar-pos">@PositionText</span>
+    </div>
+
+    <div class="toolbar-right">
+        <span class="tbar-zoom-display">@ZoomDisplay</span>
+        <button class="tbar-btn tbar-btn-icon" disabled="@ZoomOutDisabled" @onclick="OnZoomOut" title="缩小 (-)">-</button>
+        <button class="tbar-btn tbar-btn-icon" disabled="@ZoomInDisabled" @onclick="OnZoomIn" title="放大 (+)">+</button>
+        <button class="tbar-btn tbar-btn-toggle @(ZoomFitMode && !StitchMode ? "tbar-btn-active" : "")"
+                @onclick="OnToggleFit"
+                title="@FitToggleTitle">@FitToggleText</button>
+
+        @if (ShowStitch)
+        {
+            <span class="toolbar-sep"></span>
+            <button class="tbar-btn tbar-btn-toggle @(StitchMode ? "tbar-btn-active" : "")"
+                    @onclick="OnToggleStitch" title="拼接模式">📐</button>
+        }
+
+        <span class="toolbar-sep"></span>
+        <button class="tbar-btn tbar-btn-toggle" @onclick="OnToggleDetails" title="详情">ℹ</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string FilePath { get; set; } = "";
+    [Parameter] public string FileName { get; set; } = "";
+    [Parameter] public string PositionText { get; set; } = "";
+    [Parameter] public string ZoomDisplay { get; set; } = "";
+    [Parameter] public string FitToggleText { get; set; } = "适应";
+    [Parameter] public string FitToggleTitle { get; set; } = "";
+    [Parameter] public bool Hidden { get; set; }
+    [Parameter] public bool ZoomFitMode { get; set; } = true;
+    [Parameter] public bool StitchMode { get; set; }
+    [Parameter] public bool ShowStitch { get; set; }
+    [Parameter] public bool ZoomOutDisabled { get; set; }
+    [Parameter] public bool ZoomInDisabled { get; set; }
+    [Parameter] public EventCallback OnGoBack { get; set; }
+    [Parameter] public EventCallback OnZoomOut { get; set; }
+    [Parameter] public EventCallback OnZoomIn { get; set; }
+    [Parameter] public EventCallback OnToggleFit { get; set; }
+    [Parameter] public EventCallback OnToggleStitch { get; set; }
+    [Parameter] public EventCallback OnToggleDetails { get; set; }
+}

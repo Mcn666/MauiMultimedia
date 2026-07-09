@@ -1,0 +1,147 @@
+<div class="filmstrip-container @(Hidden ? "hidden" : "")">
+    <div class="filmstrip-track" @onscroll="OnScroll" @ref="_trackRef">
+        @* Leading spacer for virtualized items before the visible window *@
+        <div style="flex-shrink:0; width:@(_leadSpacerWidth)px; min-width:@(_leadSpacerWidth)px;"></div>
+
+        @for (int i = _visStart; i <= _visEnd && i < Items.Count; i++)
+        {
+            var idx = i;
+            var item = Items[i];
+            <div class="filmstrip-item @(idx == CurrentIndex ? "active" : "")"
+                 @onclick="() => OnItemClick.InvokeAsync(idx)"
+                 @onclick:preventDefault>
+                @if (!string.IsNullOrEmpty(item))
+                {
+                    <img src="@item" alt="" loading="lazy" />
+                }
+                else
+                {
+                    <div style="width:100%;height:100%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;">
+                        <span style="font-size:10px;color:rgba(255,255,255,0.2);">@(idx + 1)</span>
+                    </div>
+                }
+            </div>
+        }
+
+        @* Trailing spacer *@
+        <div style="flex-shrink:0; width:@(_trailSpacerWidth)px; min-width:@(_trailSpacerWidth)px;"></div>
+    </div>
+</div>
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    [Parameter] public List<string> Items { get; set; } = new();
+    [Parameter] public int CurrentIndex { get; set; } = -1;
+    [Parameter] public bool Hidden { get; set; }
+    [Parameter] public EventCallback<int> OnItemClick { get; set; }
+
+    private ElementReference _trackRef;
+    private IJSObjectReference? _jsModule;
+    private int _visStart;
+    private int _visEnd;
+    private bool _scrollPending;
+    private bool _initialized;
+    // While a programmatic jump (open / prev / next / click) is in flight we
+    // ignore scroll-driven window recompute. Otherwise the scroll events fired
+    // by the jump would walk the window from 0 -> index and thrash the DOM /
+    // spam thumbnail loads.
+    private bool _suppressScroll;
+
+    private const int ItemWidth = 52;
+    private const int ItemGap = 4;
+    private const int WindowPad = 20;
+    private const int Stride = ItemWidth + ItemGap;
+
+    private double _leadSpacerWidth => _visStart * Stride;
+    private double _trailSpacerWidth => Math.Max(0, (Items.Count - _visEnd - 1) * Stride);
+
+    protected override void OnParametersSet()
+    {
+        if (!_initialized && Items.Count > 0)
+        {
+            _initialized = true;
+            CenterWindow(CurrentIndex >= 0 ? CurrentIndex : 0);
+        }
+    }
+
+    private void CenterWindow(int center)
+    {
+        if (Items.Count == 0) return;
+        center = Math.Clamp(center, 0, Items.Count - 1);
+        _visStart = Math.Max(0, center - WindowPad);
+        _visEnd = Math.Min(Items.Count - 1, center + WindowPad);
+    }
+
+    /// <summary>
+    /// Programmatic jump used for open / prev / next / item-click. Sets the
+    /// virtual window straight to the target range and snaps the scroll
+    /// position (instant by default, smooth when explicitly requested),
+    /// suppressing scroll-driven window recompute for the whole move so no
+    /// off-screen items are ever created or loaded along the way.
+    /// </summary>
+    public async Task ScrollToIndexAsync(int index, bool smooth = false)
+    {
+        if (Items.Count == 0) return;
+
+        CenterWindow(index);
+        _suppressScroll = true;
+        StateHasChanged();
+
+        // Let Blazor paint the new window + spacers before we measure/scroll.
+        await Task.Delay(0);
+
+        try
+        {
+            // The function lives in the page's JS module (export function), so it
+            // must be invoked via the module reference — NOT via the global
+            // IJSRuntime `JS.InvokeVoidAsync(string)`, which would look for
+            // window.scrollFilmstripToElement (undefined) and silently fail,
+            // leaving scrollLeft = 0 and the filmstrip showing only the empty
+            // leading spacer. Lazily import the module (cached by URL) so this
+            // works regardless of when the parent calls us.
+            if (_jsModule == null)
+            {
+                var asm = typeof(ImageFilmstrip).Assembly.GetName().Name!;
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>("import",
+                    $"./_content/{asm}/Pages/ImagePage.razor.js");
+            }
+            await _jsModule.InvokeVoidAsync("scrollFilmstripToElement", _trackRef, index, smooth);
+        }
+        catch { /* noop */ }
+
+        // Keep suppression up until the scroll (and any smooth animation)
+        // has settled, then release so manual scrolling works again.
+        await Task.Delay(smooth ? 360 : 40);
+        _suppressScroll = false;
+    }
+
+    private async Task OnScroll()
+    {
+        if (_suppressScroll) return;
+        if (_scrollPending) return;
+        _scrollPending = true;
+
+        await Task.Delay(32);
+        _scrollPending = false;
+
+        double scrollLeft = 0;
+        try
+        {
+            scrollLeft = await JS.InvokeAsync<double>("eval",
+                $"document.querySelector('.filmstrip-track')?.scrollLeft || 0");
+        }
+        catch { return; }
+
+        double trackWidth = Stride;
+        int newStart = Math.Max(0, (int)(scrollLeft / trackWidth) - WindowPad);
+        int newEnd = Math.Min(Items.Count - 1, newStart + WindowPad * 2 + 15);
+
+        if (newStart != _visStart || newEnd != _visEnd)
+        {
+            _visStart = newStart;
+            _visEnd = newEnd;
+            StateHasChanged();
+        }
+    }
+}

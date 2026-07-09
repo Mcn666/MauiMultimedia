@@ -1,177 +1,53 @@
-/* ── 覆盖 Shell 全局约束 ── */
+/* ═══════ ImagePage v2 — 8 层 z-index 布局 ═══════ */
+/* 使用 ::deep 穿透子组件 CSS 隔离边界 */
+
 .viewer-page {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: var(--bg-primary);
+    background: var(--bg-viewport, #1a1a1a);
     color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-/* ── 工具栏（v-toolbar 已在 app.css 全局定义） ── */
-
-.v-title {
-    flex: 0 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 500;
-    font-size: 13px;
-    color: var(--text-secondary);
-    min-width: 0;
-    margin: 0 4px;
-}
-
-.v-pos {
-    flex: 1;
-    font-size: 11px;
-    color: var(--text-tertiary);
-    font-variant-numeric: tabular-nums;
-    margin-right: 4px;
-}
-
-.v-sep {
-    width: 1px;
-    height: 20px;
-    background: var(--border-primary);
-    margin: 0 4px;
-    flex-shrink: 0;
-}
-
-.v-zoom {
-    font-size: 12px;
-    font-weight: 600;
-    min-width: 44px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-primary);
-    letter-spacing: 0.3px;
-}
-
-.v-btn {
-    padding: 4px 10px;
-    border: 1px solid var(--btn-border);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    background: var(--btn-bg);
-    color: var(--btn-text);
-    transition: background 0.12s;
-    white-space: nowrap;
-    flex-shrink: 0;
-    line-height: 1.4;
-}
-
-.v-btn:hover:not(:disabled) {
-    background: var(--btn-hover-bg);
-}
-
-.v-btn:disabled {
-    opacity: var(--btn-disabled-opacity);
-    cursor: default;
-}
-
-.v-btn-icon {
-    padding: 4px 8px;
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1;
-}
-
-.v-btn-sm {
-    padding: 4px 8px;
-    font-size: 12px;
-}
-
-/* ── 加载 / 错误 ── */
-
-.v-status {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    gap: 16px;
-    color: var(--text-secondary);
-    background: var(--bg-viewport, #1a1a1a);
-}
-
-.v-status--err {
-    color: var(--error-text);
-}
-
-.v-spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid var(--spinner-border);
-    border-top: 3px solid var(--spinner-active);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* ── 图片视口 ── */
-
-.image-viewport {
-    flex: 1;
     position: relative;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* ── Layer 0: Viewport Background (direct child) ── */
+.viewport-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+        radial-gradient(ellipse at center, rgba(255,255,255,0.03) 0%, transparent 70%),
+        var(--bg-viewport, #1a1a1a);
+}
+
+/* ── Layer 1: Image Viewport (child component) ── */
+::deep .image-viewport {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
     outline: none;
     overflow: hidden;
-    background: var(--bg-viewport, #1a1a1a);
-}
-
-.image-viewport.fit {
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.image-viewport.fit .img-display {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    border-radius: 2px;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+::deep .image-viewport.fit {
+    display: flex;
 }
 
-.image-viewport.fit .img-wrap {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-}
-
-.image-viewport.free {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+::deep .image-viewport.free {
     cursor: grab;
-    user-select: none;
 }
-
-.image-viewport.free:active {
+::deep .image-viewport.free:active {
     cursor: grabbing;
 }
 
-.image-viewport.free .img-wrap {
-    flex-shrink: 0;
-    line-height: 0;
-}
-
-.image-viewport.free .img-display {
-    display: block;
-    border-radius: 2px;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
-    pointer-events: none;
-}
-
-/* ── 滑动切换动画（CSS @keyframes + animationend 驱动） ── */
-
-.img-slide {
+::deep .img-slide {
     width: 100%;
     height: 100%;
     display: flex;
@@ -180,38 +56,153 @@
     will-change: transform;
 }
 
-@keyframes ani-slide-out-left {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-100%); }
-}
-@keyframes ani-slide-out-right {
-    from { transform: translateX(0); }
-    to   { transform: translateX(100%); }
-}
-@keyframes ani-slide-in-from-right {
-    from { transform: translateX(100%); }
-    to   { transform: translateX(0); }
-}
-@keyframes ani-slide-in-from-left {
-    from { transform: translateX(-100%); }
-    to   { transform: translateX(0); }
+/* During a JS navigation transition the real .img-wrap is hidden so only the
+   animated clone layers show. Toggled via a class on the slide (NOT the wrap)
+   because Blazor owns the wrap's inline style and would otherwise clobber a
+   direct visibility tweak on the next re-render. */
+::deep .img-slide.cyl-animating .img-wrap:not(.cyl-clone) {
+    visibility: hidden;
 }
 
-.img-slide.slide-out-left  { animation: ani-slide-out-left .28s cubic-bezier(.4,0,.2,1) forwards; }
-.img-slide.slide-out-right { animation: ani-slide-out-right .28s cubic-bezier(.4,0,.2,1) forwards; }
-.img-slide.slide-in-from-right { animation: ani-slide-in-from-right .28s cubic-bezier(.4,0,.2,1) forwards; }
-.img-slide.slide-in-from-left  { animation: ani-slide-in-from-left .28s cubic-bezier(.4,0,.2,1) forwards; }
+/* The .img-wrap is ALWAYS transformed with scale(displayZoom) — fit mode is no
+   longer handled by a CSS max-width/object-fit contain constraint. This makes
+   the rendered scale equal the toolbar's displayZoom*_dpr by construction, so
+   the two can never desync. The <img> keeps its intrinsic size and is scaled
+   by the wrapper transform. */
+::deep .image-viewport .img-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    will-change: transform;
+}
 
-/* ── 信息叠加层 ── */
+::deep .image-viewport .img-display {
+    display: block;
+    max-width: none;
+    max-height: none;
+    border-radius: 2px;
+    pointer-events: none;
+}
 
-.img-info {
+/* Keep the image inside the *visible* region: shrink the .image-viewport box
+   to the area between the top toolbar and bottom filmstrip, so the picture (and
+   the fit-zoom math — which measures .image-viewport via getViewportMetrics) is
+   never hidden behind the chrome. When either is hidden the base `inset: 0`
+   (full screen) applies. Specificity (2 classes + child) beats the base rule. */
+.viewer-page.chrome-toolbar ::deep .image-viewport { top: 44px; }
+.viewer-page.chrome-filmstrip ::deep .image-viewport { bottom: 74px; }
+
+/* ── Layer 1b: Prev/Next Nav Buttons (child component) ── */
+::deep .nav-btn {
     position: absolute;
-    bottom: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 4px 14px;
-    background: rgba(0,0,0,0.5);
-    color: rgba(255,255,255,0.7);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    width: 48px;
+    height: 72px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.25s ease, background 0.15s;
+    pointer-events: none;
+}
+
+::deep .nav-btn.nav-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+::deep .nav-btn:hover {
+    background: rgba(0, 0, 0, 0.55);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+::deep .nav-btn-left {
+    left: 8px;
+    border-radius: 0 8px 8px 0;
+}
+
+::deep .nav-btn-right {
+    right: 8px;
+    border-radius: 8px 0 0 8px;
+}
+
+::deep .nav-arrow {
+    font-size: 28px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ── Layer 2: Loading (child component) ── */
+::deep .loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--bg-viewport, #1a1a1a);
+    pointer-events: none;
+}
+
+::deep .loading-overlay.fading {
+    opacity: 0;
+    transition: opacity 0.4s ease-out;
+}
+
+::deep .loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top: 3px solid rgba(255,255,255,0.6);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+::deep .loading-text {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+}
+
+/* ── Layer 2b: Error (direct, inside stitch else) ── */
+.error-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: var(--bg-viewport, #1a1a1a);
+    color: rgba(255,100,100,0.8);
+    font-size: 14px;
+}
+
+/* ── Layer 3: Image HUD (child component) ── */
+::deep .img-hud {
+    position: absolute;
+    bottom: 80px;
+    left: 16px;
+    z-index: 3;
+    padding: 6px 14px;
+    background: rgba(0,0,0,0.55);
+    color: rgba(255,255,255,0.8);
     border-radius: 8px;
     font-size: 11px;
     font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
@@ -220,53 +211,269 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    z-index: 10;
+    transition: opacity 0.6s ease;
 }
 
-.i-sep {
-    color: rgba(255,255,255,0.25);
+::deep .img-hud.faded {
+    opacity: 0;
 }
 
-/* ── 图片详情面板 ── */
+::deep .hud-sep {
+    color: rgba(255,255,255,0.2);
+}
 
-.v-detail-overlay {
+/* ── Layer 4: Gesture Layer (child component) ── */
+::deep .gesture-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    touch-action: none;
+    cursor: default;
+    pointer-events: none;
+}
+::deep .gesture-layer.tracking {
+    pointer-events: auto;
+}
+
+/* ── Layer 5: Filmstrip (child component) ── */
+::deep .filmstrip-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    height: 74px;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 0.5px solid rgba(255,255,255,0.08);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+::deep .filmstrip-container.hidden {
+    transform: translateY(100%);
+}
+
+::deep .filmstrip-track {
+    display: flex;
+    gap: 4px;
+    height: 100%;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* NOTE: do NOT set `scroll-behavior: smooth` here. The filmstrip is
+       virtualized and positions itself via JS using logical coordinates; a
+       CSS smooth default would animate the open-time jump (0 -> currentIndex)
+       and spam viewport thumbnail loads. Smoothness is applied explicitly
+       from JS (behavior:'smooth') only for user-initiated jumps. */
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0 12px;
+}
+
+::deep .filmstrip-track::-webkit-scrollbar { height: 0; }
+
+::deep .filmstrip-item {
+    flex-shrink: 0;
+    width: 52px;
+    height: 56px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    scroll-snap-align: center;
+    transition: border-color 0.2s, transform 0.2s;
+    position: relative;
+}
+
+::deep .filmstrip-item:hover {
+    transform: scale(1.05);
+}
+
+::deep .filmstrip-item.active {
+    border-color: #378add;
+}
+
+::deep .filmstrip-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: #378add;
+    border-radius: 1px;
+}
+
+::deep .filmstrip-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ── Layer 6: Toolbar (child component) ── */
+::deep .image-toolbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 6;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 4px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 0.5px solid rgba(255,255,255,0.06);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+::deep .image-toolbar.hidden {
+    transform: translateY(-100%);
+}
+
+::deep .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+::deep .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+::deep .toolbar-file-name {
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.85);
+    min-width: 0;
+    margin: 0 6px;
+}
+
+::deep .toolbar-pos {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    font-variant-numeric: tabular-nums;
+    margin-right: 6px;
+}
+
+::deep .toolbar-sep {
+    width: 1px;
+    height: 20px;
+    background: rgba(255,255,255,0.12);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+::deep .tbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 9px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.75);
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.4;
+    min-width: 32px;
+}
+
+::deep .tbar-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.95);
+}
+
+::deep .tbar-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+::deep .tbar-btn.tbar-btn-active {
+    background: rgba(55,138,221,0.25);
+    border-color: rgba(55,138,221,0.4);
+    color: #85b7eb;
+}
+
+::deep .tbar-btn-icon {
+    padding: 4px 6px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+::deep .tbar-zoom-display {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 44px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.85);
+    letter-spacing: 0.3px;
+}
+
+::deep .tbar-btn-toggle {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+/* ── Layer 7: Detail Panel (child component) ── */
+::deep .detail-overlay {
     position: fixed;
-    top: 0; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.3);
+    inset: 0;
     z-index: 100;
+    background: rgba(0,0,0,0.35);
 }
 
-.v-detail-panel {
+::deep .detail-panel {
     position: fixed;
-    top: 0; right: 0;
-    width: 280px;
+    top: 0;
+    right: 0;
+    width: 300px;
     height: 100vh;
+    z-index: 101;
     background: var(--bg-primary);
     border-left: 1px solid var(--border-primary);
-    box-shadow: -4px 0 16px rgba(0,0,0,.12);
-    z-index: 101;
     display: flex;
     flex-direction: column;
-    animation: vDetailSlideIn .2s ease;
+    animation: detailSlideIn 0.25s ease;
 }
-@keyframes vDetailSlideIn {
+
+@keyframes detailSlideIn {
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
 }
 
-.v-detail-header {
+::deep .detail-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 14px 16px;
     border-bottom: 1px solid var(--border-primary);
-    font-weight: 600;
+    font-weight: 500;
     font-size: 15px;
     color: var(--text-primary);
 }
 
-.v-detail-close {
-    width: 28px; height: 28px;
+::deep .detail-close {
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -278,37 +485,37 @@
     color: var(--text-tertiary);
     transition: background 0.12s;
 }
-.v-detail-close:hover { background: var(--hover-bg); }
+::deep .detail-close:hover { background: var(--hover-bg); }
 
-.v-detail-body {
+::deep .detail-body {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 16px;
+    padding: 14px 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
-.v-detail-row {
+::deep .detail-row {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
 }
 
-.v-detail-label {
+::deep .detail-label {
     font-size: 11px;
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.v-detail-value {
+::deep .detail-value {
     font-size: 13px;
     color: var(--text-primary);
     word-break: break-all;
 }
 
-.v-detail-path {
+::deep .detail-path {
     font-size: 11px;
     color: var(--text-secondary);
     overflow: hidden;
@@ -318,90 +525,129 @@
     -webkit-box-orient: vertical;
 }
 
-/* ── 拼接视图 ── */
+/* ── Zoom Popup (JS-created, no ::deep needed but keep for consistency) ── */
+.zoom-popup {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    padding: 6px 18px;
+    background: rgba(0,0,0,0.7);
+    color: rgba(255,255,255,0.9);
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
 
+.zoom-popup.visible {
+    opacity: 1;
+}
+
+/* ── Stitch Mode (direct children, no ::deep) ── */
 .v-stitch-container {
+    position: relative;
     flex: 1;
     overflow-y: auto;
     background: var(--bg-viewport, #1a1a1a);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 0;
+    -webkit-overflow-scrolling: touch;
+}
+
+.v-stitch-content {
+    position: relative;
+    width: 100%;
 }
 
 .v-stitch-img {
     display: block;
 }
 
-.v-stitch-item {
-    display: grid;
-    line-height: 0;
-}
-
-.v-stitch-item > * {
-    grid-column: 1;
-    grid-row: 1;
-}
-
 .v-stitch-label {
-    align-self: end;
-    justify-self: end;
-    margin: 4px;
-    padding: 2px 8px;
-    font-size: 11px;
-    color: #eee;
-    background: rgba(0,0,0,0.55);
-    border-radius: 4px;
-    line-height: 1.4;
-    pointer-events: none;
-    user-select: none;
-    white-space: nowrap;
-    max-width: 70%;
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    max-width: calc(100% - 8px);
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.55);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 10px;
+    border-radius: 3px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
 }
 
 .v-stitch-progress {
-    padding: 12px;
-    color: var(--text-tertiary, #888);
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    padding: 6px 14px;
+    color: var(--text-tertiary, #ccc);
+    background: rgba(0,0,0,0.55);
+    border-radius: 6px;
     font-size: 13px;
     text-align: center;
+    pointer-events: none;
+    white-space: nowrap;
 }
 
-.v-stitch-msg {
-    padding: 10px 16px;
-    margin: 4px 16px;
-    background: var(--bg-secondary, #2d2d2d);
-    border-radius: 6px;
-    font-size: 12px;
-    color: var(--text-secondary, #aaa);
-    text-align: center;
-    word-break: break-all;
+/* ── Stitch Toolbar ── */
+::deep .stitch-toolbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 6;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.06);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.v-btn-active {
-    background: var(--accent-bg, #2196F3) !important;
-    color: #fff !important;
+::deep .stitch-toolbar.hidden {
+    transform: translateY(-100%);
 }
 
-/* ── 移动端适配 ── */
+::deep .stitch-tbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
 
+::deep .stitch-tbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* ── Responsive ── */
 @media (max-width: 600px) {
-    .v-detail-panel { width: 240px; }
-    .v-detail-body { padding: 8px 12px; gap: 8px; }
-
-    .v-stitch-container { gap: 2px; padding: 4px 0; }
-}
-
-/* JS 检测到不支持 flex-gap 时回退（@supports 无法区分 grid-gap vs flex-gap） */
-html.no-flex-gap .img-info > * + *          { margin-inline-start: 6px; }
-html.no-flex-gap .v-status > * + *          { margin-block-start: 16px; }
-html.no-flex-gap .v-detail-body > * + *     { margin-block-start: 12px; }
-html.no-flex-gap .v-detail-row > * + *      { margin-block-start: 2px; }
-html.no-flex-gap .v-stitch-container > * + * { margin-block-start: 4px; }
-@media (max-width: 600px) {
-    html.no-flex-gap .v-detail-body > * + *     { margin-block-start: 8px; }
-    html.no-flex-gap .v-stitch-container > * + * { margin-block-start: 2px; }
+    ::deep .detail-panel { width: 260px; }
+    ::deep .detail-body { padding: 10px 12px; gap: 10px; }
+    ::deep .filmstrip-container { height: 64px; }
+    ::deep .filmstrip-item { width: 44px; height: 48px; }
+    ::deep .image-toolbar {
+        height: 40px;
+        padding: 0 6px;
+    }
+    ::deep .toolbar-file-name { font-size: 12px; }
+    .viewer-page.chrome-toolbar ::deep .image-viewport { top: 40px; }
+    .viewer-page.chrome-filmstrip ::deep .image-viewport { bottom: 64px; }
 }

@@ -1,0 +1,91 @@
+<div class="image-viewport @(ZoomFitMode ? "fit" : "free")"
+     tabindex="0"
+     @onwheel="OnWheel"
+     @onkeydown="OnKeyDown"
+     @ondblclick="OnDoubleClick"
+     @onpointerdown="OnPointerDown"
+     @onpointermove="OnPointerMove"
+     @onpointerup="OnPointerUp"
+     @onpointercancel="OnPointerUp"
+     @onpointerleave="OnPointerUp"
+     @onmousemove="OnMouseMove"
+     @onmouseleave="OnMouseLeave"
+     >
+
+    <div class="img-slide">
+        <div class="img-wrap" style="@(GetZoomStyle() + (ZoomReady ? "" : ";visibility:hidden"))">
+            <img src="@ImageSource" alt="@FileName" class="img-display" />
+        </div>
+    </div>
+
+    @* Z-index above image: prev/next nav buttons *@
+    @if (HasPrev)
+    {
+        <button class="nav-btn nav-btn-left @(_showLeftNav ? "nav-visible" : "")"
+                @onclick="() => OnNavPrev.InvokeAsync()"
+                @onclick:stopPropagation="true"
+                title="Previous">
+            <span class="nav-arrow">←</span>
+        </button>
+    }
+    @if (HasNext)
+    {
+        <button class="nav-btn nav-btn-right @(_showRightNav ? "nav-visible" : "")"
+                @onclick="() => OnNavNext.InvokeAsync()"
+                @onclick:stopPropagation="true"
+                title="Next">
+            <span class="nav-arrow">→</span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string? ImageSource { get; set; }
+    [Parameter] public string FileName { get; set; } = "";
+    [Parameter] public bool ZoomFitMode { get; set; } = true;
+    [Parameter] public float DisplayZoom { get; set; } = 1.0f;
+    // When false the image is kept hidden (visibility:hidden) until the parent
+    // has computed a REAL fit/1:1 zoom. This prevents the first-frame flash
+    // where the image would otherwise render at the default scale(1.0) — i.e.
+    // 200% on a HiDPI screen — for one frame before the correct zoom is applied.
+    [Parameter] public bool ZoomReady { get; set; } = true;
+    [Parameter] public float PanX { get; set; }
+    [Parameter] public float PanY { get; set; }
+    [Parameter] public bool HasPrev { get; set; }
+    [Parameter] public bool HasNext { get; set; }
+    [Parameter] public float ViewportWidth { get; set; }
+    [Parameter] public EventCallback OnNavPrev { get; set; }
+    [Parameter] public EventCallback OnNavNext { get; set; }
+    [Parameter] public EventCallback<WheelEventArgs> OnWheel { get; set; }
+    [Parameter] public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> OnDoubleClick { get; set; }
+    [Parameter] public EventCallback<PointerEventArgs> OnPointerDown { get; set; }
+    [Parameter] public EventCallback<PointerEventArgs> OnPointerMove { get; set; }
+    [Parameter] public EventCallback<PointerEventArgs> OnPointerUp { get; set; }
+
+    private bool _showLeftNav;
+    private bool _showRightNav;
+
+    private string GetZoomStyle()
+    {
+        // ALWAYS apply scale(DisplayZoom). Fit mode is no longer handled by a
+        // CSS max-width/object-fit contain constraint, so the rendered scale is
+        // exactly DisplayZoom in every mode — which is the value the toolbar
+        // reports (DisplayZoom * _dpr). The two can never diverge.
+        return $"transform:translate({PanX}px,{PanY}px) scale({DisplayZoom})";
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        double vw = ViewportWidth > 0 ? ViewportWidth : 800;
+        double threshold = Math.Min(vw * 0.2, 160);
+        _showLeftNav = e.ClientX < threshold;
+        _showRightNav = e.ClientX > (vw - threshold);
+    }
+
+    private void OnMouseLeave()
+    {
+        _showLeftNav = false;
+        _showRightNav = false;
+    }
+}
