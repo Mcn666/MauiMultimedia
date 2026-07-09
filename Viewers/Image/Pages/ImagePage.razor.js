@@ -343,9 +343,10 @@ export function cylinderTransition(imageUrl, direction, targetScale = 1, targetF
 
 // ── Flip-Through Transition (filmstrip click) ──
 
-export function flipThroughTransition(imageUris, direction, targetScale = 1, targetFit = true) {
+export function flipThroughTransition(thumbUris, targetUri, direction, targetScale = 1, targetFit = true) {
   return new Promise(resolve => {
     const slide = document.querySelector('.img-slide');
+    const imageUris = thumbUris;   // cards render these 120px thumbnails
     if (!slide || !imageUris || !imageUris.length) { resolve(); return; }
 
     const isNext = direction === 'next';
@@ -364,16 +365,19 @@ export function flipThroughTransition(imageUris, direction, targetScale = 1, tar
       card.style.opacity = '0.7';
       card.style.zIndex = (n - i);
 
-      // Match the real .img-wrap on-screen size: intrinsic <img> scaled by
-      // targetScale (== displayZoom). Avoids the object-fit:contain mismatch
-      // that caused jitter when animations were enabled (esp. 1:1 / HiDPI).
+      // The flip cards are decorative eye-candy, so they show the 120px
+      // thumbnail (thumbUris) scaled to FILL the viewport via object-fit:contain
+      // — NOT scaled by targetScale (which assumes the full natural image size
+      // and would shrink a 120px thumb to a speck). Decoupling the cards from
+      // targetScale also frees the animation from the full-res HTTP fetch, so
+      // the flip is instant after P1's streaming change. The real, correctly-
+      // zoomed image is shown on the final frame by Blazor (displayImg.src =
+      // targetUri below).
       const inner = document.createElement('div');
-      inner.style.cssText = 'display:flex;align-items:center;justify-content:center;';
-      inner.style.transform = `scale(${targetScale})`;
-
+      inner.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;height:100%;';
       const img = document.createElement('img');
       img.src = uri;
-      img.style.cssText = 'max-width:none;max-height:none;border-radius:2px;';
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:2px;';
       img.draggable = false;
       inner.appendChild(img);
       card.appendChild(inner);
@@ -390,11 +394,20 @@ export function flipThroughTransition(imageUris, direction, targetScale = 1, tar
       if (i >= n) {
         // Cleanup
         if (displayImg) {
-          displayImg.src = imageUris[n - 1];
-          // Pin the real .img-wrap to EXACTLY what Blazor will render next:
-          // translate(0,0) scale(displayZoom). Matching GetZoomStyle() lets
-          // Blazor's diff see no change -> no pop. (pan is 0 after ResetView.)
-          const w = displayImg.parentElement;
+          // Hand off to the REAL (full-res) target so the final frame shows
+          // the actual image at the correct zoom — not a 120px thumbnail.
+          // Blazor's LoadImageAsync then re-renders .img-display with the
+          // (same/similar) target URL, continuing the load seamlessly.
+          if (targetUri) displayImg.src = targetUri;
+          // Pin the real .img-wrap (NOT .img-stack) to EXACTLY what Blazor will
+          // render next: translate(0,0) scale(displayZoom). The .img-wrap already
+          // carries scale(displayZoom) via GetZoomStyle(), so pinning it here
+          // matches and Blazor's diff sees no change -> no pop, no double-scale.
+          // (displayImg.parentElement is .img-stack, a CHILD of .img-wrap — pinning
+          // there would nest scale(displayZoom) * scale(targetScale) and make the
+          // image render at displayZoom^2, diverging from the toolbar's single
+          // displayZoom * _dpr. That was the filmstrip-specific "zoom mismatch".)
+          const w = displayImg.closest('.img-wrap') || slide.querySelector('.img-wrap');
           if (w) w.style.transform = `translate(0px,0px) scale(${targetScale})`;
         }
         setTimeout(() => {

@@ -79,12 +79,39 @@
     will-change: transform;
 }
 
+::deep .image-viewport .img-stack {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+}
+
+/* P4: blurred low-res preview behind the full image while it loads. Inset:0
+   makes it fill the stack (the real image's box); scale(1.06) hides the soft
+   transparent blur edge. object-fit:contain keeps it aligned with the final. */
+::deep .image-viewport .img-placeholder {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: blur(14px);
+    transform: scale(1.06);
+    pointer-events: none;
+}
+
 ::deep .image-viewport .img-display {
     display: block;
     max-width: none;
     max-height: none;
     border-radius: 2px;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+}
+
+/* Fade the full image in once it has decoded, over the blurred placeholder. */
+::deep .image-viewport .img-display.img-loaded {
+    opacity: 1;
 }
 
 /* Keep the image inside the *visible* region: shrink the .image-viewport box

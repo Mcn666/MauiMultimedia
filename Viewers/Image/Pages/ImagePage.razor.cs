@@ -26,6 +26,12 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private string filePath = "";
     private string fileName = "";
     private string? imageSource;
+    // Blurred low-res preview shown behind the full image while it loads (P4).
+    private string? placeholderSource;
+    // True when the current image is already available instantly (cached
+    // data:URI). Signalled to ImageViewport so it skips the fade-in — avoids
+    // a post-navigation-animation flash. Reset each LoadImageAsync.
+    private bool _instantLoad;
     private bool isLoading = true;
     private string? errorMessage;
     private List<string> fileList = new();
@@ -110,7 +116,10 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
     // ── JS ──
     private IJSObjectReference? _jsModule;
-    private string? _imageToken;
+    // P1: maps filePath -> FileServer token for images served directly (no
+    // Skia/base64). Tokens live for the page lifetime (never individually
+    // revoked) so a cached URL never goes stale; all are revoked on dispose.
+    private readonly Dictionary<string, string> _servedTokens = new();
 
     // ── Navigation ──
     private bool hasPrev => currentIndex > 0;
@@ -460,8 +469,12 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             }
             else
             {
+                // Only reuse a cached entry as a filmstrip thumb if it is a
+                // thumbnail-sized data:URI. P1 may cache a full-res FileServer
+                // URL here; using it for a 120px strip would fetch the whole
+                // image, so skip and let GenerateThumbnail populate it instead.
                 var cached = DecodeCache.Get(path);
-                if (cached.HasValue)
+                if (cached.HasValue && cached.Value.DataUri.StartsWith("data:"))
                     _filmstripThumbnails[i] = cached.Value.DataUri;
             }
         }
@@ -522,25 +535,37 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         int dir = index > currentIndex ? 1 : -1;
         int dist = Math.Abs(index - currentIndex);
 
-        // Pick 2-4 evenly-spaced intermediate images
+        // Pick 2-4 evenly-spaced intermediate images for the flip *cards*.
+        // After P1 (HTTP loopback streaming) the real images are fetched over
+        // the FileServer — far too slow to load inside the 110ms-per-card flip,
+        // which made the animation show blank/janky frames. So the cards use
+        // cheap 120px thumbnails (instant data:URIs, ~tiny memory); the final
+        // real image is handed off to Blazor's LoadImageAsync below.
         int steps = Math.Min(dist, 4);
-        var imageUris = new string?[steps];
-        for (int s = 1; s <= steps; s++)
+        var thumbUris = await Task.Run(() =>
         {
-            int idx = currentIndex + dir * (int)Math.Round((double)dist * s / steps);
-            if (idx == currentIndex) idx += dir;
-            if (idx < 0 || idx >= fileList.Count) { imageUris[s - 1] = null; continue; }
-            imageUris[s - 1] = await GetImageDataUriAsync(fileList[idx]);
-        }
+            var list = new List<string>(steps);
+            for (int s = 1; s <= steps; s++)
+            {
+                int idx = currentIndex + dir * (int)Math.Round((double)dist * s / steps);
+                if (idx == currentIndex) idx += dir;
+                if (idx < 0 || idx >= fileList.Count) continue;
+                var t = GetThumbUri(fileList[idx]);
+                if (!string.IsNullOrEmpty(t)) list.Add(t);
+            }
+            return list;
+        });
 
         // Apply the target image's fit/1:1 zoom before the transition so the
         // real wrap is pinned to it the moment the cards are removed.
         ApplyZoomFor(fileList[index]);
 
-        // Animate rapid card flip
+        // Animate rapid card flip using thumbnails; hand off to the full-res
+        // target URI so the final frame shows the real image (not a thumbnail).
         if (_jsModule != null && _navAnimationEnabled)
             await _jsModule.InvokeVoidAsync("flipThroughTransition",
-                imageUris.Where(u => u != null).ToArray(),
+                thumbUris.ToArray(),
+                await GetImageDataUriAsync(fileList[index]),
                 dir > 0 ? "next" : "prev",
                 displayZoom, zoomFitMode);
 
@@ -643,17 +668,52 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     }
     private void CloseDetails() { showDetails = false; showFilmstrip = showToolbar; _ = RecomputeZoomForChromeAsync(); }
 
+    // P1: get (or create) a loopback FileServer URL for an image file. The token
+    // is cached per path for the page lifetime so the same image never registers
+    // duplicate tokens and a cached URL never becomes invalid.
+    private string ServedUrl(string path)
+    {
+        if (_servedTokens.TryGetValue(path, out var tok))
+            return $"{FileServer.BaseUrl}/file?token={tok}";
+        var t = FileServer.RegisterFile(path);
+        _servedTokens[path] = t;
+        return $"{FileServer.BaseUrl}/file?token={t}";
+    }
+
+    // Revoke every FileServer token we registered (called on navigation-away /
+    // dispose so the loopback server stops serving our files).
+    private void RevokeServedTokens()
+    {
+        foreach (var tok in _servedTokens.Values)
+        {
+            try { FileServer.UnregisterFile(tok); } catch { }
+        }
+        _servedTokens.Clear();
+    }
+
+    // P4: pick the cached grid thumbnail for `path` as the blurred placeholder
+    // shown while the full image loads. No-op if no thumbnail is available yet.
+    // IMPORTANT: skip the placeholder entirely when the image is already cached
+    // (DecodeCache hit). A cached image is available instantly, so a blurred
+    // preview would only flash for a frame — most visibly right after a
+    // navigation animation that already shows the incoming image crisply —
+    // reading as an edge-blur glitch. Cold (uncached) loads still get it.
+    private void SetPlaceholderFor(string path)
+    {
+        if (DecodeCache.Get(path).HasValue) { placeholderSource = null; return; }
+        if (s_thumbCache.TryGetValue(path, out var t) && !string.IsNullOrEmpty(t))
+            placeholderSource = t;
+        else
+            placeholderSource = null;
+    }
+
     private async Task LoadImageAsync()
     {
         isLoading = true;
         errorMessage = null;
         imageSource = null;
-
-        if (_imageToken != null)
-        {
-            try { FileServer.UnregisterFile(_imageToken); } catch { }
-            _imageToken = null;
-        }
+        _instantLoad = false;
+        SetPlaceholderFor(filePath);
 
         imageWidth = 0;
         imageHeight = 0;
@@ -667,7 +727,20 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             var cached = DecodeCache.Get(filePath);
             if (cached.HasValue)
             {
-                ApplyDecoded(cached.Value.DataUri, cached.Value.Width, cached.Value.Height);
+                // A data:URI entry is truly instant (inline) — tell the viewport
+                // to skip the fade-in so navigation doesn't flash. Direct-serve
+                // entries still fetch from the loopback server, so keep the
+                // (now blur-free, thanks to SetPlaceholderFor) fade.
+                _instantLoad = !cached.Value.IsDirectServe;
+
+                // P1 fix: a direct-serve entry stores only dimensions + a flag,
+                // never the per-page FileServer token URL (that token is revoked
+                // on dispose). A cross-page cache hit must re-mint a fresh token
+                // via ServedUrl() instead of reusing the now-403 stale URL.
+                string src = cached.Value.IsDirectServe
+                    ? ServedUrl(filePath)
+                    : cached.Value.DataUri;
+                ApplyDecoded(src, cached.Value.Width, cached.Value.Height);
                 try
                 {
                     var fi = new FileInfo(filePath);
@@ -690,31 +763,45 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             _fileCreationTime = fileInfo.CreationTime.ToString("yyyy-MM-dd HH:mm:ss");
             _fileLastWriteTime = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-            await Task.Run(async () =>
+            await Task.Run(() =>
             {
                 try
                 {
-                    var bytes = await File.ReadAllBytesAsync(filePath);
+                    // P1 — fast path: serve the original file directly via the
+                    // loopback FileServer. The browser decodes natively (and honors
+                    // EXIF orientation itself), so we skip the Skia decode, the
+                    // base64 round-trip, and the C#→JS interop serialization of a
+                    // multi-MB string. Dimensions come from a cheap header parse.
+                    var serve = ImageProcessingService.GetDirectServeInfo(filePath);
+                    if (serve.canServe)
+                    {
+                        var url = ServedUrl(filePath);
+                        // Cache dimensions only — the token URL is page-scoped and
+                        // must be re-minted via ServedUrl() on each entry (a re-visit
+                        // would otherwise reuse a revoked token → 403).
+                        DecodeCache.SetDirectServe(filePath, serve.width, serve.height);
+                        ApplyDecoded(url, serve.width, serve.height);
+                        return;
+                    }
+
+                    // Slow path: Skia decodes (EXIF/downscale) into a data:URI.
+                    var bytes = File.ReadAllBytes(filePath);
                     var result = ImageProcessingService.DecodeImage(bytes, fileName);
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     ApplyDecoded(result.DataUri, result.Width, result.Height);
                 }
                 catch
                 {
+                    // Last-resort: even if Skia fails, let the browser try the raw
+                    // file via FileServer (handles some formats Skia rejects).
                     try
                     {
-                        _imageToken = FileServer.RegisterFile(filePath);
-                        imageSource = $"{FileServer.BaseUrl}/file?token={_imageToken}";
-                        var bytes = await File.ReadAllBytesAsync(filePath);
-                        var dims = ImageProcessingService.GetImageDimensions(bytes);
-                        imageWidth = dims.width;
-                        imageHeight = dims.height;
-                        AutoSelectZoom();
+                        var url = ServedUrl(filePath);
+                        var dims = ImageProcessingService.GetImageDimensions(File.ReadAllBytes(filePath));
+                        ApplyDecoded(url, dims.width, dims.height);
                     }
                     catch
                     {
-                        _imageToken = null;
-                        imageSource = null;
                         errorMessage = $"Cannot decode: {fileName}";
                     }
                 }
@@ -841,6 +928,20 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             if (DecodeCache.Get(p).HasValue) continue;
             try
             {
+                // P1: preload adjacent images via direct FileServer URL when
+                // possible — keeps them instantly switchable without holding
+                // multi-MB base64 strings in the cache.
+                var serve = ImageProcessingService.GetDirectServeInfo(p);
+                if (serve.canServe)
+                {
+                    // Mint a token for this page so switching to the adjacent
+                    // image is instant, but only cache dimensions — the URL with
+                    // its token must not persist cross-page (see SetDirectServe).
+                    ServedUrl(p);
+                    DecodeCache.SetDirectServe(p, serve.width, serve.height);
+                    continue;
+                }
+
                 var bytes = await File.ReadAllBytesAsync(p);
                 var result = await Task.Run(() =>
                     ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p)));
@@ -1095,7 +1196,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private void GoBack()
     {
         stitchMode = false; stitchImages = null;
-        if (_imageToken != null) { try { FileServer.UnregisterFile(_imageToken); } catch { } _imageToken = null; }
+        RevokeServedTokens();
         _ = MauiNav.GoBackAsync();
     }
 
@@ -1161,16 +1262,28 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         await ScrollFilmstripToCurrentAsync();
     }
 
-    /// <summary>Get image data URI from cache or load from disk.</summary>
+    /// <summary>Get image source (data URI or FileServer URL) from cache or disk.</summary>
     private async Task<string?> GetImageDataUriAsync(string path)
     {
         // Check cache first
         var cached = DecodeCache.Get(path);
-        if (cached.HasValue) return cached.Value.DataUri;
+        if (cached.HasValue)
+            return cached.Value.IsDirectServe ? ServedUrl(path) : cached.Value.DataUri;
 
         // Load into cache
         try
         {
+            // P1: prefer serving the original file directly when the browser can
+            // decode it natively — avoids a Skia decode + base64 for every image
+            // touched during rapid navigation / flip-through.
+            var serve = ImageProcessingService.GetDirectServeInfo(path);
+            if (serve.canServe)
+            {
+                var url = ServedUrl(path);
+                DecodeCache.SetDirectServe(path, serve.width, serve.height);
+                return url;
+            }
+
             var bytes = await File.ReadAllBytesAsync(path);
             var result = await Task.Run(() =>
                 ImageProcessingService.DecodeImage(bytes, Path.GetFileName(path)));
@@ -1178,6 +1291,32 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             return result.DataUri;
         }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// Returns a small (120px) data:URI thumbnail for <paramref name="path"/>,
+    /// generating + caching it on first use (s_thumbCache). Used by the filmstrip
+    /// flip-through so the rapid animation cards render instantly without
+    /// fetching/decoding the full-size image over the loopback FileServer — which,
+    /// after P1's streaming change, would stall the 110ms-per-card flip and show
+    /// blank/janky frames. Cheap: decodes at most to a 1024px cap and emits a
+    /// tiny data:URI. Returns "" if generation fails.
+    /// </summary>
+    private string GetThumbUri(string path)
+    {
+        if (s_thumbCache.TryGetValue(path, out var cached) && !string.IsNullOrEmpty(cached))
+            return cached;
+        try
+        {
+            var thumb = ImageProcessingService.GenerateThumbnail(path, 120);
+            if (!string.IsNullOrEmpty(thumb))
+            {
+                lock (s_thumbCache) s_thumbCache[path] = thumb;
+                return thumb;
+            }
+        }
+        catch { }
+        return "";
     }
 
     // ═══════════ Slide Helpers ═══════════
@@ -1481,10 +1620,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             try { await _jsModule.DisposeAsync(); } catch { }
         }
 
-        if (_imageToken != null)
-        {
-            try { FileServer.UnregisterFile(_imageToken); } catch { }
-        }
+        RevokeServedTokens();
 
         _stitchCts?.Cancel();
         if (stitchImages != null)

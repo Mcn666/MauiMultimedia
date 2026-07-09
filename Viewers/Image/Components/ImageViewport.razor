@@ -14,7 +14,17 @@
 
     <div class="img-slide">
         <div class="img-wrap" style="@(GetZoomStyle() + (ZoomReady ? "" : ";visibility:hidden"))">
-            <img src="@ImageSource" alt="@FileName" class="img-display" />
+            <div class="img-stack">
+                @* P4: blurred low-res preview shown until the full image finishes
+                   loading. Kept behind the real <img>, which fades in over it. *@
+                @if (!string.IsNullOrEmpty(PlaceholderSource) && !_loaded)
+                {
+                    <img class="img-placeholder" src="@PlaceholderSource" alt="" />
+                }
+                <img src="@ImageSource" alt="@FileName"
+                     class="img-display @(_loaded ? "img-loaded" : "")"
+                     @onload="OnImgLoad" />
+            </div>
         </div>
     </div>
 
@@ -41,6 +51,7 @@
 
 @code {
     [Parameter] public string? ImageSource { get; set; }
+    [Parameter] public string? PlaceholderSource { get; set; }
     [Parameter] public string FileName { get; set; } = "";
     [Parameter] public bool ZoomFitMode { get; set; } = true;
     [Parameter] public float DisplayZoom { get; set; } = 1.0f;
@@ -49,6 +60,11 @@
     // where the image would otherwise render at the default scale(1.0) — i.e.
     // 200% on a HiDPI screen — for one frame before the correct zoom is applied.
     [Parameter] public bool ZoomReady { get; set; } = true;
+    // When true the image is already available (cached / data URI), so we must
+    // NOT drop to the "loading" state on a source change — doing so would flash
+    // the blurred placeholder or a fade-in right after a navigation animation
+    // that already shows the incoming image crisply.
+    [Parameter] public bool Instant { get; set; }
     [Parameter] public float PanX { get; set; }
     [Parameter] public float PanY { get; set; }
     [Parameter] public bool HasPrev { get; set; }
@@ -65,6 +81,25 @@
 
     private bool _showLeftNav;
     private bool _showRightNav;
+
+    // P4: tracks whether the current full image has finished loading so it can
+    // fade in over the blurred placeholder. Reset whenever ImageSource changes.
+    private string? _currentSrc;
+    private bool _loaded;
+
+    protected override void OnParametersSet()
+    {
+        if (_currentSrc != ImageSource)
+        {
+            _currentSrc = ImageSource;
+            // Cached / data-URI images are available immediately, so keep the
+            // image shown (no blurred placeholder, no fade-in) — this prevents
+            // the post-navigation-animation edge-blur flash.
+            _loaded = Instant;
+        }
+    }
+
+    private void OnImgLoad() => _loaded = true;
 
     private string GetZoomStyle()
     {

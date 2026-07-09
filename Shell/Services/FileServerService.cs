@@ -394,6 +394,20 @@ public sealed class FileServerService : IFileServerService, IDisposable
     {
         return Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant() switch
         {
+            // ── Image (served directly to the WebView for large-image viewing) ──
+            "jpg" or "jpeg" => "image/jpeg",
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            "bmp" => "image/bmp",
+            "ico" => "image/x-icon",
+            "avif" => "image/avif",
+            "svg" => "image/svg+xml",
+            // TIFF is not natively rendered by browsers; octet-stream forces a
+            // download/sniff fallback rather than a broken inline render.
+            "tiff" or "tif" => "application/octet-stream",
+
+            // ── Video (Range-streamed playback) ──
             "mp4" or "m4v" => "video/mp4",
             "webm" => "video/webm",
             "mkv" => "video/x-matroska",

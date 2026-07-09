@@ -109,6 +109,39 @@ public static class ImageProcessingService
     };
 
     /// <summary>
+    /// 浏览器原生可直接渲染的图片格式（无需 SkiaSharp 解码/重编码）。
+    /// 这些格式交给 WebView 自己的解码器，由 FileServer 以原始文件流式提供，
+    /// 省去 base64 膨胀、C#→JS 序列化开销，以及一次额外 Skia 解码。
+    /// 注意：TIFF 浏览器不原生渲染，排除；SVG 走文本通道，单独处理。
+    /// </summary>
+    private static readonly HashSet<string> BrowserNativeFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".ico", ".avif"
+    };
+
+    /// <summary>
+    /// 判断图片能否直接以原始文件经 FileServer 提供给浏览器（零 Skia 开销）。
+    /// 返回的宽高已按 EXIF 方向校正——现代浏览器默认 <c>image-orientation:
+    /// from-image</c>，会自行校正方向，因此即使带 EXIF 旋转的 JPEG 也能正确显示。
+    /// </summary>
+    public static (bool canServe, int width, int height) GetDirectServeInfo(string filePath)
+    {
+        var ext = Path.GetExtension(filePath);
+        if (!BrowserNativeFormats.Contains(ext))
+            return (false, 0, 0);
+
+        using var codec = SKCodec.Create(filePath);
+        if (codec == null)
+            return (false, 0, 0);
+
+        var origin = codec.EncodedOrigin;
+        bool swap = origin is SKEncodedOrigin.LeftBottom or SKEncodedOrigin.RightTop;
+        int w = swap ? codec.Info.Height : codec.Info.Width;
+        int h = swap ? codec.Info.Width : codec.Info.Height;
+        return (true, w, h);
+    }
+
+    /// <summary>
     /// 生成缩略图 data:URI（网格快照用）。尺寸小、快速加载。
     /// 
     /// 优化：通过 codec.GetScaledDimensions 让解码器按目标尺寸
