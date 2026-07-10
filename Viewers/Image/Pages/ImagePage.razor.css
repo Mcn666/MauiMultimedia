@@ -64,6 +64,16 @@
     visibility: hidden;
 }
 
+/* Contain the cylinder animation to the slide's subtree. "paint" tells the
+   browser that nothing inside the slide draws outside its bounds, so it can
+   skip full-document paint on each composited frame. "style" tells it that
+   no counter/style changes inside affect the outer document. This eliminates
+   unnecessary layout/paint work during the 3D flip — the #1 cause of jank in
+   preserve-3d animations with large images. */
+::deep .img-slide.cyl-animating {
+    contain: paint style;
+}
+
 /* The .img-wrap is ALWAYS transformed with scale(displayZoom) — fit mode is no
    longer handled by a CSS max-width/object-fit contain constraint. This makes
    the rendered scale equal the toolbar's displayZoom*_dpr by construction, so

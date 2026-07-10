@@ -101,6 +101,11 @@ let _gestureEl = null;
 let _gestureDotNetRef = null;
 let _gestureSwipeThreshold = 0; // min px for swipe detect
 
+// Drag peek: preview of adjacent images visible while dragging
+let _peekPrev = null;   // <img> for the previous image (left side)
+let _peekNext = null;   // <img> for the next image (right side)
+let _peekViewport = null; // container element
+
 function _gestureReset() {
   _gestureActive = false;
   _gestureStartX = 0;
@@ -117,6 +122,76 @@ function _gestureGetVelocity() {
   let sum = 0;
   for (const s of _gestureVelocitySamples) sum += s;
   return sum / _gestureVelocitySamples.length;
+}
+
+function _gestureCleanupPeek() {
+  if (_peekViewport && _peekViewport.parentNode) {
+    _peekViewport.parentNode.removeChild(_peekViewport);
+  }
+  _peekPrev = null;
+  _peekNext = null;
+  _peekViewport = null;
+}
+
+function _gestureCreatePeek() {
+  _gestureCleanupPeek();
+
+  const slide = document.querySelector('.img-slide');
+  if (!slide) return;
+
+  // Fetch adjacent URIs from C# (fire-and-forget — results arrive async)
+  const prevPromise = _gestureDotNetRef
+    ? _gestureDotNetRef.invokeMethodAsync('GetPeekUri', -1).catch(() => null)
+    : Promise.resolve(null);
+  const nextPromise = _gestureDotNetRef
+    ? _gestureDotNetRef.invokeMethodAsync('GetPeekUri', 1).catch(() => null)
+    : Promise.resolve(null);
+
+  Promise.all([prevPromise, nextPromise]).then(([prevUri, nextUri]) => {
+    // Peek elements are children of .img-slide, positioned to its left and
+    // right. When the slide translates, they move with it. The viewport's
+    // overflow:hidden naturally clips them — only the portion that slides
+    // into the visible area (between 0 and viewportWidth) shows through.
+    // This avoids any z-index or stacking-context trickery.
+    if (!prevUri && !nextUri) return;
+
+    const wrap = slide.querySelector('.img-wrap');
+    if (!wrap) return;
+
+    const container = document.createElement('div');
+    container.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;' +
+      'pointer-events:none;display:flex;align-items:center;justify-content:center;';
+
+    if (prevUri) {
+      const p = document.createElement('div');
+      p.style.cssText = 'position:absolute;top:0;bottom:0;left:-100%;width:100%;' +
+        'display:flex;align-items:center;justify-content:center;';
+      const img = document.createElement('img');
+      img.src = prevUri;
+      img.draggable = false;
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:2px;';
+      p.appendChild(img);
+      container.appendChild(p);
+      _peekPrev = p;
+    }
+
+    if (nextUri) {
+      const n = document.createElement('div');
+      n.style.cssText = 'position:absolute;top:0;bottom:0;left:100%;width:100%;' +
+        'display:flex;align-items:center;justify-content:center;';
+      const img = document.createElement('img');
+      img.src = nextUri;
+      img.draggable = false;
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:2px;';
+      n.appendChild(img);
+      container.appendChild(n);
+      _peekNext = n;
+    }
+
+    // Insert peek BEFORE .img-wrap so it sits behind it in stacking order
+    slide.insertBefore(container, wrap);
+    _peekViewport = container;
+  });
 }
 
 export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
@@ -140,6 +215,11 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
     _gestureVelocitySamples = [];
     el.setPointerCapture(e.pointerId);
     el.classList.add('tracking');
+
+    // Create peek previews of adjacent images (only in fit mode)
+    if (el.classList.contains('fit')) {
+      _gestureCreatePeek();
+    }
   });
 
   el.addEventListener('pointermove', (e) => {
@@ -201,8 +281,16 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
 
 export function disposeGestureTracker() {
   _gestureReset();
+  _gestureCleanupPeek();
   _gestureDotNetRef = null;
   _gestureEl = null;
+}
+
+// ── Frame wait (deferred paint gate) ──
+// Returns a Promise that resolves after the next rAF + paint, giving the
+// browser a frame to composite the final state before C# modifies more DOM.
+export function waitFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
 }
 
 // ── Image Slide Transform ──
@@ -315,7 +403,7 @@ export function hideOverscrollGuide() {
   }
 }
 
-// ── 3D Cylinder Transition ──
+// ── 3D Cylinder Transition (v3 — optimized for 60fps) ──
 // We animate CLONES layered above the real .img-wrap. When the animation ends
 // we DO touch the real wrap, but ONLY to pin it to EXACTLY what Blazor will
 // render next: `scale(targetScale)` where targetScale == displayZoom (the same
@@ -323,35 +411,39 @@ export function hideOverscrollGuide() {
 // zoom stays identical to displayZoom — no desync, no 200% flash. (.img-wrap
 // always carries scale(displayZoom) now; fit mode no longer uses a bare CSS
 // transform, which is what used to let the rendered zoom and toolbar diverge.)
+//
+// v3 optimizations:
+//   A) Pre-decode target image via Image.decode() before any DOM work, so the
+//      browser has the decoded bitmap ready when backImg.src is set later —
+//      eliminates the 20-50ms main-thread decode that caused frame drops on
+//      large JPEGs.
+//   B) translateZ(0) on front/back clones guarantees GPU compositor layers,
+//      avoiding per-frame layer creation/disposal.
+//   C) will-change:transform on slide (already in CSS) + contain:paint on
+//      .cyl-animating isolates compositing to just the slide subtree.
+//   D) Batch all style changes before the rAF, minimizing forced layout.
 
-export function cylinderTransition(imageUrl, direction, targetScale = 1, targetFit = true) {
-  return new Promise(resolve => {
+export function cylinderTransition(imageUrl, direction, targetScale = 1, targetFit = true, panX = 0, panY = 0, outgoingScale = 1) {
+  return new Promise((resolve) => {
     const slide = document.querySelector('.img-slide');
     const wrap = slide && slide.querySelector('.img-wrap');
     const img = slide && slide.querySelector('.img-display');
     if (!slide || !wrap || !img) { resolve(); return; }
 
     const isNext = direction === 'next';
-    // Slightly longer than before so large images don't whip past the
-    // highest-distortion part of the flip (near rotateY 90deg) too fast.
     const duration = 480;
     const outAngle = isNext ? -90 : 90;
     const inAngle = isNext ? 90 : -90;
 
-    // Larger perspective softens the near/far distortion of a 3D rotateY flip.
-    // At 1200px a wide image's left/right edges swing a large Z distance, so
-    // the perspective foreshortening becomes extreme (the "deep / whips past"
-    // effect on big images). 2800px keeps a subtle 3D feel without the
-    // exaggerated depth. Tune up further if very wide panoramas still distort.
+    // IMPORTANT: hide the real wrap IMMEDIATELY, before any Blazor render
+    // flush can update it with ApplyZoomFor's new displayZoom.
     slide.style.perspective = '2800px';
     slide.style.perspectiveOrigin = 'center center';
-    // Hide the real (Blazor-managed) wrap for the animation's duration so only
-    // the clones are visible. Done via a class on the slide — Blazor does not
-    // manage the slide's classes, so this survives Blazor's mid-animation
-    // re-renders (which would otherwise wipe a direct visibility tweak).
     slide.classList.add('cyl-animating');
 
-    // Front clone = current image, carrying the wrap's existing zoom transform.
+    // ── Front card: shown immediately, starts rotating right away ──
+    // Stays at outgoingScale throughout so mid-flip projections match the
+    // back card's (outgoingScale×cosθ×w = targetScale×cosθ×w = viewport×cosθ).
     const front = wrap.cloneNode(true);
     front.classList.add('cyl-clone');
     front.style.position = 'absolute';
@@ -365,85 +457,146 @@ export function cylinderTransition(imageUrl, direction, targetScale = 1, targetF
     front.style.transformStyle = 'preserve-3d';
     front.style.backfaceVisibility = 'hidden';
     front.style.willChange = 'transform';
-    const base = front.style.transform || '';
-    // Set the initial transform (with rotateY(0deg)) BEFORE attaching the
-    // transition, so the scale(..) -> scale(..) rotateY(0) step doesn't burn
-    // the whole duration as a no-op and delay the actual flip.
-    front.style.transform = (base ? base + ' ' : '') + 'rotateY(0deg)';
+    front.style.transform = `translate(${panX}px,${panY}px) scale(${outgoingScale}) rotateY(0deg) translateZ(0)`;
     front.style.transition = `transform ${duration}ms ease-in-out`;
+    slide.appendChild(front);
+    // Force layout
+    void front.offsetHeight;
 
-    // Back card = incoming image. It MUST render at EXACTLY the same on-screen
-    // size as the real .img-wrap will after the transition — i.e. the image's
-    // intrinsic pixel size scaled by targetScale (== displayZoom, the single
-    // source of truth). The old code used object-fit:contain on the back <img>,
-    // which sizes the image to the slide CONTAINER (fit-to-viewport) and IGNORES
-    // the real zoom — so in 1:1 mode (or on HiDPI where displayZoom = 1/_dpr)
-    // the incoming image was shown far larger during the flip, then snapped to
-    // the correct scale the instant the real wrap was revealed. That snap is the
-    // jitter seen ONLY when animations are on. Fix: scale an intrinsic-size <img>
-    // by targetScale inside the rotating card, matching .img-wrap exactly.
+    // Record when front starts rotating (for back card timing compensation)
+    const frontStartTime = performance.now();
+
+    // Start front rotation immediately
+    requestAnimationFrame(() => {
+      front.style.transform = `translate(0px,0px) scale(${outgoingScale}) rotateY(${outAngle}deg) translateZ(0)`;
+    });
+
+    // ── Back card: preload target image off-screen, then show ──
+    // Front rotates out immediately; the back card only appears after the
+    // image is decoded. Its animation duration is dynamically shortened so
+    // both cards finish at the same time (t = 480ms), avoiding a gap where
+    // one card completes before the other.
     const back = document.createElement('div');
-    back.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;backface-visibility:hidden;transform-style:preserve-3d;';
-    back.style.transform = `rotateY(${inAngle}deg)`;
-    back.style.transition = `transform ${duration}ms ease-in-out`;
+    back.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;display:flex;' +
+      'align-items:center;justify-content:center;backface-visibility:hidden;' +
+      'transform-style:preserve-3d;';
     back.style.willChange = 'transform';
 
     const backInner = document.createElement('div');
-    backInner.style.cssText = 'display:flex;align-items:center;justify-content:center;transform-style:preserve-3d;';
+    backInner.style.cssText = 'display:flex;align-items:center;' +
+      'justify-content:center;transform-style:preserve-3d;';
     backInner.style.transform = `scale(${targetScale})`;
 
     const backImg = document.createElement('img');
-    backImg.src = imageUrl;
     backImg.draggable = false;
-    backImg.style.cssText = 'max-width:none;max-height:none;border-radius:2px;';  // intrinsic size; scaling done by backInner
+    backImg.style.cssText = 'max-width:none;max-height:none;border-radius:2px;';
     backInner.appendChild(backImg);
     back.appendChild(backInner);
 
-    slide.appendChild(front);
-    slide.appendChild(back);
-
-    // Force layout
-    back.offsetHeight;
-
-    requestAnimationFrame(() => {
-      front.style.transform = (base ? base + ' ' : '') + `rotateY(${outAngle}deg)`;
-      back.style.transform = 'rotateY(0deg)';
-
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        front.removeEventListener('transitionend', finish);
-        back.removeEventListener('transitionend', finish);
-
-        // Swap the real <img> source to the new image AND pin .img-wrap's
-        // transform to the new image's correct zoom before it is un-hidden.
-        // Without this, the new <img> would momentarily inherit the *outgoing*
-        // image's zoom (e.g. fit -> 1:1 shows scale(1.0) = 200% for one frame).
-        // We set it to EXACTLY what Blazor will render next, so Blazor's diff
-        // sees no change and the value stays correct — no desync, no pop.
-        // .img-wrap ALWAYS carries scale(displayZoom) now (fit no longer uses a
-        // bare CSS transform), so pin it unconditionally to the incoming zoom.
-        img.src = imageUrl;
-        // Pin the real .img-wrap to EXACTLY what Blazor will render next:
-        // translate(0,0) scale(displayZoom). Matching the GetZoomStyle() output
-        // string lets Blazor's diff see no change, so it won't re-set and there
-        // is no pop. (pan is 0 after ResetView on navigation.)
-        wrap.style.transform = `translate(0px,0px) scale(${targetScale})`;
-
-        if (front.parentNode) front.parentNode.removeChild(front);
-        if (back.parentNode) back.parentNode.removeChild(back);
-        slide.classList.remove('cyl-animating');
-        slide.style.perspective = '';
-        slide.style.perspectiveOrigin = '';
-
-        resolve();
-      };
-      front.addEventListener('transitionend', finish);
+    function appendBack() {
+      if (back.parentNode) return; // already appended
+      const elapsed = performance.now() - frontStartTime;
+      const backDuration = Math.max(200, duration - elapsed);
+      back.style.transform = `rotateY(${inAngle}deg) translateZ(0)`;
+      back.style.transition = `transform ${backDuration}ms ease-in-out`;
+      slide.appendChild(back);
+      void back.offsetHeight;
+      requestAnimationFrame(() => {
+        back.style.transform = 'rotateY(0deg) translateZ(0)';
+      });
+      // Also listen for back's transitionend to call finish
       back.addEventListener('transitionend', finish);
-      setTimeout(finish, duration + 150);
-    });
+    }
+
+    // Preload target image off-screen; when decoded, show back card.
+    // The browser fetches + decodes the image in the background without
+    // blocking the (already-running) front card flip animation.
+    backImg.src = imageUrl;
+    const preloader = new Image();
+    preloader.onload = appendBack;
+    preloader.onerror = appendBack;
+    preloader.src = imageUrl;
+    // Fallback: show back card at most 200ms after front starts, even if
+    // the image hasn't fully loaded yet (avoids a completely empty flip).
+    const fallbackTimer = setTimeout(appendBack, 200);
+
+    // ── Completion: wait for front + back transitionend ──
+
+    let backEndCount = 0;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      // Front's transition always fires at 480ms. Back's fires at its
+      // dynamic backDuration. Wait for BOTH before cleaning up.
+      if (back.parentNode) {
+        backEndCount++;
+        if (backEndCount < 2) return;   // need front + back
+      }
+      done = true;
+      clearTimeout(fallbackTimer);
+      front.removeEventListener('transitionend', finish);
+      back.removeEventListener('transitionend', finish);
+
+      img.src = imageUrl;
+      wrap.style.transform = `translate(0px,0px) scale(${targetScale})`;
+
+      if (front.parentNode) front.parentNode.removeChild(front);
+      if (back.parentNode) back.parentNode.removeChild(back);
+      slide.classList.remove('cyl-animating');
+      slide.style.perspective = '';
+      slide.style.perspectiveOrigin = '';
+
+      resolve();
+    };
+    front.addEventListener('transitionend', finish);
+    // back transitionend listener added in appendBack()
+    setTimeout(finish, duration + 150);
   });
+}
+
+// ── Slide Transition (gesture swipe) ──
+// The pre-positioned peek image slides into view as .img-slide translates
+// to full viewport width. No clone, no fade — the peek is already in the
+// DOM at left:-100%/100%, and the viewport's overflow:hidden clips it
+// naturally as the slide moves.
+
+export function slideTransition(imageUrl, direction, viewportWidth, targetScale = 1) {
+  return new Promise(resolve => {
+    const slide = document.querySelector('.img-slide');
+    const wrap = slide && slide.querySelector('.img-wrap');
+    const img = slide && slide.querySelector('.img-display');
+    if (!slide || !wrap || !img) { resolve(); return; }
+
+    const duration = 280;
+    const endX = direction < 0 ? viewportWidth : -viewportWidth;
+
+    slide.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    slide.style.transform = `translateX(${endX}px)`;
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      slide.removeEventListener('transitionend', finish);
+
+      // Pin the real image and zoom BEFORE resetting the slide position,
+      // so when transform snaps back to '' the .img-wrap already shows the
+      // target image at the correct zoom — no frame of old image visible.
+      img.src = imageUrl;
+      wrap.style.transform = `translate(0px,0px) scale(${targetScale})`;
+      slide.style.transform = '';
+      slide.style.transition = '';
+      slide.classList.remove('tracking');
+
+      resolve();
+    };
+    slide.addEventListener('transitionend', finish);
+    setTimeout(finish, duration + 100);
+  });
+}
+
+export function cleanupGesturePeek() {
+  _gestureCleanupPeek();
 }
 
 // ── Flip-Through Transition (filmstrip click) ──

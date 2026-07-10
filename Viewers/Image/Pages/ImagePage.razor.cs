@@ -283,6 +283,19 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         // Called during drag — could show visual feedback
     }
 
+    /// <summary>
+    /// Called by the JS gesture tracker to get the adjacent image URI for
+    /// the drag preview ("peek"). direction: -1 = prev, 1 = next.
+    /// Returns null if there's no adjacent image in that direction.
+    /// </summary>
+    [JSInvokable]
+    public async Task<string?> GetPeekUri(int direction)
+    {
+        var idx = currentIndex + direction;
+        if (idx < 0 || idx >= fileList.Count) return null;
+        return await GetImageDataUriAsync(fileList[idx]);
+    }
+
     [JSInvokable]
     public async Task OnGestureRelease(double offsetX, double velocity)
     {
@@ -347,6 +360,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 await _jsModule.InvokeVoidAsync("springStart", ".img-slide",
                     offsetX, 0, velocity,
                     new { stiffness = 400, damping = 30, mass = 1 });
+                await _jsModule.InvokeVoidAsync("cleanupGesturePeek");
             }
             else
             {
@@ -355,8 +369,8 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (toPrev && hasPrev) await DoSpringNavigate(-1, offsetX, velocity);
-        else if (!toPrev && hasNext) await DoSpringNavigate(1, offsetX, velocity);
+        if (toPrev && hasPrev) await DoFadeNavigate(-1, offsetX);
+        else if (!toPrev && hasNext) await DoFadeNavigate(1, offsetX);
         else
         {
             if (_jsModule != null)
@@ -364,6 +378,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 await _jsModule.InvokeVoidAsync("springStart", ".img-slide",
                     offsetX, 0, velocity,
                     new { stiffness = 400, damping = 30, mass = 1 });
+                await _jsModule.InvokeVoidAsync("cleanupGesturePeek");
             }
             else
             {
@@ -372,56 +387,42 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task DoSpringNavigate(int direction, double fromX, double velocity)
+    private async Task DoFadeNavigate(int direction, double offsetX)
     {
         // direction: -1 = prev, 1 = next
         _isAnimating = true;
 
-        double targetX = direction > 0 ? -vpWidth : vpWidth;
+        var targetPath = fileList[currentIndex + direction];
+        var targetUri = await GetImageDataUriAsync(targetPath);
 
-        // Animate out
+        // Pre-compute the target image's zoom.
+        ApplyZoomFor(targetPath);
+
+        // Hide the real wrap so the peek image shows through during the slide
+        if (_jsModule != null) await _jsModule.InvokeVoidAsync("hideOverscrollGuide");
+
+        // Slide: the peek image (already positioned at left:-100%/100% within
+        // .img-slide) slides into view as the whole container translates.
+        // The JS handler pins img.src + wrap.transform before resetting the
+        // slide position, so there's no frame of the old image flashing back.
+        if (_jsModule != null && targetUri != null)
+            await _jsModule.InvokeVoidAsync("slideTransition", targetUri, direction, (double)vpWidth, displayZoom);
+
+        // Clean up peek elements created during drag
+        if (_jsModule != null) await _jsModule.InvokeVoidAsync("cleanupGesturePeek");
+
+        // Hide the (now empty) real wrap during the swap then immediately show it
+        // with the new image at the correct zoom — no flash because the browser
+        // already decoded targetUri from the peek preview.
         if (_jsModule != null)
-        {
-            await _jsModule.InvokeVoidAsync("springStart", ".img-slide",
-                fromX, targetX, velocity,
-                new { stiffness = 250, damping = 25, mass = 1 });
-        }
-        else
-        {
-            // Fallback: use CSS transition
-            await SetSlideTransitionAsync(280);
-            await SetSlideTransformAsync($"{targetX}px");
-            await Task.Delay(300);
-        }
+            await _jsModule.InvokeVoidAsync("waitFrame");
 
-        // Switch image
-        await ClearSlideTransformAsync();
+        // Switch state
         currentIndex += direction;
         filePath = fileList[currentIndex];
         fileName = Path.GetFileName(filePath);
         ResetView();
         await LoadImageAsync();
-
-        // Position off-screen opposite side, animate in
-        double startX = direction > 0 ? vpWidth : -vpWidth;
-        await SetSlideTransformAsync($"{startX}px");
-        StateHasChanged();
-        await Task.Delay(16);
-
-        if (_jsModule != null)
-        {
-            await _jsModule.InvokeVoidAsync("springStart", ".img-slide",
-                startX, 0, 0,
-                new { stiffness = 250, damping = 25, mass = 1 });
-        }
-        else
-        {
-            await SetSlideTransitionAsync(280);
-            await SetSlideTransformAsync("0px");
-            await Task.Delay(300);
-        }
-
-        await ClearSlideTransformAsync();
         _isAnimating = false;
 
         await ScrollFilmstripToCurrentAsync();
@@ -1269,12 +1270,24 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         // the new-image layer (and the src swap it performs) shows the incoming
         // image at its own correct scale from frame one — not the outgoing
         // image's zoom. The transition function itself is unchanged.
+        // Save the old zoom so the front card starts the flip at the image's
+        // own zoom and smoothly transitions to the target zoom via CSS
+        // interpolation (no visible jump).
+        var oldZoom = displayZoom;
         ApplyZoomFor(targetPath);
 
-        // 3D cylinder transition (pass the target image's zoom so the real
-        // wrap can be pinned to it the moment the clones are removed)
+        // 3D cylinder transition. panX/panY passed so the front card's
+        // transform uses the outgoing image's pan. outgoingScale (oldZoom)
+        // lets the front start at the current zoom and interpolate to the
+        // target zoom during the 480ms flip — no "缩放变化".
         if (_jsModule != null && targetUri != null && _navAnimationEnabled)
-            await _jsModule.InvokeVoidAsync("cylinderTransition", targetUri, "prev", displayZoom, zoomFitMode);
+            await _jsModule.InvokeVoidAsync("cylinderTransition", targetUri, "prev", displayZoom, zoomFitMode, panX, panY, oldZoom);
+
+        // Let the browser paint the animation's final frame before C#
+        // modifies DOM state (currentIndex/filePath/LoadImageAsync trigger
+        // Blazor re-renders that would otherwise compete with the paint).
+        if (_jsModule != null)
+            await _jsModule.InvokeVoidAsync("waitFrame");
 
         // Switch state
         currentIndex--; filePath = targetPath;
@@ -1300,12 +1313,17 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         // the new-image layer (and the src swap it performs) shows the incoming
         // image at its own correct scale from frame one — not the outgoing
         // image's zoom. The transition function itself is unchanged.
+        var oldZoom = displayZoom;
         ApplyZoomFor(targetPath);
 
-        // 3D cylinder transition (pass the target image's zoom so the real
-        // wrap can be pinned to it the moment the clones are removed)
+        // 3D cylinder transition. panX/panY/outgoingScale passed.
         if (_jsModule != null && targetUri != null && _navAnimationEnabled)
-            await _jsModule.InvokeVoidAsync("cylinderTransition", targetUri, "next", displayZoom, zoomFitMode);
+            await _jsModule.InvokeVoidAsync("cylinderTransition", targetUri, "next", displayZoom, zoomFitMode, panX, panY, oldZoom);
+
+        // Let the browser paint the animation's final frame before C#
+        // modifies DOM state.
+        if (_jsModule != null)
+            await _jsModule.InvokeVoidAsync("waitFrame");
 
         // Switch state
         currentIndex++; filePath = targetPath;

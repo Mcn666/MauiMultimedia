@@ -35,6 +35,7 @@ public class ViewerPageFactory
 
         page.Content = bwv;
         NavigationPage.SetHasNavigationBar(page, false);
+        NavigationPage.SetHasBackButton(page, false);
         return page;
     }
 
