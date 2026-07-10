@@ -12,10 +12,7 @@
 <div class="v-page">
     <div class="v-toolbar">
         <button class="v-btn" @onclick="GoBack">← 返回</button>
-        <button class="v-btn" disabled="@(hasPrev ? null : true)" @onclick="GoPrev">← 上一个</button>
-        <span class="v-title" title="@filePath">@fileName</span>
-        <span class="v-pos">@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")</span>
-        <button class="v-btn" disabled="@(hasNext ? null : true)" @onclick="GoNext">下一个 →</button>
+        <FileNavDropdown FileList="fileList" CurrentIndex="currentIndex" OnFileSelected="OnFileSelected" />
     </div>
 
     @if (isLoading)
@@ -52,9 +49,6 @@
     private readonly Dictionary<string, string> _servedTokens = new(); // .html 图片：路径 -> token
     private readonly List<string> _mhtmlTempFiles = new();            // .mht 抽取出的临时文件
     private readonly List<string> _mhtmlTokens = new();               // .mht 资源 token
-
-    private bool hasPrev => currentIndex > 0;
-    private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
 
     protected override async Task OnInitializedAsync()
     {
@@ -229,18 +223,11 @@
         _ = MauiNav.GoBackAsync();
     }
 
-    private void GoPrev()
+    private void OnFileSelected(int index)
     {
-        if (!hasPrev) return;
-        currentIndex--; filePath = fileList[currentIndex];
-        fileName = Path.GetFileName(filePath);
-        _ = LoadContentAsync();
-    }
-
-    private void GoNext()
-    {
-        if (!hasNext) return;
-        currentIndex++; filePath = fileList[currentIndex];
+        if (index < 0 || index >= fileList.Count || index == currentIndex) return;
+        currentIndex = index;
+        filePath = fileList[currentIndex];
         fileName = Path.GetFileName(filePath);
         _ = LoadContentAsync();
     }

@@ -9,9 +9,7 @@
 <div class="viewer-page">
     <div class="v-toolbar">
         <button class="v-btn" @onclick="GoBack">← 返回</button>
-        <button class="v-btn v-btn-nav" disabled="@(hasPrev ? null : true)" @onclick="GoPrev">←</button>
-        <span class="v-title" title="@filePath">@fileName</span>
-        <button class="v-btn v-btn-nav" disabled="@(hasNext ? null : true)" @onclick="GoNext">→</button>
+        <FileNavDropdown FileList="fileList" CurrentIndex="currentIndex" OnFileSelected="OnFileSelected" />
     </div>
 
     @if (isLoading)
@@ -46,8 +44,6 @@
     private string? errorMessage;
     private List<string> fileList = new();
     private int currentIndex = -1;
-    private bool hasPrev => currentIndex > 0;
-    private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
 
     protected override async Task OnInitializedAsync()
     {
@@ -97,17 +93,13 @@
     {
         _ = MauiNav.GoBackAsync();
     }
-    private void GoPrev()
+    private async Task OnFileSelected(int index)
     {
-        if (!hasPrev) return;
-        currentIndex--; filePath = fileList[currentIndex]; fileName = Path.GetFileName(filePath);
-        _ = LoadFileContentAsync();
-    }
-    private void GoNext()
-    {
-        if (!hasNext) return;
-        currentIndex++; filePath = fileList[currentIndex]; fileName = Path.GetFileName(filePath);
-        _ = LoadFileContentAsync();
+        if (index < 0 || index >= fileList.Count || index == currentIndex) return;
+        currentIndex = index;
+        filePath = fileList[currentIndex];
+        fileName = Path.GetFileName(filePath);
+        await LoadFileContentAsync();
     }
     private async Task LoadFileContentAsync()
     {

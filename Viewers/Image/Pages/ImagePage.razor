@@ -95,9 +95,8 @@
     }
 
     @* z=6: Toolbar *@
-    <ImageToolbar FilePath="@filePath"
-                 FileName="@fileName"
-                 PositionText="@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")"
+    <ImageToolbar FileList="@fileList"
+                 CurrentIndex="@currentIndex"
                  ZoomDisplay="@GetDisplayZoom()"
                  FitToggleText="@GetFitToggleText()"
                  FitToggleTitle="@GetFitToggleTitle()"
@@ -108,6 +107,7 @@
                  ZoomOutDisabled="@((stitchMode ? _stitchZoom <= 0.1f : displayZoom <= MinZoom))"
                  ZoomInDisabled="@((stitchMode ? _stitchZoom >= 5.0f : displayZoom >= MaxZoom))"
                  OnGoBack="GoBack"
+                 OnFileSelected="OnFileDropSelected"
                  OnZoomOut="ZoomOut"
                  OnZoomIn="ZoomIn"
                  OnToggleFit="ToggleFitActual"

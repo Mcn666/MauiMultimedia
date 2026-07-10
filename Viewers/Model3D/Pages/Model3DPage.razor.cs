@@ -1,16 +1,22 @@
 using System.IO;
+using System.Linq;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using MauiMultimedia.Core.Abstractions;
 
 namespace MauiMultimedia.Viewers.Model3D.Pages;
 
-public partial class Model3DPage : ComponentBase
+public partial class Model3DPage : ComponentBase, IAsyncDisposable
 {
     [Inject] private NavigationManager Navigation { get; set; } = null!;
     [Inject] private IFileNavigationState NavState { get; set; } = null!;
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".glb", ".gltf", ".stl", ".obj", ".fbx", ".dae", ".ply", ".3ds", ".wrl"
+    };
 
     private IJSObjectReference? _jsModule;
     private string filePath = "";
@@ -20,6 +26,8 @@ public partial class Model3DPage : ComponentBase
     private string? _modelUrl;
     private bool _isGlb;
     private bool _scriptsReady;
+    private List<string> fileList = new();
+    private int currentIndex = -1;
 
     private sealed record ScriptLoadStatus(
         bool Ok,
@@ -29,6 +37,8 @@ public partial class Model3DPage : ComponentBase
 
     protected override async Task OnInitializedAsync()
     {
+        fileList = NavState.CurrentDirectoryFiles?
+            .Where(f => Exts.Contains(Path.GetExtension(f))).ToList() ?? new();
         await LoadAsync();
     }
 
@@ -57,7 +67,6 @@ public partial class Model3DPage : ComponentBase
             {
                 if (_isGlb)
                 {
-                    // GLB 路径：仅需 <model-viewer> 自定义元素就绪，由组件内 <model-viewer> 自动升级
                     var status = await _jsModule.InvokeAsync<ScriptLoadStatus>("ensureScriptsLoaded");
                     if (!status.Ok || !status.ModelViewer)
                     {
@@ -70,7 +79,6 @@ public partial class Model3DPage : ComponentBase
                 }
                 else
                 {
-                    // STL/OBJ 路径：initThree 内部会先 await ensureScriptsLoaded 并校验 THREE，失败抛异常
                     await _jsModule.InvokeVoidAsync("initThree", "three-canvas", _modelUrl, Path.GetExtension(filePath).ToLowerInvariant());
                 }
             }
@@ -83,16 +91,27 @@ public partial class Model3DPage : ComponentBase
         }
     }
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(string? path = null)
     {
-        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        filePath = NavState.CurrentFilePath
-            ?? uri.Query.TrimStart('?').Split('&')
-                .Select(p => p.Split('=', 2))
-                .Where(kv => kv.Length == 2 && kv[0] == "path")
-                .Select(kv => Uri.UnescapeDataString(kv[1]))
-                .FirstOrDefault() ?? "";
+        if (path != null)
+        {
+            filePath = path;
+        }
+        else
+        {
+            var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+            filePath = NavState.CurrentFilePath
+                ?? uri.Query.TrimStart('?').Split('&')
+                    .Select(p => p.Split('=', 2))
+                    .Where(kv => kv.Length == 2 && kv[0] == "path")
+                    .Select(kv => Uri.UnescapeDataString(kv[1]))
+                    .FirstOrDefault() ?? "";
+        }
+
         fileName = Path.GetFileName(filePath);
+        if (path == null)
+            currentIndex = fileList.FindIndex(f => string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
+
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
         _isGlb = ext == ".glb" || ext == ".gltf";
 
@@ -102,6 +121,15 @@ public partial class Model3DPage : ComponentBase
             isLoading = false;
             return;
         }
+
+        // Release old Blob URL before loading new model
+        if (_modelUrl != null)
+        {
+            try { await JS.InvokeVoidAsync("revokeBlobUrl", _modelUrl); }
+            catch { }
+        }
+        _modelUrl = null;
+        _scriptsReady = false;
 
         isLoading = true;
         errorMessage = null;
@@ -126,5 +154,26 @@ public partial class Model3DPage : ComponentBase
         finally { isLoading = false; StateHasChanged(); }
     }
 
+    private async Task OnFileSelected(int index)
+    {
+        if (index < 0 || index >= fileList.Count || index == currentIndex) return;
+        currentIndex = index;
+        await LoadAsync(fileList[currentIndex]);
+    }
+
     private void GoBack() { _ = MauiNav.GoBackAsync(); }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_modelUrl != null)
+        {
+            try { await JS.InvokeVoidAsync("revokeBlobUrl", _modelUrl); }
+            catch { }
+        }
+        if (_jsModule != null)
+        {
+            try { await _jsModule.DisposeAsync(); }
+            catch { }
+        }
+    }
 }

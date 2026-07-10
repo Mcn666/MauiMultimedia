@@ -2,8 +2,9 @@
     <div class="toolbar-left">
         <button class="tbar-btn" @onclick="OnGoBack" title="返回 (Esc)">← 返回</button>
 
-        <span class="toolbar-file-name" title="@FilePath">@FileName</span>
-        <span class="toolbar-pos">@PositionText</span>
+        <FileNavDropdown FileList="FileList"
+                         CurrentIndex="CurrentIndex"
+                         OnFileSelected="OnFileSelected" />
     </div>
 
     <div class="toolbar-right">
@@ -22,14 +23,13 @@
         }
 
         <span class="toolbar-sep"></span>
-        <button class="tbar-btn tbar-btn-toggle" @onclick="OnToggleDetails" title="详情">ℹ</button>
+        <button class="tbar-btn tbar-btn-toggle tbar-btn-circle" @onclick="OnToggleDetails" title="详情">ℹ</button>
     </div>
 </div>
 
 @code {
-    [Parameter] public string FilePath { get; set; } = "";
-    [Parameter] public string FileName { get; set; } = "";
-    [Parameter] public string PositionText { get; set; } = "";
+    [Parameter] public IReadOnlyList<string> FileList { get; set; } = Array.Empty<string>();
+    [Parameter] public int CurrentIndex { get; set; }
     [Parameter] public string ZoomDisplay { get; set; } = "";
     [Parameter] public string FitToggleText { get; set; } = "适应";
     [Parameter] public string FitToggleTitle { get; set; } = "";
@@ -40,6 +40,7 @@
     [Parameter] public bool ZoomOutDisabled { get; set; }
     [Parameter] public bool ZoomInDisabled { get; set; }
     [Parameter] public EventCallback OnGoBack { get; set; }
+    [Parameter] public EventCallback<int> OnFileSelected { get; set; }
     [Parameter] public EventCallback OnZoomOut { get; set; }
     [Parameter] public EventCallback OnZoomIn { get; set; }
     [Parameter] public EventCallback OnToggleFit { get; set; }

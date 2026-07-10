@@ -129,6 +129,8 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
 
   el.addEventListener('pointerdown', (e) => {
     if (_gestureActive) return;
+    // Let nav buttons handle their own clicks — don't capture
+    if (e.target.closest('.nav-btn')) return;
     _gestureActive = true;
     _gestureStartX = e.clientX;
     _gestureStartY = e.clientY;
@@ -225,8 +227,8 @@ export function setSlideTransition(duration) {
 export function cylinderTransition(imageUrl, direction, targetScale = 1, targetFit = true) {
   return new Promise(resolve => {
     const slide = document.querySelector('.img-slide');
-    const wrap = slide?.querySelector('.img-wrap');
-    const img = slide?.querySelector('.img-display');
+    const wrap = slide && slide.querySelector('.img-wrap');
+    const img = slide && slide.querySelector('.img-display');
     if (!slide || !wrap || !img) { resolve(); return; }
 
     const isNext = direction === 'next';
@@ -253,7 +255,10 @@ export function cylinderTransition(imageUrl, direction, targetScale = 1, targetF
     const front = wrap.cloneNode(true);
     front.classList.add('cyl-clone');
     front.style.position = 'absolute';
-    front.style.inset = '0';
+    front.style.top = '0';
+    front.style.right = '0';
+    front.style.bottom = '0';
+    front.style.left = '0';
     front.style.margin = '0';
     front.style.width = '100%';
     front.style.height = '100%';
@@ -278,7 +283,7 @@ export function cylinderTransition(imageUrl, direction, targetScale = 1, targetF
     // jitter seen ONLY when animations are on. Fix: scale an intrinsic-size <img>
     // by targetScale inside the rotating card, matching .img-wrap exactly.
     const back = document.createElement('div');
-    back.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;backface-visibility:hidden;transform-style:preserve-3d;';
+    back.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;backface-visibility:hidden;transform-style:preserve-3d;';
     back.style.transform = `rotateY(${inAngle}deg)`;
     back.style.transition = `transform ${duration}ms ease-in-out`;
     back.style.willChange = 'transform';
@@ -359,7 +364,7 @@ export function flipThroughTransition(thumbUris, targetUri, direction, targetSca
 
     const cards = imageUris.map((uri, i) => {
       const card = document.createElement('div');
-      card.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;backface-visibility:hidden;';
+      card.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;backface-visibility:hidden;';
       card.style.transform = `translateX(${isNext ? '120%' : '-120%'})`;
       card.style.transition = `transform ${cardMs}ms ease-out, opacity ${cardMs}ms ease-out`;
       card.style.opacity = '0.7';
@@ -458,20 +463,18 @@ export function scrollFilmstripToElement(el, index, smooth = false) {
   const itemW = 52;    // ItemWidth
   const max = strip.scrollWidth - strip.clientWidth;
 
-  // Few items: the whole strip fits inside the track, so there is nothing to
-  // scroll and the thumbnails would sit left-aligned (scrollLeft is clamped to
-  // 0). To keep behavior consistent with the many-items case — where the active
-  // thumbnail is scrolled to the center — pad the leading edge so the active
-  // thumbnail lands in the middle of the track. We use an inline style (not a
-  // Blazor-managed attribute) so it survives the background thumbnail
-  // re-renders. If `index` is past the centerable range the pad clamps to 0
-  // and the small strip simply left-aligns, which is fine.
-  if (max <= 0) {
-    const pad = Math.max(0, strip.clientWidth / 2 - itemW / 2 - index * stride);
-    strip.style.paddingLeft = pad + 'px';
-    strip.style.paddingRight = '';
-    return;
-  }
+    // Few items: the whole strip fits inside the track (max <= 0), so every
+    // thumbnail is already visible and there is nothing to scroll. Leave the
+    // strip in its natural layout — the active thumbnail is simply highlighted
+    // in place. The previous behavior recentered per-index here (paddingLeft =
+    // clientWidth/2 - itemW/2 - index*stride), which made the ENTIRE strip slide
+    // left/right on every prev/next press and read as "jumping". Don't do that.
+    // Clear any inline padding so we fall back to the CSS `padding: 0 12px`.
+    if (max <= 0) {
+        strip.style.paddingLeft = '';
+        strip.style.paddingRight = '';
+        return;
+    }
 
   // Many items: clear any leading pad we may have added for the few-items case
   // and scroll the active thumbnail to the center of the track.
@@ -521,7 +524,8 @@ export function showZoomPopup(percentText) {
   if (!popup) {
     popup = document.createElement('div');
     popup.className = 'zoom-popup';
-    document.querySelector('.viewer-page')?.appendChild(popup);
+    var vp = document.querySelector('.viewer-page');
+    if (vp) vp.appendChild(popup);
   }
   popup.textContent = percentText;
   popup.classList.add('visible');
@@ -535,13 +539,18 @@ export function showZoomPopup(percentText) {
 // ── Utility (kept from v1) ──
 
 export function focusViewport() {
-  document.querySelector('.image-viewport')?.focus();
+  var iv = document.querySelector('.image-viewport');
+  if (iv) iv.focus();
 }
 
 export function getViewportMetrics() {
-  const v = document.querySelector('.image-viewport');
-  if (!v) return [0, 0, 1];
-  return [v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1];
+  return new Promise(resolve => {
+    requestAnimationFrame(() => {
+      const v = document.querySelector('.image-viewport');
+      if (!v) { resolve([0, 0, 1]); return; }
+      resolve([v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1]);
+    });
+  });
 }
 
 export function revokeBlobUrls(urls) {

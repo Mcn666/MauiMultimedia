@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\MauiMultimedia.Core.csproj" />
+    <ProjectReference Include="..\Shared\MauiMultimedia.Viewers.Shared.csproj" />
   </ItemGroup>
 
 </Project>

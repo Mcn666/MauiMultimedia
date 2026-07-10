@@ -17,7 +17,7 @@
 /* ── Layer 0: Viewport Background (direct child) ── */
 .viewport-bg {
     position: absolute;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     z-index: 0;
     background:
         radial-gradient(ellipse at center, rgba(255,255,255,0.03) 0%, transparent 70%),
@@ -27,7 +27,7 @@
 /* ── Layer 1: Image Viewport (child component) ── */
 ::deep .image-viewport {
     position: absolute;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     z-index: 1;
     outline: none;
     overflow: hidden;
@@ -76,7 +76,6 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    will-change: transform;
 }
 
 ::deep .image-viewport .img-stack {
@@ -90,7 +89,7 @@
    transparent blur edge. object-fit:contain keeps it aligned with the final. */
 ::deep .image-viewport .img-placeholder {
     position: absolute;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -172,16 +171,17 @@
 /* ── Layer 2: Loading (child component) ── */
 ::deep .loading-overlay {
     position: absolute;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 16px;
     background: var(--bg-viewport, #1a1a1a);
     pointer-events: none;
 }
+
+::deep .loading-overlay > * + * { margin-block-start: 16px; }
 
 ::deep .loading-overlay.fading {
     opacity: 0;
@@ -209,17 +209,18 @@
 /* ── Layer 2b: Error (direct, inside stitch else) ── */
 .error-overlay {
     position: absolute;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
     background: var(--bg-viewport, #1a1a1a);
     color: rgba(255,100,100,0.8);
     font-size: 14px;
 }
+
+.error-overlay > * + * { margin-block-start: 12px; }
 
 /* ── Layer 3: Image HUD (child component) ── */
 ::deep .img-hud {
@@ -237,9 +238,10 @@
     white-space: nowrap;
     display: flex;
     align-items: center;
-    gap: 6px;
     transition: opacity 0.6s ease;
 }
+
+::deep .img-hud > * + * { margin-inline-start: 6px; }
 
 ::deep .img-hud.faded {
     opacity: 0;
@@ -252,7 +254,7 @@
 /* ── Layer 4: Gesture Layer (child component) ── */
 ::deep .gesture-layer {
     position: absolute;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     z-index: 4;
     touch-action: none;
     cursor: default;
@@ -284,7 +286,6 @@
 
 ::deep .filmstrip-track {
     display: flex;
-    gap: 4px;
     height: 100%;
     align-items: center;
     overflow-x: auto;
@@ -299,6 +300,8 @@
     scrollbar-width: none;
     padding: 0 12px;
 }
+
+::deep .filmstrip-track > * + * { margin-inline-start: 4px; }
 
 ::deep .filmstrip-track::-webkit-scrollbar { height: 0; }
 
@@ -351,7 +354,6 @@
     display: flex;
     align-items: center;
     padding: 0 8px;
-    gap: 4px;
     background: rgba(0,0,0,0.6);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -363,20 +365,22 @@
     transform: translateY(-100%);
 }
 
+::deep .image-toolbar > * + * { margin-inline-start: 4px; }
+
 ::deep .toolbar-left {
     display: flex;
     align-items: center;
-    gap: 4px;
     flex: 1;
     min-width: 0;
 }
+::deep .toolbar-left > * + * { margin-inline-start: 4px; }
 
 ::deep .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 4px;
     flex-shrink: 0;
 }
+::deep .toolbar-right > * + * { margin-inline-start: 4px; }
 
 ::deep .toolbar-file-name {
     flex: 0 1 auto;
@@ -421,6 +425,8 @@
     flex-shrink: 0;
     line-height: 1.4;
     min-width: 32px;
+    height: 28px;
+    box-sizing: border-box;
 }
 
 ::deep .tbar-btn:hover:not(:disabled) {
@@ -460,10 +466,17 @@
     font-size: 11px;
 }
 
+::deep .tbar-btn-circle {
+    width: 28px;
+    padding: 0;
+    border-radius: 50%;
+    min-width: 0;
+}
+
 /* ── Layer 7: Detail Panel (child component) ── */
 ::deep .detail-overlay {
     position: fixed;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     z-index: 100;
     background: rgba(0,0,0,0.35);
 }
@@ -520,14 +533,16 @@
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
 }
+
+::deep .detail-body > * + * { margin-block-start: 14px; }
 
 ::deep .detail-row {
     display: flex;
     flex-direction: column;
-    gap: 3px;
 }
+
+::deep .detail-row > * + * { margin-block-start: 3px; }
 
 ::deep .detail-label {
     font-size: 11px;
@@ -637,7 +652,6 @@
     display: flex;
     align-items: center;
     padding: 0 8px;
-    gap: 4px;
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -649,25 +663,28 @@
     transform: translateY(-100%);
 }
 
+::deep .stitch-toolbar > * + * { margin-inline-start: 4px; }
+
 ::deep .stitch-tbar-left {
     display: flex;
     align-items: center;
-    gap: 8px;
     flex: 1;
     min-width: 0;
 }
+::deep .stitch-tbar-left > * + * { margin-inline-start: 8px; }
 
 ::deep .stitch-tbar-right {
     display: flex;
     align-items: center;
-    gap: 4px;
     flex-shrink: 0;
 }
+::deep .stitch-tbar-right > * + * { margin-inline-start: 4px; }
 
 /* ── Responsive ── */
 @media (max-width: 600px) {
     ::deep .detail-panel { width: 260px; }
-    ::deep .detail-body { padding: 10px 12px; gap: 10px; }
+    ::deep .detail-body { padding: 10px 12px; }
+    ::deep .detail-body > * + * { margin-block-start: 10px; }
     ::deep .filmstrip-container { height: 64px; }
     ::deep .filmstrip-item { width: 44px; height: 48px; }
     ::deep .image-toolbar {
@@ -678,3 +695,4 @@
     .viewer-page.chrome-toolbar ::deep .image-viewport { top: 40px; }
     .viewer-page.chrome-filmstrip ::deep .image-viewport { bottom: 64px; }
 }
+

@@ -30,9 +30,6 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     private List<string> fileList = new();
     private int currentIndex = -1;
 
-    private bool hasPrev => currentIndex > 0;
-    private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
-
     // ═══════════ 生命周期 ═══════════
 
     protected override async Task OnInitializedAsync()
@@ -142,6 +139,14 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
 
     // ═══════════ 导航 ═══════════
 
+    private void OnFileSelected(int index)
+    {
+        if (index < 0 || index >= fileList.Count || index == currentIndex) return;
+        currentIndex = index;
+        ApplyNavigation();
+        ReloadVideo();
+    }
+
     private void GoBack()
     {
         _ = StopVideoAsync();
@@ -155,22 +160,6 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
             try { await _jsModule.InvokeVoidAsync("stopVideo", _videoElementId); }
             catch { }
         }
-    }
-
-    private void GoPrev()
-    {
-        if (!hasPrev) return;
-        currentIndex--;
-        ApplyNavigation();
-        ReloadVideo();
-    }
-
-    private void GoNext()
-    {
-        if (!hasNext) return;
-        currentIndex++;
-        ApplyNavigation();
-        ReloadVideo();
     }
 
     private void ApplyNavigation()

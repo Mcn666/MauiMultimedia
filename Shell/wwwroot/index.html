@@ -49,6 +49,9 @@
             const blob = new Blob([ab], { type: mimeType });
             return URL.createObjectURL(blob);
         };
+        window.revokeBlobUrl = function (url) {
+            URL.revokeObjectURL(url);
+        };
     </script>
 </head>
 

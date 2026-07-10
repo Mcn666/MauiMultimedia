@@ -1,0 +1,110 @@
+@using System.IO
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="fnd-container">
+    <button class="fnd-trigger"
+            @onclick="Toggle"
+            @onkeydown="OnTriggerKeyDown"
+            title="@_currentFileName"
+            type="button">
+        <span class="fnd-arrow">@(_isOpen ? "▲" : "▼")</span>
+        <span class="fnd-pos">@(CurrentIndex + 1) / @FileList.Count</span>
+        <span class="fnd-sep"></span>
+        <span class="fnd-name">@_currentFileName</span>
+    </button>
+
+    @if (_isOpen)
+    {
+        <div class="fnd-backdrop" @onclick="Close"></div>
+        <div class="fnd-dropdown" @onclick:stopPropagation="true">
+            <div class="fnd-list">
+                @for (int i = 0; i < FileList.Count; i++)
+                {
+                    var idx = i;
+                    var name = Path.GetFileName(FileList[idx]);
+                    <div class="fnd-item @(idx == CurrentIndex ? "fnd-item--active" : "")"
+                         @onclick="() => Select(idx)"
+                         title="@name">
+                        <span class="fnd-item-num">@(idx + 1).</span>
+                        <span class="fnd-item-name">@name</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> FileList { get; set; } = Array.Empty<string>();
+
+    [Parameter]
+    public int CurrentIndex { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnFileSelected { get; set; }
+
+    private bool _isOpen;
+    private bool _shouldScroll;
+    private IJSObjectReference? _jsModule;
+
+    private string _currentFileName =>
+        CurrentIndex >= 0 && CurrentIndex < FileList.Count
+            ? Path.GetFileName(FileList[CurrentIndex])
+            : "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import",
+                "./_content/MauiMultimedia.Viewers.Shared/Components/FileNavDropdown.razor.js");
+        }
+
+        if (_shouldScroll && _jsModule != null)
+        {
+            _shouldScroll = false;
+            await _jsModule.InvokeVoidAsync("scrollToActive",
+                ".fnd-dropdown .fnd-list", ".fnd-item--active");
+        }
+    }
+
+    private void Toggle()
+    {
+        _isOpen = !_isOpen;
+        if (_isOpen) _shouldScroll = true;
+    }
+
+    private void Close()
+    {
+        _isOpen = false;
+    }
+
+    private async Task Select(int index)
+    {
+        _isOpen = false;
+        if (index != CurrentIndex)
+        {
+            await OnFileSelected.InvokeAsync(index);
+        }
+    }
+
+    private void OnTriggerKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && _isOpen)
+        {
+            _isOpen = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule != null)
+        {
+            try { await _jsModule.DisposeAsync(); }
+            catch { }
+        }
+    }
+}

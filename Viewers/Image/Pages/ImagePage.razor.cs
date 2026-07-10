@@ -157,7 +157,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 if (_jsModule != null)
                 {
                     await _jsModule.InvokeVoidAsync("initGestureTracker",
-                        _dotNetRef, ".gesture-layer", 80);
+                        _dotNetRef, ".image-viewport", 80);
 
                     // Position the filmstrip at the current image *instantly* on
                     // open. The child snaps scrollLeft (no animation) and
@@ -242,7 +242,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             var dims = _jsModule != null
                 ? await _jsModule.InvokeAsync<double[]>("getViewportMetrics")
                 : await JS.InvokeAsync<double[]>("eval",
-                    "(() => { var v = document.querySelector('.image-viewport'); return v ? [v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1] : [0,0,1]; })()");
+                    "new Promise(r => requestAnimationFrame(() => { var v = document.querySelector('.image-viewport'); r(v ? [v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1] : [0,0,1]); }))");
             vpWidth = (float)dims[0];
             vpHeight = (float)dims[1];
             _dpr = (float)dims[2];
@@ -1260,6 +1260,11 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         _isAnimating = false;
 
         await ScrollFilmstripToCurrentAsync();
+    }
+
+    private async Task OnFileDropSelected(int index)
+    {
+        await OnFilmstripClick(index);
     }
 
     /// <summary>Get image source (data URI or FileServer URL) from cache or disk.</summary>
