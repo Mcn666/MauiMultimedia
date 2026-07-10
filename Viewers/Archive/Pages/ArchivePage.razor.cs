@@ -20,14 +20,8 @@ public partial class ArchivePage : ComponentBase, IDisposable
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private IEnumerable<IFileViewer> Viewers { get; set; } = null!;
     [Inject] private IFileSystemService FileSystem { get; set; } = null!;
+    [Inject] private IEnumerable<IItemPresenter> Presenters { get; set; } = null!;
 
-    private static readonly HashSet<string> Img = new(StringComparer.OrdinalIgnoreCase)
-    { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".ico", ".svg" };
-    private static readonly HashSet<string> Doc = new(StringComparer.OrdinalIgnoreCase)
-    { ".txt", ".log", ".md", ".csv", ".xml", ".json", ".yaml", ".yml",
-      ".cs", ".js", ".ts", ".html", ".htm", ".css", ".jsx", ".tsx",
-      ".py", ".java", ".cpp", ".c", ".h", ".sql", ".sh", ".bat", ".ps1",
-      ".ini", ".cfg", ".conf", ".csproj", ".sln", ".slnx" };
     private static readonly HashSet<string> Arc = new(StringComparer.OrdinalIgnoreCase)
     { ".zip", ".tar", ".gz", ".tgz", ".rar", ".7z", ".bz2" };
 
@@ -230,7 +224,7 @@ public partial class ArchivePage : ComponentBase, IDisposable
             {
                 b.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => Open(n)));
                 b.OpenElement(4, "span"); b.AddAttribute(5, "class", "col-icon item-icon");
-                b.AddContent(6, Icn(n.Label));
+                b.AddContent(6, GetIconForFile(n.Label));
                 b.CloseElement();
                 b.OpenElement(7, "span"); b.AddAttribute(8, "class", "col-name item-name");
                 b.AddContent(9, n.Label);
@@ -492,5 +486,17 @@ public partial class ArchivePage : ComponentBase, IDisposable
 
     private static string Sz(long b) { double d = b; if (d < 1024) return $"{d:F0} B"; d /= 1024; if (d < 1024) return $"{d:F1} KB"; return $"{d / 1024:F1} MB"; }
     private static string Dt(DateTime d) => d == DateTime.MinValue ? "" : d.ToString("yyyy/MM/dd HH:mm");
-    private static string Icn(string n) { var e = Path.GetExtension(n); if (Img.Contains(e)) return "🖼️"; if (Doc.Contains(e)) return "📄"; if (Arc.Contains(e) || n.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)) return "📦"; return "📎"; }
+    private string GetIconForFile(string name)
+    {
+        var item = new FileSystemItem { Name = name, IsFolder = false };
+        foreach (var p in Presenters)
+        {
+            if (p.CanHandle(item))
+            {
+                var icon = p.GetIcon(item);
+                if (icon != null) return icon;
+            }
+        }
+        return "\uD83D\uDCCE"; // 📎 default
+    }
 }
