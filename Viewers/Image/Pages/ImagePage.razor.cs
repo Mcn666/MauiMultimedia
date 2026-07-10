@@ -102,6 +102,9 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private float panX, panY;
     private bool isDragging;
     private float dragStartX, dragStartY, panAtDragStartX, panAtDragStartY;
+    // Tracks the unclamped (desired) panX during drag, used to compute overscroll
+    // past the pan boundary for edge-based navigation when zoomed in.
+    private float _dragDesiredPanX;
 
     // ── Touch ──
     private bool isTouchPan;
@@ -285,6 +288,39 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     {
         if (_isAnimating) return;
 
+        // ── Free mode (zoomed in): navigate by overscroll only ──
+        if (!zoomFitMode)
+        {
+            float fingerDx = (float)offsetX;
+            float panApplied = panX - panAtDragStartX;
+            float overscroll = fingerDx - panApplied;
+
+            // Dynamic threshold: at least 80px or 12% of viewport width.
+            // A fixed 60px is too small on mobile — the user blasts past it
+            // before noticing the guide line.
+            float threshold = Math.Max(80f, vpWidth * 0.12f);
+
+            if (Math.Abs(overscroll) >= threshold)
+            {
+                // Instantly clear overscroll inline styles before navigation
+                if (_jsModule != null)
+                {
+                    await _jsModule.InvokeVoidAsync("clearSlideTransform");
+                    await _jsModule.InvokeVoidAsync("hideOverscrollGuide");
+                }
+                if (overscroll > 0 && hasPrev) await GoPrev();
+                else if (overscroll < 0 && hasNext) await GoNext();
+            }
+            else if (_jsModule != null)
+            {
+                // Smooth snap-back of the elastic overscroll visual
+                await _jsModule.InvokeVoidAsync("setSlideOverscroll", 0);
+                await _jsModule.InvokeVoidAsync("hideOverscrollGuide");
+            }
+            return;
+        }
+
+        // ── Fit mode: navigate by velocity / offset ──
         bool shouldNavigate;
         bool toPrev;
 
@@ -306,7 +342,6 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
         if (!shouldNavigate)
         {
-            // Spring back to 0
             if (_jsModule != null)
             {
                 await _jsModule.InvokeVoidAsync("springStart", ".img-slide",
@@ -320,12 +355,10 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             return;
         }
 
-        // Navigate
         if (toPrev && hasPrev) await DoSpringNavigate(-1, offsetX, velocity);
         else if (!toPrev && hasNext) await DoSpringNavigate(1, offsetX, velocity);
         else
         {
-            // Boundary — spring back
             if (_jsModule != null)
             {
                 await _jsModule.InvokeVoidAsync("springStart", ".img-slide",
@@ -627,6 +660,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         // transient flash.
         panX = 0;
         panY = 0;
+        _dragDesiredPanX = 0;
     }
 
     private async Task CheckCanStitchAsync()
@@ -1082,13 +1116,34 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private void OnPointerMove(PointerEventArgs e)
     {
         if (!isDragging) return;
-        panX = panAtDragStartX + (float)(e.ClientX - dragStartX);
-        panY = panAtDragStartY + (float)(e.ClientY - dragStartY);
+        float desiredPanX = panAtDragStartX + (float)(e.ClientX - dragStartX);
+        float desiredPanY = panAtDragStartY + (float)(e.ClientY - dragStartY);
+        _dragDesiredPanX = desiredPanX;
+        panX = desiredPanX;
+        panY = desiredPanY;
         ClampPan();
+
+        // Elastic overscroll feedback when zoomed in: if pan is at horizontal
+        // boundary, give .img-slide a damped translate for the "pull" feel.
+        if (!zoomFitMode && _jsModule != null)
+        {
+            float damped = (desiredPanX - panX) * 0.3f;
+            float thresh = Math.Max(80f, vpWidth * 0.12f);
+            _ = _jsModule.InvokeVoidAsync("setSlideOverscroll", damped);
+            _ = _jsModule.InvokeVoidAsync("showOverscrollGuide", desiredPanX - panX, thresh);
+        }
+
         StateHasChanged();
     }
 
-    private void OnPointerUp(PointerEventArgs e) => isDragging = false;
+    private void OnPointerUp(PointerEventArgs e)
+    {
+        isDragging = false;
+        // Overscroll visual cleanup is handled in OnGestureRelease,
+        // where we know whether to animate back or navigate.
+        if (!zoomFitMode && _jsModule != null)
+            _ = _jsModule.InvokeVoidAsync("hideOverscrollGuide");
+    }
 
     // ═══════════ Touch ═══════════
 

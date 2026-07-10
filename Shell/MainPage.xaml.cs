@@ -13,7 +13,7 @@ public partial class MainPage : ContentPage
         else if (saved == "light") dark = false;
         else dark = Application.Current?.RequestedTheme == AppTheme.Dark;
 
-        var bg = dark ? "#1a1a1a" : "#ffffff";
+        var bg = dark ? "#1e1e1e" : "#ffffff";
         BackgroundColor = Color.FromArgb(bg);
 
         // WebView Handler 就绪时立即设置原生背景色（比 Page.OnHandlerChanged 更早）
@@ -27,9 +27,9 @@ public partial class MainPage : ContentPage
     {
         if (blazorWebView.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
         {
-            // 强制设置深色背景，防止 Android WebView 默认白色背景的闪烁
+            // 强制设置暗色背景，防止 Android WebView 默认白色背景的闪烁
             // HTML 加载后内联脚本会立刻纠正为正确值
-            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor("#1a1a1a"));
+            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor("#1e1e1e"));
         }
     }
 #endif
@@ -43,15 +43,28 @@ public partial class MainPage : ContentPage
             var resources = Android.App.Application.Context.Resources;
             if (resources != null)
             {
-                int resourceId = resources.GetIdentifier("status_bar_height", "dimen", "android");
-                if (resourceId > 0)
+                int top = 0, bottom = 0;
+
+                // 状态栏高度（顶部）
+                int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
+                if (rid > 0)
                 {
-                    int statusBarHeightPx = resources.GetDimensionPixelSize(resourceId);
+                    int hPx = resources.GetDimensionPixelSize(rid);
                     float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
-                    int topPadding = (int)(statusBarHeightPx / density);
-                    if (topPadding > 0)
-                        Padding = new Thickness(0, topPadding, 0, 0);
+                    top = (int)(hPx / density);
                 }
+
+                // 导航栏高度（底部）
+                int navRid = resources.GetIdentifier("navigation_bar_height", "dimen", "android");
+                if (navRid > 0)
+                {
+                    int hPx = resources.GetDimensionPixelSize(navRid);
+                    float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
+                    bottom = (int)(hPx / density);
+                }
+
+                if (top > 0 || bottom > 0)
+                    Padding = new Thickness(0, top, 0, bottom);
             }
         }
 #endif

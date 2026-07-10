@@ -16,7 +16,7 @@ public class ViewerPageFactory
         // 主题色背景（防闪白）
         var saved = Preferences.Get("filebrowser-theme", "");
         var isDark = saved == "dark" || (saved != "light" && Application.Current?.RequestedTheme == AppTheme.Dark);
-        page.BackgroundColor = isDark ? Color.FromArgb("#1a1a1a") : Colors.White;
+        page.BackgroundColor = isDark ? Color.FromArgb("#1e1e1e") : Colors.White;
 
         var bwv = new BlazorWebView { HostPage = "wwwroot/viewer.html" };
         bwv.RootComponents.Add(new RootComponent
@@ -44,21 +44,35 @@ public class ViewerPageFactory
         var resources = Android.App.Application.Context.Resources;
         if (resources != null)
         {
+            int top = 0, bottom = 0;
+
+            // 状态栏高度（顶部）
             int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
             if (rid > 0)
             {
                 int hPx = resources.GetDimensionPixelSize(rid);
                 float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
-                int top = (int)(hPx / density);
-                if (top > 0) page.Padding = new Thickness(0, top, 0, 0);
+                top = (int)(hPx / density);
             }
+
+            // 导航栏高度（底部）
+            int navRid = resources.GetIdentifier("navigation_bar_height", "dimen", "android");
+            if (navRid > 0)
+            {
+                int hPx = resources.GetDimensionPixelSize(navRid);
+                float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
+                bottom = (int)(hPx / density);
+            }
+
+            if (top > 0 || bottom > 0)
+                page.Padding = new Thickness(0, top, 0, bottom);
         }
 
         if (bwv.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
         {
             // 主题色背景
             nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor(
-                isDark ? "#1a1a1a" : "#ffffff"));
+                isDark ? "#1e1e1e" : "#ffffff"));
 
             // 允许混合内容（HTTP 视频从 HTTPS 页面加载）
             if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.Lollipop)

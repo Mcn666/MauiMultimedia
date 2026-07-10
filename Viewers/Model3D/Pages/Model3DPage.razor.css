@@ -9,7 +9,7 @@
 .model-container {
     flex: 1;
     overflow: hidden;
-    background: var(--bg-viewport, #1a1a1a);
+    background: var(--bg-viewport, #111111);
 }
 
 .viewer-loading {

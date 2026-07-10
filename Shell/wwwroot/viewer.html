@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MauiMultimedia.Shell.styles.css" />
     <style>
-        :root { background: #1a1a1a; }
+        :root { background: #1e1e1e; }
         @media (prefers-color-scheme: light) {
             :root { background: #ffffff; }
         }
@@ -26,7 +26,7 @@
                 else if (resolved === 'light') dark = false;
                 else dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             }
-            document.documentElement.style.background = dark ? '#1a1a1a' : '#ffffff';
+            document.documentElement.style.background = dark ? '#1e1e1e' : '#ffffff';
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
         })();
 

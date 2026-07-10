@@ -157,10 +157,17 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
     }
 
     const offsetX = e.clientX - _gestureStartX;
-    const imgSlide = document.querySelector('.img-slide');
-    if (imgSlide) {
-      imgSlide.style.transform = `translateX(${offsetX}px)`;
-      imgSlide.style.transition = 'none';
+
+    // In fit mode: slide .img-slide to preview navigation.
+    // In free mode (zoomed in): C# panX/panY handles the image, and C#
+    // OnPointerMove sets .img-slide overscroll feedback if at boundary.
+    var isFitMode = el.classList.contains('fit');
+    if (isFitMode) {
+      const imgSlide = document.querySelector('.img-slide');
+      if (imgSlide) {
+        imgSlide.style.transform = `translateX(${offsetX}px)`;
+        imgSlide.style.transition = 'none';
+      }
     }
 
     // Notify Blazor of drag progress
@@ -205,6 +212,31 @@ export function setSlideTransform(transform) {
   if (el) { el.style.transform = transform; el.style.transition = 'none'; }
 }
 
+// Applied during pointer-move when zoomed in and the pan has reached its
+// horizontal boundary. Shows a damped elastic stretch (overscroll preview)
+// on .img-slide. px=0 animates it smoothly back to neutral.
+export function setSlideOverscroll(px) {
+  const el = document.querySelector('.img-slide');
+  if (!el) return;
+  px = Math.round(px);
+  if (px === 0) {
+    if (el.style.transform === '' || el.style.transform === 'none') return;
+    // Smooth snap-back: animate transform back to 0 with a CSS transition
+    // then clean up inline styles once the animation completes.
+    el.style.transition = 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)';
+    el.style.transform = 'translateX(0px)';
+    setTimeout(function () {
+      if (el) {
+        el.style.removeProperty('transform');
+        el.style.removeProperty('transition');
+      }
+    }, 220);
+  } else {
+    el.style.transform = 'translateX(' + px + 'px)';
+    el.style.transition = 'none';
+  }
+}
+
 export function clearSlideTransform() {
   const el = document.querySelector('.img-slide');
   if (el) { el.style.removeProperty('transform'); el.style.removeProperty('transition'); }
@@ -213,6 +245,74 @@ export function clearSlideTransform() {
 export function setSlideTransition(duration) {
   const el = document.querySelector('.img-slide');
   if (el) el.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+}
+
+// ── Overscroll Guide — vertical line, damped position ──
+
+var _guideEl = null;
+
+export function showOverscrollGuide(overscroll, threshold) {
+  var vp = document.querySelector('.image-viewport');
+  if (!vp) return;
+  var r = vp.getBoundingClientRect();
+  var vpL = r.left;
+  var vpR = r.right;
+
+  if (!_guideEl) {
+    _guideEl = document.createElement('div');
+    _guideEl.style.cssText = 'position:fixed;top:0;left:0;right:0;height:0;pointer-events:none;z-index:9999';
+    document.body.appendChild(_guideEl);
+
+    var ln = document.createElement('div');
+    ln.style.cssText = 'position:fixed;top:0;bottom:0;width:2px;pointer-events:none;transition:background .15s';
+    _guideEl.appendChild(ln);
+
+    var lb = document.createElement('span');
+    lb.style.cssText = 'position:fixed;font:10px/1 monospace;' +
+      'color:#fff;background:rgba(0,0,0,.7);padding:2px 4px;border-radius:2px;white-space:nowrap;pointer-events:none;';
+    _guideEl.appendChild(lb);
+  }
+
+  var absOx = Math.abs(overscroll);
+  var isRight = overscroll < 0; // drag LEFT -> line on RIGHT side
+  threshold = threshold || 80;
+  var damp = 0.3;
+  var dampedThresh = Math.round(threshold * damp);
+
+  var line = _guideEl.children[0];
+  var label = _guideEl.children[1];
+  var topPx = r.top;
+  var botPx = r.bottom;
+
+  line.style.top = topPx + 'px';
+  line.style.bottom = 'auto';
+  line.style.height = (botPx - topPx) + 'px';
+  label.style.top = (topPx + 8) + 'px';
+
+  if (isRight) {
+    // Drag LEFT -> line on the RIGHT side
+    line.style.left = (vpR - dampedThresh) + 'px';
+    label.style.left = (vpR - dampedThresh + 4) + 'px';
+  } else {
+    // Drag RIGHT -> line on the LEFT side
+    line.style.left = (vpL + dampedThresh) + 'px';
+    label.style.left = (vpL + dampedThresh + 4) + 'px';
+  }
+
+  label.textContent = absOx >= threshold
+    ? '✓ ' + Math.round(threshold) + 'px'
+    : Math.round(absOx) + ' / ' + Math.round(threshold) + 'px';
+  line.style.background = absOx >= threshold ? '#4CAF50' : '#ff9800';
+  line.style.boxShadow = absOx >= threshold ? '0 0 6px rgba(76,175,80,.6)' : 'none';
+
+  _guideEl.style.opacity = absOx > 0 ? '1' : '0';
+}
+
+export function hideOverscrollGuide() {
+  if (_guideEl) {
+    if (_guideEl.parentNode) _guideEl.parentNode.removeChild(_guideEl);
+    _guideEl = null;
+  }
 }
 
 // ── 3D Cylinder Transition ──

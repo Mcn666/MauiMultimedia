@@ -11,7 +11,7 @@
     <style>
         /* 默认深色背景，防止 Android WebView 白色闪烁。内联脚本会立刻纠正为正确值 */
         :root {
-            background: #1a1a1a;
+            background: #1e1e1e;
         }
 
         @media (prefers-color-scheme: light) {
@@ -38,7 +38,7 @@
                 }
             }
 
-            var bg = dark ? '#1a1a1a' : '#ffffff';
+            var bg = dark ? '#1e1e1e' : '#ffffff';
             document.documentElement.style.background = bg;
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
         })();
@@ -55,7 +55,7 @@
     </script>
 </head>
 
-<body style="background:#1a1a1a;margin:0;">
+<body style="background:#1e1e1e;margin:0;">
 
     <div class="status-bar-safe-area"></div>
 

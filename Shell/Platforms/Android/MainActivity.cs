@@ -16,7 +16,7 @@ public class MainActivity : MauiAppCompatActivity
         var window = Window;
         if (window == null) return;
 
-        var bgColor = Android.Graphics.Color.ParseColor(isDark ? "#1a1a1a" : "#ffffff");
+        var bgColor = Android.Graphics.Color.ParseColor(isDark ? "#1e1e1e" : "#ffffff");
 
         // 同步 ContentPage 背景色（API 35+ 状态栏透明后由它透过显示）
         if (Microsoft.Maui.Controls.Application.Current?.Windows.Count > 0)
@@ -24,7 +24,7 @@ public class MainActivity : MauiAppCompatActivity
             var mainPage = Microsoft.Maui.Controls.Application.Current.Windows[0].Page;
             if (mainPage != null)
                 mainPage.BackgroundColor = Microsoft.Maui.Graphics.Color.FromArgb(
-                    isDark ? "#1a1a1a" : "#ffffff");
+                    isDark ? "#1e1e1e" : "#ffffff");
         }
 
         if (OperatingSystem.IsAndroidVersionAtLeast(35))
