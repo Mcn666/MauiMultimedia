@@ -7,6 +7,7 @@
 @inject IFileNavigationState NavState
 @inject IMauiNavigation MauiNav
 @inject IJSRuntime JS
+@implements IDisposable
 
 <div class="v-page">
     <div class="v-toolbar">
@@ -46,6 +47,11 @@
     private string? errorMessage;
     private List<string> fileList = new();
     private int currentIndex = -1;
+
+    [Inject] private IFileServerService FileServer { get; set; } = null!;
+    private readonly Dictionary<string, string> _servedTokens = new(); // .html 图片：路径 -> token
+    private readonly List<string> _mhtmlTempFiles = new();            // .mht 抽取出的临时文件
+    private readonly List<string> _mhtmlTokens = new();               // .mht 资源 token
 
     private bool hasPrev => currentIndex > 0;
     private bool hasNext => currentIndex >= 0 && currentIndex < fileList.Count - 1;
@@ -90,6 +96,7 @@
         isLoading = true;
         errorMessage = null;
         htmlContent = null;
+        RevokeAndCleanup(); // 释放上一份文件占用的 token / 临时文件
 
         try
         {
@@ -109,15 +116,15 @@
             if (isMhtml)
             {
                 MhtmlParser.ParseResult result = null!;
-                await Task.Run(async () =>
+                string served = "";
+                await Task.Run(() =>
                 {
-                    var bytes = await File.ReadAllBytesAsync(filePath);
+                    var bytes = File.ReadAllBytes(filePath);
                     result = MhtmlParser.Parse(bytes);
+                    // 抽取内嵌资源到临时文件并经 loopback 服务按 token 提供
+                    served = ServeMhtmlResources(result);
                 });
-
-                // 通过 JS 创建 Blob URL 并替换占位符
-                htmlContent = await InjectBlobUrls(result);
-                htmlContent = styleTag + htmlContent;
+                htmlContent = styleTag + served;
             }
             else
             {
@@ -127,7 +134,7 @@
                     var content = System.Text.Encoding.UTF8.GetString(bytes);
                     var dir = Path.GetDirectoryName(filePath);
                     if (dir != null)
-                        content = ResourceInliner.Inline(content, dir);
+                        content = ResourceInliner.Inline(content, dir, FileServer, _servedTokens);
                     return styleTag + content;
                 });
             }
@@ -143,40 +150,79 @@
         }
     }
 
-    private async Task<string> InjectBlobUrls(MhtmlParser.ParseResult result)
+    // 把 MHTML 内嵌资源抽取到临时文件，用同一个 loopback FileServer 按 token
+    // 提供（与 .html 的图片一致），避免在 C# 托管堆里 base64 化全部资源、
+    // 也避免 Blob URL 从不吊销的泄漏。占位符 __BLOB_n__ 替换为 served URL。
+    private string ServeMhtmlResources(MhtmlParser.ParseResult result)
     {
-        if (result.Resources.Count == 0) return result.HtmlBody;
-
-        // 将资源批量传给 JS，JS 创建 Blob URL 并返回 token→url 映射
-        var entries = result.Resources.Select(r => new
-        {
-            token = $"__BLOB_{Array.IndexOf(result.Resources.ToArray(), r)}__",
-            base64 = Convert.ToBase64String(r.Data),
-            mime = r.MimeType
-        }).ToArray();
-
-        var json = System.Text.Json.JsonSerializer.Serialize(entries);
-        var urlMap = await JS.InvokeAsync<Dictionary<string, string>>("eval", $@"
-            (function() {{
-                var map = {{}};
-                var list = {json};
-                for (var i = 0; i < list.length; i++) {{
-                    var e = list[i];
-                    var bin = atob(e.base64);
-                    var arr = new Uint8Array(bin.length);
-                    for (var j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
-                    map[e.token] = URL.createObjectURL(new Blob([arr], {{type: e.mime}}));
-                }}
-                return map;
-            }})()
-        ");
-
-        // 在 C# 中完成所有占位符替换（避免 JS eval 大字符串的坑）
         var html = result.HtmlBody;
-        foreach (var (token, url) in urlMap)
-            html = html.Replace(token, url);
+        if (result.Resources.Count == 0) return html;
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "MauiMM_Html", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        for (int i = 0; i < result.Resources.Count; i++)
+        {
+            var res = result.Resources[i];
+            var ext = MimeToExt(res.MimeType, res.Location);
+            var tmp = Path.Combine(tempDir, $"{i}{ext}");
+            File.WriteAllBytes(tmp, res.Data);
+            _mhtmlTempFiles.Add(tmp);
+
+            var tok = FileServer.RegisterFile(tmp);
+            _mhtmlTokens.Add(tok);
+            var url = $"{FileServer.BaseUrl}/file?token={tok}";
+            html = html.Replace($"__BLOB_{i}__", url);
+        }
         return html;
     }
+
+    // 离开当前文件 / 页面时吊销所有已注册 token 并删除临时文件，
+    // 防止 loopback 服务持续可访问旧文件、临时文件堆积。
+    private void RevokeAndCleanup()
+    {
+        foreach (var tok in _servedTokens.Values)
+            try { FileServer.UnregisterFile(tok); } catch { }
+        _servedTokens.Clear();
+
+        foreach (var tok in _mhtmlTokens)
+            try { FileServer.UnregisterFile(tok); } catch { }
+        _mhtmlTokens.Clear();
+
+        foreach (var f in _mhtmlTempFiles)
+            try { File.Delete(f); } catch { }
+        _mhtmlTempFiles.Clear();
+    }
+
+    private static string MimeToExt(string mime, string location)
+    {
+        var ext = mime.ToLowerInvariant() switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" => ".jpg",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            "image/bmp" => ".bmp",
+            "image/x-icon" => ".ico",
+            "image/svg+xml" => ".svg",
+            "image/avif" => ".avif",
+            "text/css" => ".css",
+            "text/javascript" or "application/javascript" or "application/x-javascript" => ".js",
+            "application/json" => ".json",
+            "text/html" => ".html",
+            "text/plain" => ".txt",
+            "application/xml" => ".xml",
+            "font/woff" => ".woff",
+            "font/woff2" => ".woff2",
+            "font/ttf" or "application/x-font-ttf" => ".ttf",
+            "font/otf" => ".otf",
+            "application/vnd.ms-fontobject" => ".eot",
+            _ => Path.GetExtension(location) is { Length: > 0 } e ? e.ToLowerInvariant() : ".bin"
+        };
+        return ext;
+    }
+
+    public void Dispose() => RevokeAndCleanup();
 
     private void GoBack()
     {

@@ -403,6 +403,23 @@ public sealed class FileServerService : IFileServerService, IDisposable
             "ico" => "image/x-icon",
             "avif" => "image/avif",
             "svg" => "image/svg+xml",
+
+            // ── Web / static assets (MHTML inline resources, fonts, etc.) ──
+            // Browsers enforce strict MIME checking on stylesheets/scripts, so
+            // these MUST be served with the correct Content-Type or they are
+            // silently rejected (e.g. layout breaks for CSS served as octet-stream).
+            "css" => "text/css",
+            "js" or "mjs" => "text/javascript",
+            "json" => "application/json",
+            "html" or "htm" => "text/html",
+            "txt" => "text/plain",
+            "xml" => "application/xml",
+            "woff" => "font/woff",
+            "woff2" => "font/woff2",
+            "ttf" => "font/ttf",
+            "otf" => "font/otf",
+            "eot" => "application/vnd.ms-fontobject",
+
             // TIFF is not natively rendered by browsers; octet-stream forces a
             // download/sniff fallback rather than a broken inline render.
             "tiff" or "tif" => "application/octet-stream",
