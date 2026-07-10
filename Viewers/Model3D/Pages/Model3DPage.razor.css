@@ -40,3 +40,6 @@
     flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Android 10 WebView (Chrome < 84) flex-gap fallback */
+html.no-flex-gap .viewer-loading > * + * { margin-inline-start: 8px; }

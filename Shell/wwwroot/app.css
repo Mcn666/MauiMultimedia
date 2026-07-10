@@ -692,6 +692,22 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     font-size: 11px;
     color: var(--text-tertiary);
 }
+.scan-item-count {
+    font-weight: 600;
+    color: var(--accent, var(--text-secondary));
+}
+.scan-count-sep {
+    margin: 0 3px;
+    color: var(--border-secondary);
+}
+.scan-count-loading {
+    color: var(--text-tertiary);
+    animation: scanCountPulse .8s ease-in-out infinite;
+}
+@keyframes scanCountPulse {
+    0%, 100% { opacity: .4; }
+    50% { opacity: 1; }
+}
 .scan-type-sep {
     height: 1px;
     background: var(--border-secondary);

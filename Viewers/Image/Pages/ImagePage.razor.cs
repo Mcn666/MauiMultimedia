@@ -1396,7 +1396,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private async Task ToggleStitch()
     {
         stitchMode = !stitchMode;
-        _stitchZoom = Math.Clamp(displayZoom, 0.3f, 3.0f);
+        _stitchZoom = 1.0f;  // fixed — every image fills viewport width
         if (!stitchMode)
         {
             _stitchCts?.Cancel();

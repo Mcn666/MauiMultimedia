@@ -35,6 +35,8 @@ public partial class Home
     private string? scanTypeLabel;
     private CancellationTokenSource? scanCts;
     private List<FileScanCategory> scanCategories = new();
+    private int[]? _scanCategoryCounts;
+    private bool _scanCountsLoading;
     private string? _activeFilePath;
     // 多级父目录滚动位置栈：进入子文件夹时入栈，返回时出栈恢复
     private readonly Stack<double> _parentScrollStack = new();
@@ -542,20 +544,54 @@ public partial class Home
     {
         showScanPanel = !showScanPanel;
         if (showScanPanel)
+        {
             await JS.InvokeVoidAsync("eval",
                 "document.querySelector('.browser-main').classList.add('panel-open')");
+            // 在后台计算各类别的文件数量（一次遍历）
+            _ = RefreshScanCountsAsync();
+        }
     }
     private async Task CloseScanPanel()
     {
         showScanPanel = false;
+        _scanCategoryCounts = null;
+        _scanCountsLoading = false;
         await JS.InvokeVoidAsync("eval",
             "document.querySelector('.browser-main').classList.remove('panel-open')");
+    }
+
+    /// <summary>
+    /// 单次递归遍历当前目录，为每个筛选类别计算匹配的文件数量。
+    /// </summary>
+    private async Task RefreshScanCountsAsync()
+    {
+        if (scanCategories.Count == 0) return;
+
+        _scanCountsLoading = true;
+        _scanCategoryCounts = null;
+        try
+        {
+            var extensionGroups = scanCategories.Select(c => c.Extensions).ToArray();
+            var counts = await FileSystemService.CountFilesByTypesAsync(currentPath, extensionGroups);
+            _scanCategoryCounts = counts;
+        }
+        catch
+        {
+            // 静默失败，面板继续显示格式计数即可
+        }
+        finally
+        {
+            _scanCountsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void ExitScan()
     {
         isScanned = false;
         isScanning = false;
+        _scanCategoryCounts = null;
+        _scanCountsLoading = false;
         scanCts?.Cancel();
         scanCts = null;
         scanResults = new();

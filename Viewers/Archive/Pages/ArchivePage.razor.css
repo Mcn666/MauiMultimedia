@@ -140,3 +140,7 @@
     cursor: pointer;
     font-size: 13px;
 }
+
+/* Android 10 WebView (Chrome < 84) flex-gap fallback */
+html.no-flex-gap .loading-box > * + *  { margin-block-start: 10px; }
+html.no-flex-gap .pw-actions  > * + *  { margin-inline-start: 8px; }

@@ -62,4 +62,11 @@ public interface IFileSystemService
     /// 递归扫描目录树，按扩展名过滤文件
     /// </summary>
     Task<List<FileSystemItem>> ScanFilesByTypeAsync(string rootPath, string[] extensions, CancellationToken ct = default);
+
+    /// <summary>
+    /// 单次递归扫描目录树，一次性计算多组扩展名的文件数量。
+    /// extensionGroups[i] 对应返回值的 int[i]。
+    /// 比多次调用 ScanFilesByTypeAsync 高效得多（只遍历一次目录树）。
+    /// </summary>
+    Task<int[]> CountFilesByTypesAsync(string rootPath, IReadOnlyList<string[]> extensionGroups, CancellationToken ct = default);
 }

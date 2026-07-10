@@ -55,3 +55,6 @@
     .v-pos { font-size: 10px; }
     .v-btn-nav { display: none; }
 }
+
+/* Android 10 WebView (Chrome < 84) flex-gap fallback */
+html.no-flex-gap .v-status > * + * { margin-inline-start: 8px; }

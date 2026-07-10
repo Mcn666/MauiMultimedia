@@ -95,6 +95,9 @@
                     {
                         var idx = scanCategories.IndexOf(cat) + 1;
                         var accent = catColors[idx % catColors.Length];
+                        var catCount = (_scanCategoryCounts != null && idx - 1 < _scanCategoryCounts.Length)
+                            ? _scanCategoryCounts[idx - 1]
+                            : (int?)null;
                         // 不同标签间加分隔线
                         if (lastLabel != null && lastLabel != cat.Label)
                         {
@@ -105,7 +108,19 @@
                             <span class="scan-type-icon">@cat.Icon</span>
                             <span class="scan-type-info">
                                 <span class="scan-type-label">@cat.Label</span>
-                                <span class="scan-type-count">@cat.Extensions.Length 种格式</span>
+                                <span class="scan-type-count">
+                                    @if (catCount.HasValue)
+                                    {
+                                        <span class="scan-item-count">@catCount.Value 个项目</span>
+                                        <span class="scan-count-sep">·</span>
+                                    }
+                                    else if (_scanCountsLoading)
+                                    {
+                                        <span class="scan-count-loading">…</span>
+                                        <span class="scan-count-sep">·</span>
+                                    }
+                                    @cat.Extensions.Length 种格式
+                                </span>
                             </span>
                         </button>
                     }

@@ -193,6 +193,60 @@ public class FileSystemService : IFileSystemService
 #endif
     }
 
+    public Task<int[]> CountFilesByTypesAsync(string rootPath, IReadOnlyList<string[]> extensionGroups, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            var counts = new int[extensionGroups.Count];
+            CountDirByTypes(rootPath, extensionGroups, counts, ct);
+            return counts;
+        }, ct);
+    }
+
+    private static void CountDirByTypes(string dir, IReadOnlyList<string[]> extensionGroups, int[] counts, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        string[] files;
+        try
+        {
+            files = Directory.GetFiles(dir);
+        }
+        catch { return; }
+
+        foreach (var f in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            var ext = Path.GetExtension(f);
+            for (int i = 0; i < extensionGroups.Count; i++)
+            {
+                if (extensionGroups[i].Length == 0 ||
+                    extensionGroups[i].Contains(ext, StringComparer.OrdinalIgnoreCase))
+                {
+                    counts[i]++;
+                }
+            }
+        }
+
+        string[] subDirs;
+        try
+        {
+            subDirs = Directory.GetDirectories(dir);
+        }
+        catch { return; }
+
+        foreach (var d in subDirs)
+        {
+            var name = Path.GetFileName(d);
+            if (name.StartsWith(".") ||
+                string.Equals(name, "Android", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "data", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            CountDirByTypes(d, extensionGroups, counts, ct);
+        }
+    }
+
     public Task<List<FileSystemItem>> ScanFilesByTypeAsync(string rootPath, string[] extensions, CancellationToken ct = default)
     {
         return Task.Run(() =>
