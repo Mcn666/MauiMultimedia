@@ -20,4 +20,10 @@ public interface IFileServerService
 
     /// <summary>注销令牌，使其随后失效（如查看器离开页面时调用）。</summary>
     void UnregisterFile(string token);
+
+    /// <summary>注册一个本地目录，返回目录级访问令牌。该目录下的任意文件可通过 <c>{BaseUrl}/dir/{token}/relative/path</c> 访问。</summary>
+    string RegisterDirectory(string dirPath);
+
+    /// <summary>注销目录令牌。</summary>
+    void UnregisterDirectory(string token);
 }

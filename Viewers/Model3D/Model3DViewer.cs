@@ -8,7 +8,7 @@ public class Model3DViewer : IFileViewer
 {
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".glb", ".gltf", ".stl", ".obj"
+        ".glb", ".gltf", ".stl", ".obj", ".fbx", ".pmx", ".vrm"
     };
 
     public string DisplayName => "3D 模型查看器";

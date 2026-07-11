@@ -3,6 +3,8 @@ using System.Linq;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Viewers.Image.Services;
+using MauiMultimedia.Viewers.Model3D.Services;
 
 namespace MauiMultimedia.Viewers.Model3D.Pages;
 
@@ -12,10 +14,11 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
     [Inject] private IFileNavigationState NavState { get; set; } = null!;
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
+    [Inject] private IFileServerService FileServer { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".glb", ".gltf", ".stl", ".obj", ".fbx", ".dae", ".ply", ".3ds", ".wrl"
+        ".glb", ".gltf", ".stl", ".obj", ".fbx", ".pmx", ".vrm"
     };
 
     private IJSObjectReference? _jsModule;
@@ -28,6 +31,8 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
     private bool _scriptsReady;
     private List<string> fileList = new();
     private int currentIndex = -1;
+    private string? _dirToken;
+    private string? _textureDataJson;
 
     private sealed record ScriptLoadStatus(
         bool Ok,
@@ -79,7 +84,7 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
                 }
                 else
                 {
-                    await _jsModule.InvokeVoidAsync("initThree", "three-canvas", _modelUrl, Path.GetExtension(filePath).ToLowerInvariant());
+                    await _jsModule.InvokeVoidAsync("initThree", "three-canvas", _modelUrl, Path.GetExtension(filePath).ToLowerInvariant(), _textureDataJson);
                 }
             }
             catch (Exception ex)
@@ -93,10 +98,7 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
 
     private async Task LoadAsync(string? path = null)
     {
-        if (path != null)
-        {
-            filePath = path;
-        }
+        if (path != null) filePath = path;
         else
         {
             var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
@@ -108,13 +110,6 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
                     .FirstOrDefault() ?? "";
         }
 
-        fileName = Path.GetFileName(filePath);
-        if (path == null)
-            currentIndex = fileList.FindIndex(f => string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
-
-        var ext = Path.GetExtension(filePath).ToLowerInvariant();
-        _isGlb = ext == ".glb" || ext == ".gltf";
-
         if (string.IsNullOrEmpty(filePath))
         {
             errorMessage = "未指定文件路径";
@@ -122,12 +117,28 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
             return;
         }
 
-        // Release old Blob URL before loading new model
-        if (_modelUrl != null)
+        fileName = Path.GetFileName(filePath);
+        if (path == null)
+            currentIndex = fileList.FindIndex(f => string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
+
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+
+        // ── 自动转换旧版 3D 格式到 GLB ──
+        string modelPath = filePath;
+        if (!ext.Equals(".glb") && !ext.Equals(".gltf") && !ext.Equals(".vrm") &&
+            !ext.Equals(".stl") && !ext.Equals(".pmx") && !ext.Equals(".fbx") && !ext.Equals(".obj"))
         {
-            try { await JS.InvokeVoidAsync("revokeBlobUrl", _modelUrl); }
-            catch { }
+            var converted = FbxConversionService.ConvertToGlb(filePath);
+            if (converted != null)
+            {
+                modelPath = converted;
+                ext = ".glb";
+            }
         }
+
+        _isGlb = ext == ".glb" || ext == ".gltf" || ext == ".vrm";
+
+        // Release old model URL and register new directory token
         _modelUrl = null;
         _scriptsReady = false;
 
@@ -135,17 +146,42 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
         errorMessage = null;
         try
         {
-            var bytes = await File.ReadAllBytesAsync(filePath);
-            var mime = ext switch
+            // ── 只预加载 DDS 贴图（PNG/JPG 由虚拟主机或 FileServer 直接加载） ──
+            string? textureDataJson = null;
+            var texDir = Path.GetDirectoryName(modelPath)!;
+            var texMap = new Dictionary<string, string>();
+            foreach (var texFile in Directory.GetFiles(texDir, "*.*", SearchOption.AllDirectories))
             {
-                ".gltf" => "model/gltf+json",
-                ".glb" => "model/gltf-binary",
-                ".stl" => "application/sla",
-                ".obj" => "text/plain",
-                _ => "application/octet-stream"
-            };
-            var streamRef = new DotNetStreamReference(new MemoryStream(bytes));
-            _modelUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, mime);
+                if (Path.GetExtension(texFile).Equals(".dds", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var result = ImageProcessingService.DecodeDds(texFile);
+                        if (result.dataUri != null)
+                            texMap[Path.GetFileName(texFile)] = result.dataUri;
+                    }
+                    catch { }
+                }
+            }
+            // OBJ 模型：同名的 .mtl 材质文件（纯文本，极小）
+            if (ext == ".obj")
+            {
+                var mtlPath = Path.ChangeExtension(modelPath, ".mtl");
+                if (File.Exists(mtlPath))
+                {
+                    try { texMap["__mtl__"] = await File.ReadAllTextAsync(mtlPath); }
+                    catch { }
+                }
+            }
+            if (texMap.Count > 0)
+                textureDataJson = System.Text.Json.JsonSerializer.Serialize(texMap);
+            _textureDataJson = textureDataJson;
+
+            // ── 构建模型 URL（使用 FileServer 目录令牌） ──
+            var modelDir = Path.GetDirectoryName(modelPath)!;
+            _dirToken = FileServer.RegisterDirectory(modelDir);
+            var modelName = Path.GetFileName(modelPath);
+            _modelUrl = $"{FileServer.BaseUrl}/dir/{_dirToken}/{Uri.EscapeDataString(modelName)}";
         }
         catch (Exception ex)
         {
@@ -165,11 +201,13 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_modelUrl != null)
+        if (_dirToken != null)
         {
-            try { await JS.InvokeVoidAsync("revokeBlobUrl", _modelUrl); }
+            try { FileServer.UnregisterDirectory(_dirToken); }
             catch { }
+            _dirToken = null;
         }
+
         if (_jsModule != null)
         {
             try { await _jsModule.DisposeAsync(); }

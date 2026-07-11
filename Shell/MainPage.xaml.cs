@@ -2,6 +2,13 @@ namespace MauiMultimedia.Shell;
 
 public partial class MainPage : ContentPage
 {
+    // Windows WebView2 虚拟主机映射，供 Blazor 组件（如 Model3DPage）调用
+#if WINDOWS
+    private static Microsoft.Web.WebView2.Core.CoreWebView2? _coreWv2;
+    private static int _hostCounter;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _hostMappings = new();
+#endif
+
     public MainPage()
     {
         InitializeComponent();
@@ -16,21 +23,62 @@ public partial class MainPage : ContentPage
         var bg = dark ? "#1e1e1e" : "#ffffff";
         BackgroundColor = Color.FromArgb(bg);
 
-        // WebView Handler 就绪时立即设置原生背景色（比 Page.OnHandlerChanged 更早）
-#if ANDROID
+        // WebView Handler 就绪时设置原生背景色 + Windows 虚拟主机映射
         blazorWebView.HandlerChanged += OnBlazorWebViewHandlerChanged;
+    }
+
+    private void OnBlazorWebViewHandlerChanged(object? sender, EventArgs e)
+    {
+#if ANDROID
+        if (blazorWebView.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
+        {
+            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor("#1e1e1e"));
+        }
+#elif WINDOWS
+        if (blazorWebView.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.WebView2 wv2)
+        {
+            _ = InitializeHostMappingAsync(wv2);
+        }
 #endif
     }
 
-#if ANDROID
-    private void OnBlazorWebViewHandlerChanged(object? sender, EventArgs e)
+#if WINDOWS
+    private static async Task InitializeHostMappingAsync(Microsoft.UI.Xaml.Controls.WebView2 wv2)
     {
-        if (blazorWebView.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
+        try
         {
-            // 强制设置暗色背景，防止 Android WebView 默认白色背景的闪烁
-            // HTML 加载后内联脚本会立刻纠正为正确值
-            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor("#1e1e1e"));
+            await wv2.EnsureCoreWebView2Async();
+            _coreWv2 = wv2.CoreWebView2;
         }
+        catch { }
+    }
+
+    /// <summary>
+    /// 将本地目录映射为虚拟主机名称，返回 https://{hostname}/ 基 URL。
+    /// Blazor 页面本身是 HTTPS，映射后的资源也是 HTTPS → 无 Mixed Content。
+    /// 调用方应在 Dispose 时调用 UnmapVirtualHost 注销。
+    /// </summary>
+    public static string? MapDirectoryToVirtualHost(string directoryPath)
+    {
+        if (_coreWv2 == null || !Directory.Exists(directoryPath)) return null;
+        var host = $"models-{Interlocked.Increment(ref _hostCounter)}.local";
+        try
+        {
+            _coreWv2.SetVirtualHostNameToFolderMapping(
+                host,
+                directoryPath,
+                Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+            _hostMappings[host] = directoryPath;
+            return $"https://{host}/";
+        }
+        catch { return null; }
+    }
+
+    public static void UnmapVirtualHost(string host)
+    {
+        if (_coreWv2 == null || !_hostMappings.TryRemove(host, out _)) return;
+        try { _coreWv2.ClearVirtualHostNameToFolderMapping(host); }
+        catch { }
     }
 #endif
 
@@ -45,7 +93,6 @@ public partial class MainPage : ContentPage
             {
                 int top = 0, bottom = 0;
 
-                // 状态栏高度（顶部）
                 int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
                 if (rid > 0)
                 {
@@ -54,7 +101,6 @@ public partial class MainPage : ContentPage
                     top = (int)(hPx / density);
                 }
 
-                // 导航栏高度（底部）
                 int navRid = resources.GetIdentifier("navigation_bar_height", "dimen", "android");
                 if (navRid > 0)
                 {

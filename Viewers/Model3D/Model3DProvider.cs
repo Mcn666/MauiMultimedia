@@ -7,7 +7,7 @@ public class Model3DProvider : IItemPresenter, ISnapshotProvider
 {
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".glb", ".gltf", ".stl", ".obj"
+        ".glb", ".gltf", ".stl", ".obj", ".fbx", ".pmx", ".vrm"
     };
 
     public bool CanHandle(FileSystemItem item) =>

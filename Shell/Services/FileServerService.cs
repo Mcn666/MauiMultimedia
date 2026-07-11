@@ -20,6 +20,7 @@ public sealed class FileServerService : IFileServerService, IDisposable
     // token → 规范化后的绝对路径。只有宿主（C#）能写入，
     // WebView 内的 JS 拿不到令牌就无法访问任意文件。
     private readonly ConcurrentDictionary<string, string> _tokenMap = new();
+    private readonly ConcurrentDictionary<string, string> _dirTokenMap = new();
 
     public int Port { get; private set; }
     public bool IsRunning => Volatile.Read(ref _listener) != null;
@@ -87,6 +88,27 @@ public sealed class FileServerService : IFileServerService, IDisposable
             _tokenMap.TryRemove(token, out _);
     }
 
+    /// <inheritdoc/>
+    public string RegisterDirectory(string dirPath)
+    {
+        if (string.IsNullOrWhiteSpace(dirPath))
+            throw new ArgumentException("路径不能为空", nameof(dirPath));
+        var canonical = Path.GetFullPath(dirPath);
+        if (!Directory.Exists(canonical))
+            throw new ArgumentException($"目录不存在：{dirPath}", nameof(dirPath));
+        var token = Guid.NewGuid().ToString("N");
+        _dirTokenMap[token] = canonical;
+        Debug.WriteLine($"[FileServer] Registered dir token for {canonical}");
+        return token;
+    }
+
+    /// <inheritdoc/>
+    public void UnregisterDirectory(string token)
+    {
+        if (!string.IsNullOrEmpty(token))
+            _dirTokenMap.TryRemove(token, out _);
+    }
+
     // ═══════════ 接受循环 ═══════════
 
     private async Task AcceptLoopAsync(CancellationToken ct)
@@ -118,6 +140,49 @@ public sealed class FileServerService : IFileServerService, IDisposable
                 using var stream = client.GetStream();
                 var (method, queryPath, headers) = await ReadHttpRequestAsync(stream, ct);
                 if (string.IsNullOrEmpty(method)) return;
+
+                // ── 目录服务 /dir/{token}/relative/path ──
+                // 用于 Three.js/MMDLoader 等需要按相对路径加载附加工件的场景。
+                var dm = System.Text.RegularExpressions.Regex.Match(
+                    queryPath, @"^/dir/([^/]+)(/.*)?(\?.*)?$");
+                if (dm.Success && method == "GET")
+                {
+                    var dirToken = dm.Groups[1].Value;
+                    var relPath = dm.Groups[2].Value;
+                    if (string.IsNullOrEmpty(relPath))
+                    { await WriteErrorAsync(stream, 400, "Bad Request", ct); return; }
+
+                    relPath = Uri.UnescapeDataString(relPath.TrimStart('/'));
+                    relPath = relPath.Replace('\\', '/');
+                    var ci = relPath.IndexOf(':');
+                    if (ci > 0 && ci < 4) relPath = relPath.Substring(ci + 1);
+                    relPath = relPath.TrimStart('/');
+
+                    _dirTokenMap.TryGetValue(dirToken, out var dir);
+                    if (string.IsNullOrEmpty(dir))
+                    { await WriteErrorAsync(stream, 403, "Forbidden", ct); return; }
+
+                    string fullPath;
+                    try { fullPath = Path.GetFullPath(Path.Combine(dir, relPath)); }
+                    catch { fullPath = ""; }
+
+                    if (string.IsNullOrEmpty(fullPath) || !fullPath.StartsWith(dir + Path.DirectorySeparatorChar))
+                    { await WriteErrorAsync(stream, 403, "Forbidden", ct); return; }
+
+                    if (!File.Exists(fullPath))
+                    {
+                        var fb = Path.Combine(dir, Path.GetFileName(relPath));
+                        if (Path.GetFileName(relPath) != relPath && File.Exists(fb))
+                            fullPath = fb;
+                        else
+                        { await WriteErrorAsync(stream, 404, "Not Found", ct); return; }
+                    }
+
+                    var rh = GetHeaderValue(headers, "Range");
+                    var (hr, rs, re) = ParseRangeHeader(rh);
+                    await ServeFileAsync(stream, fullPath, hr, rs, re, ct);
+                    return;
+                }
 
                 // 解析访问令牌
                 var token = ParseQueryParam(queryPath, "token");
