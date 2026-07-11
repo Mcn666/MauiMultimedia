@@ -1,6 +1,7 @@
 using SkiaSharp;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using MauiMultimedia.Core.Utils;
 
 namespace MauiMultimedia.Viewers.Image.Services;
 
@@ -50,7 +51,7 @@ public static class ImageProcessingService
         {
             var rawBytes = File.ReadAllBytes(filePath);
             var base64 = Convert.ToBase64String(rawBytes);
-            var mime = GetMimeType(ext);
+            var mime = MimeTypes.Get(ext);
             var dataUri = $"data:{mime};base64,{base64}";
             var fmtName = ext.TrimStart('.').ToUpperInvariant();
             return new ImageResult(dataUri, codec.Info.Width, codec.Info.Height,
@@ -279,7 +280,7 @@ public static class ImageProcessingService
         if (!needsDownscale && !needsExifFix)
         {
             var base64 = Convert.ToBase64String(fileData);
-            var mime = GetMimeType(ext);
+            var mime = MimeTypes.Get(ext);
             var dataUri = $"data:{mime};base64,{base64}";
             var fmtName = ext.TrimStart('.').ToUpperInvariant();
             return new ImageResult(dataUri, codec.Info.Width, codec.Info.Height,
@@ -406,22 +407,6 @@ public static class ImageProcessingService
 
     // ── 内部方法 ──────────────────────────────────────────
 
-    /// <summary>
-    /// 文件扩展名 → MIME 类型
-    /// </summary>
-    private static string GetMimeType(string extension) => extension.ToLowerInvariant() switch
-    {
-        ".jpg" or ".jpeg" => "image/jpeg",
-        ".png" => "image/png",
-        ".gif" => "image/gif",
-        ".bmp" => "image/bmp",
-        ".webp" => "image/webp",
-        ".ico" => "image/x-icon",
-        ".tiff" or ".tif" => "image/tiff",
-        ".avif" => "image/avif",
-        ".dds" => "image/x-dds",
-        _ => "application/octet-stream"
-    };
 
     /// <summary>
     /// 如果图片超过最大尺寸则等比缩小。

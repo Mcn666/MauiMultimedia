@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.Utils;
 
 namespace MauiMultimedia.Viewers.Video.Pages;
 
@@ -105,7 +106,8 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     {
         // 通过文件服务注册令牌，URL 只携带令牌而非裸路径，
         // WebView 内 JS 无法据此构造其他文件的访问 URL。
-        _currentToken = FileServer.RegisterFile(path);
+        // 视频查看器自行决定 MIME（沿用标准表；如需覆盖可在注册时传入自定义值）。
+        _currentToken = FileServer.RegisterFile(path, MimeTypes.Get(path));
         return $"{FileServer.BaseUrl}/file?token={_currentToken}";
     }
 

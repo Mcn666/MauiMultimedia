@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.Utils;
 using MauiMultimedia.Viewers.Image.Components;
 using MauiMultimedia.Viewers.Image.Services;
 
@@ -764,7 +765,8 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     {
         if (_servedTokens.TryGetValue(path, out var tok))
             return $"{FileServer.BaseUrl}/file?token={tok}";
-        var t = FileServer.RegisterFile(path);
+        // 图片查看器自行决定 MIME（此处沿用标准表；如需覆盖可在注册时传入自定义值）。
+        var t = FileServer.RegisterFile(path, MimeTypes.Get(path));
         _servedTokens[path] = t;
         return $"{FileServer.BaseUrl}/file?token={t}";
     }
@@ -1525,16 +1527,6 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
     }
 
-    private static string GetMimeType(string ext) => ext switch
-    {
-        "jpg" or "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "bmp" => "image/bmp",
-        "dds" => "image/x-dds",
-        _ => "image/jpeg"
-    };
 
     private async Task StitchGapUp()
     {
@@ -1681,7 +1673,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             if (stitchImages == null) return;
             var streamRef = new DotNetStreamReference(stream);
             var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-            var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, GetMimeType(ext));
+            var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, MimeTypes.Get(ext));
             if (stitchImages == null) { await RevokeBlobUrlAsync(blobUrl); return; }
             stitchImages[i].BlobUrl = blobUrl;
             _stitchLoadedCount++;

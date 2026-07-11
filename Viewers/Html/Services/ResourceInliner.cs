@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.Utils;
 
 namespace MauiMultimedia.Viewers.Html.Services;
 
@@ -122,7 +123,8 @@ public static partial class ResourceInliner
     {
         if (tokenMap.TryGetValue(absPath, out var existing))
             return $"{fileServer.BaseUrl}/file?token={existing}";
-        var tok = fileServer.RegisterFile(absPath);
+        // HTML 查看器自行决定内联资源的 MIME（沿用标准表；如需覆盖可在注册时传入自定义值）。
+        var tok = fileServer.RegisterFile(absPath, MimeTypes.Get(absPath));
         tokenMap[absPath] = tok;
         return $"{fileServer.BaseUrl}/file?token={tok}";
     }

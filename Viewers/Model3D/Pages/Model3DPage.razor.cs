@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.Utils;
 using MauiMultimedia.Viewers.Image.Services;
 using MauiMultimedia.Viewers.Model3D.Services;
 
@@ -178,8 +179,9 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
             _textureDataJson = textureDataJson;
 
             // ── 构建模型 URL（使用 FileServer 目录令牌） ──
+            // 3D 查看器为目录声明默认 MIME，填补标准表未覆盖的模型格式（如 .fbx/.pmx）。
             var modelDir = Path.GetDirectoryName(modelPath)!;
-            _dirToken = FileServer.RegisterDirectory(modelDir);
+            _dirToken = FileServer.RegisterDirectory(modelDir, "model/gltf-binary");
             var modelName = Path.GetFileName(modelPath);
             _modelUrl = $"{FileServer.BaseUrl}/dir/{_dirToken}/{Uri.EscapeDataString(modelName)}";
         }

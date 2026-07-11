@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.Utils;
 
 namespace MauiMultimedia.Shell.Services;
 
@@ -21,6 +22,11 @@ public sealed class FileServerService : IFileServerService, IDisposable
     // WebView 内的 JS 拿不到令牌就无法访问任意文件。
     private readonly ConcurrentDictionary<string, string> _tokenMap = new();
     private readonly ConcurrentDictionary<string, string> _dirTokenMap = new();
+
+    // token → 查看器注册时显式提供的 MIME（覆盖默认解析）。null 表示回落标准表。
+    private readonly ConcurrentDictionary<string, string?> _mimeOverride = new();
+    // dirToken → 目录级默认 MIME（仅填补标准表未覆盖的查看器自有格式）。
+    private readonly ConcurrentDictionary<string, string?> _dirMimeOverride = new();
 
     public int Port { get; private set; }
     public bool IsRunning => Volatile.Read(ref _listener) != null;
@@ -63,7 +69,7 @@ public sealed class FileServerService : IFileServerService, IDisposable
     // ═══════════ 令牌注册（宿主侧 API） ═══════════
 
     /// <inheritdoc/>
-    public string RegisterFile(string filePath)
+    public string RegisterFile(string filePath, string? mimeType = null)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("文件路径不能为空", nameof(filePath));
@@ -77,6 +83,7 @@ public sealed class FileServerService : IFileServerService, IDisposable
 
         var token = Guid.NewGuid().ToString("N");
         _tokenMap[token] = canonical;
+        _mimeOverride[token] = mimeType;
         Debug.WriteLine($"[FileServer] Registered token for {canonical}");
         return token;
     }
@@ -85,11 +92,14 @@ public sealed class FileServerService : IFileServerService, IDisposable
     public void UnregisterFile(string token)
     {
         if (!string.IsNullOrEmpty(token))
+        {
             _tokenMap.TryRemove(token, out _);
+            _mimeOverride.TryRemove(token, out _);
+        }
     }
 
     /// <inheritdoc/>
-    public string RegisterDirectory(string dirPath)
+    public string RegisterDirectory(string dirPath, string? defaultMimeType = null)
     {
         if (string.IsNullOrWhiteSpace(dirPath))
             throw new ArgumentException("路径不能为空", nameof(dirPath));
@@ -98,6 +108,7 @@ public sealed class FileServerService : IFileServerService, IDisposable
             throw new ArgumentException($"目录不存在：{dirPath}", nameof(dirPath));
         var token = Guid.NewGuid().ToString("N");
         _dirTokenMap[token] = canonical;
+        _dirMimeOverride[token] = defaultMimeType;
         Debug.WriteLine($"[FileServer] Registered dir token for {canonical}");
         return token;
     }
@@ -106,7 +117,10 @@ public sealed class FileServerService : IFileServerService, IDisposable
     public void UnregisterDirectory(string token)
     {
         if (!string.IsNullOrEmpty(token))
+        {
             _dirTokenMap.TryRemove(token, out _);
+            _dirMimeOverride.TryRemove(token, out _);
+        }
     }
 
     // ═══════════ 接受循环 ═══════════
@@ -180,7 +194,18 @@ public sealed class FileServerService : IFileServerService, IDisposable
 
                     var rh = GetHeaderValue(headers, "Range");
                     var (hr, rs, re) = ParseRangeHeader(rh);
-                    await ServeFileAsync(stream, fullPath, hr, rs, re, ct);
+
+                    // 目录内文件的 MIME：优先标准表；若标准表未覆盖（octet-stream），
+                    // 且查看器为该目录声明了默认 MIME，则用于填补其自有格式（如 .fbx/.pmx）。
+                    var fileMime = MimeTypes.Get(fullPath);
+                    if (_dirMimeOverride.TryGetValue(dirToken, out var dirDefault)
+                        && dirDefault != null
+                        && fileMime == MimeTypes.Fallback)
+                    {
+                        fileMime = dirDefault;
+                    }
+
+                    await ServeFileAsync(stream, fullPath, hr, rs, re, fileMime, ct);
                     return;
                 }
 
@@ -223,11 +248,15 @@ public sealed class FileServerService : IFileServerService, IDisposable
                     return;
                 }
 
+                // 查看器注册时提供的 MIME 优先；否则回落标准映射表。
+                _mimeOverride.TryGetValue(token, out var overrideMime);
+                var mimeType = overrideMime ?? MimeTypes.Get(filePath);
+
                 // 解析 Range 头
                 var rangeHeader = GetHeaderValue(headers, "Range");
                 var (hasRange, rangeStart, rangeEnd) = ParseRangeHeader(rangeHeader);
 
-                await ServeFileAsync(stream, filePath, hasRange, rangeStart, rangeEnd, ct);
+                await ServeFileAsync(stream, filePath, hasRange, rangeStart, rangeEnd, mimeType, ct);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
@@ -334,11 +363,11 @@ public sealed class FileServerService : IFileServerService, IDisposable
     private static async Task ServeFileAsync(
         NetworkStream stream, string filePath,
         bool hasRange, long rangeStart, long? rangeEnd,
+        string mimeType,
         CancellationToken ct)
     {
         var fileInfo = new FileInfo(filePath);
         var fileLength = fileInfo.Length;
-        var mimeType = GetMimeType(filePath);
 
         if (hasRange)
         {
@@ -453,56 +482,4 @@ public sealed class FileServerService : IFileServerService, IDisposable
             await stream.WriteAsync(body, ct);
     }
 
-    // ═══════════ MIME ═══════════
-
-    private static string GetMimeType(string filePath)
-    {
-        return Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant() switch
-        {
-            // ── Image (served directly to the WebView for large-image viewing) ──
-            "jpg" or "jpeg" => "image/jpeg",
-            "png" => "image/png",
-            "gif" => "image/gif",
-            "webp" => "image/webp",
-            "bmp" => "image/bmp",
-            "ico" => "image/x-icon",
-            "avif" => "image/avif",
-            "svg" => "image/svg+xml",
-            "dds" => "image/x-dds",
-
-            // ── Web / static assets (MHTML inline resources, fonts, etc.) ──
-            // Browsers enforce strict MIME checking on stylesheets/scripts, so
-            // these MUST be served with the correct Content-Type or they are
-            // silently rejected (e.g. layout breaks for CSS served as octet-stream).
-            "css" => "text/css",
-            "js" or "mjs" => "text/javascript",
-            "json" => "application/json",
-            "html" or "htm" => "text/html",
-            "txt" => "text/plain",
-            "xml" => "application/xml",
-            "woff" => "font/woff",
-            "woff2" => "font/woff2",
-            "ttf" => "font/ttf",
-            "otf" => "font/otf",
-            "eot" => "application/vnd.ms-fontobject",
-
-            // TIFF is not natively rendered by browsers; octet-stream forces a
-            // download/sniff fallback rather than a broken inline render.
-            "tiff" or "tif" => "application/octet-stream",
-
-            // ── Video (Range-streamed playback) ──
-            "mp4" or "m4v" => "video/mp4",
-            "webm" => "video/webm",
-            "mkv" => "video/x-matroska",
-            "mov" => "video/quicktime",
-            "avi" => "video/x-msvideo",
-            "wmv" => "video/x-ms-wmv",
-            "flv" => "video/x-flv",
-            "3gp" => "video/3gpp",
-            "ogv" => "video/ogg",
-            "mpg" or "mpeg" => "video/mpeg",
-            "ts" or "mts" => "video/mp2t",
-            _ => "application/octet-stream"
-        };
-    }
 }
