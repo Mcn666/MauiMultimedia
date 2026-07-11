@@ -9,7 +9,7 @@ public class ImageViewer : IFileViewer
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-        ".ico", ".tiff", ".tif", ".svg", ".avif"
+        ".ico", ".tiff", ".tif", ".svg", ".avif", ".dds"
     };
 
     public string DisplayName => "图片查看器";

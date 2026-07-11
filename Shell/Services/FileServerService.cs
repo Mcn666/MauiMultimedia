@@ -403,6 +403,7 @@ public sealed class FileServerService : IFileServerService, IDisposable
             "ico" => "image/x-icon",
             "avif" => "image/avif",
             "svg" => "image/svg+xml",
+            "dds" => "image/x-dds",
 
             // ── Web / static assets (MHTML inline resources, fonts, etc.) ──
             // Browsers enforce strict MIME checking on stylesheets/scripts, so

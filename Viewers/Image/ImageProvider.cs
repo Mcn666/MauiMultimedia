@@ -8,7 +8,7 @@ public class ImageProvider : IItemPresenter, ISnapshotProvider
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-        ".ico", ".tiff", ".tif", ".svg", ".avif"
+        ".ico", ".tiff", ".tif", ".svg", ".avif", ".dds"
     };
 
     /// <summary>

@@ -19,7 +19,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-        ".ico", ".tiff", ".tif", ".svg", ".avif"
+        ".ico", ".tiff", ".tif", ".svg", ".avif", ".dds"
     };
 
     // ── File state ──
@@ -874,6 +874,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                     }
 
                     // Slow path: Skia decodes (EXIF/downscale) into a data:URI.
+                    // DDS files are also handled here via ImageProcessingService.
                     var bytes = File.ReadAllBytes(filePath);
                     var result = ImageProcessingService.DecodeImage(bytes, fileName);
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
@@ -1531,6 +1532,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         "gif" => "image/gif",
         "webp" => "image/webp",
         "bmp" => "image/bmp",
+        "dds" => "image/x-dds",
         _ => "image/jpeg"
     };
 
