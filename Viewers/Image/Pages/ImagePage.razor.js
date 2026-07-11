@@ -139,21 +139,29 @@ function _gestureCreatePeek() {
   const slide = document.querySelector('.img-slide');
   if (!slide) return;
 
-  // Fetch adjacent URIs from C# (fire-and-forget — results arrive async)
-  const prevPromise = _gestureDotNetRef
-    ? _gestureDotNetRef.invokeMethodAsync('GetPeekUri', -1).catch(() => null)
-    : Promise.resolve(null);
-  const nextPromise = _gestureDotNetRef
-    ? _gestureDotNetRef.invokeMethodAsync('GetPeekUri', 1).catch(() => null)
-    : Promise.resolve(null);
+  // Fetch adjacent URIs + zoom from C#.
+  // NOTE: GetPeekZoom is called AFTER GetPeekUri (chained via .then) because
+  // GetPeekUri decodes the image into DecodeCache — GetPeekZoom reads the
+  // cached dimensions for the zoom calculation. Parallel calls would race:
+  // GetPeekZoom would see no cache entry and return the default zoom (1.0),
+  // making both prev and next peeks use the same wrong scale.
+  function getAdj(dir) {
+    if (!_gestureDotNetRef) return Promise.resolve({ uri: null, zoom: 1 });
+    return _gestureDotNetRef.invokeMethodAsync('GetPeekUri', dir)
+      .catch(() => null)
+      .then(function (uri) {
+        if (!uri) return { uri: null, zoom: 1 };
+        return _gestureDotNetRef.invokeMethodAsync('GetPeekZoom', dir)
+          .catch(function () { return 1; })
+          .then(function (zoom) { return { uri: uri, zoom: zoom }; });
+      });
+  }
 
-  Promise.all([prevPromise, nextPromise]).then(([prevUri, nextUri]) => {
-    // Peek elements are children of .img-slide, positioned to its left and
-    // right. When the slide translates, they move with it. The viewport's
-    // overflow:hidden naturally clips them — only the portion that slides
-    // into the visible area (between 0 and viewportWidth) shows through.
-    // This avoids any z-index or stacking-context trickery.
-    if (!prevUri && !nextUri) return;
+  const prevPromise = getAdj(-1);
+  const nextPromise = getAdj(1);
+
+  Promise.all([prevPromise, nextPromise]).then(([prev, next]) => {
+    if (!prev.uri && !next.uri) return;
 
     const wrap = slide.querySelector('.img-wrap');
     if (!wrap) return;
@@ -162,31 +170,31 @@ function _gestureCreatePeek() {
     container.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;' +
       'pointer-events:none;display:flex;align-items:center;justify-content:center;';
 
-    if (prevUri) {
-      const p = document.createElement('div');
-      p.style.cssText = 'position:absolute;top:0;bottom:0;left:-100%;width:100%;' +
+    function makePeek(uri, zoom, leftValue) {
+      if (!uri) return null;
+      // Match the real image rendering: intrinsic-size <img> wrapped in a
+      // scale(zoom) inner, not object-fit:contain at viewport size —
+      // otherwise a 1:1 image would appear full-viewport during peek and
+      // snap to actual size on transition completion (= "缩放抖动").
+      // leftValue: '-100%' for prev (left side), '100%' for next (right side).
+      var card = document.createElement('div');
+      card.style.cssText = 'position:absolute;top:0;bottom:0;left:' + leftValue + ';width:100%;' +
         'display:flex;align-items:center;justify-content:center;';
-      const img = document.createElement('img');
-      img.src = prevUri;
+      var inner = document.createElement('div');
+      inner.style.cssText = 'display:flex;align-items:center;justify-content:center;';
+      inner.style.transform = 'scale(' + zoom + ')';
+      var img = document.createElement('img');
+      img.src = uri;
       img.draggable = false;
-      img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:2px;';
-      p.appendChild(img);
-      container.appendChild(p);
-      _peekPrev = p;
+      img.style.cssText = 'max-width:none;max-height:none;border-radius:2px;';
+      inner.appendChild(img);
+      card.appendChild(inner);
+      container.appendChild(card);
+      return card;
     }
 
-    if (nextUri) {
-      const n = document.createElement('div');
-      n.style.cssText = 'position:absolute;top:0;bottom:0;left:100%;width:100%;' +
-        'display:flex;align-items:center;justify-content:center;';
-      const img = document.createElement('img');
-      img.src = nextUri;
-      img.draggable = false;
-      img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:2px;';
-      n.appendChild(img);
-      container.appendChild(n);
-      _peekNext = n;
-    }
+    if (prev.uri) _peekPrev = makePeek(prev.uri, prev.zoom, '-100%');
+    if (next.uri) _peekNext = makePeek(next.uri, next.zoom, '100%');
 
     // Insert peek BEFORE .img-wrap so it sits behind it in stacking order
     slide.insertBefore(container, wrap);
@@ -216,10 +224,10 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
     el.setPointerCapture(e.pointerId);
     el.classList.add('tracking');
 
-    // Create peek previews of adjacent images (only in fit mode)
-    if (el.classList.contains('fit')) {
-      _gestureCreatePeek();
-    }
+    // Create peek previews of adjacent images in ALL modes (not just fit).
+    // For 1:1 images that fit the viewport, the peek shows through the slide
+    // just like fit mode — no guide line, no damping.
+    _gestureCreatePeek();
   });
 
   el.addEventListener('pointermove', (e) => {
@@ -238,9 +246,10 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
 
     const offsetX = e.clientX - _gestureStartX;
 
-    // In fit mode: slide .img-slide to preview navigation.
-    // In free mode (zoomed in): C# panX/panY handles the image, and C#
-    // OnPointerMove sets .img-slide overscroll feedback if at boundary.
+    // Fit mode: slide .img-slide to preview navigation with peek visible.
+    // Free mode: C# OnPointerMove handles the transform (damped overscroll
+    // or full slide depending on whether the image can actually be panned),
+    // so JS does NOT set it here — avoids jitter from competing transforms.
     var isFitMode = el.classList.contains('fit');
     if (isFitMode) {
       const imgSlide = document.querySelector('.img-slide');
@@ -284,6 +293,38 @@ export function disposeGestureTracker() {
   _gestureCleanupPeek();
   _gestureDotNetRef = null;
   _gestureEl = null;
+}
+
+// ── Window Resize Handler ──
+
+let _resizeDotNetRef = null;
+var _resizeObserver = null;  // var for Android 10 compatibility
+
+export function initResizeHandler(dotNetRef) {
+  _resizeDotNetRef = dotNetRef;
+  var vp = document.querySelector('.image-viewport');
+  if (!vp) return;
+  // ResizeObserver fires synchronously on observe() with the initial size.
+  // Skip that first callback — the page's own OnAfterRenderAsync handles
+  // the initial filmstrip positioning after measuring the viewport.
+  try {
+    var first = true;
+    _resizeObserver = new ResizeObserver(function () {
+      if (first) { first = false; return; }
+      if (_resizeDotNetRef) {
+        _resizeDotNetRef.invokeMethodAsync('OnWindowResize');
+      }
+    });
+    _resizeObserver.observe(vp);
+  } catch (_) { /* ResizeObserver not available — skip */ }
+}
+
+export function disposeResizeHandler() {
+  _resizeDotNetRef = null;
+  if (_resizeObserver) {
+    try { _resizeObserver.disconnect(); } catch (_) {}
+    _resizeObserver = null;
+  }
 }
 
 // ── Frame wait (deferred paint gate) ──

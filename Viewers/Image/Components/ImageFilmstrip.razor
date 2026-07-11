@@ -28,6 +28,8 @@
     </div>
 </div>
 
+@using System.Diagnostics
+
 @code {
     [Inject] private IJSRuntime JS { get; set; } = null!;
 
@@ -35,6 +37,7 @@
     [Parameter] public int CurrentIndex { get; set; } = -1;
     [Parameter] public bool Hidden { get; set; }
     [Parameter] public EventCallback<int> OnItemClick { get; set; }
+    [Parameter] public float ViewportWidth { get; set; }
 
     private ElementReference _trackRef;
     private IJSObjectReference? _jsModule;
@@ -42,19 +45,22 @@
     private int _visEnd;
     private bool _scrollPending;
     private bool _initialized;
-    // While a programmatic jump (open / prev / next / click) is in flight we
-    // ignore scroll-driven window recompute. Otherwise the scroll events fired
-    // by the jump would walk the window from 0 -> index and thrash the DOM /
-    // spam thumbnail loads.
     private bool _suppressScroll;
+    private float _lastVpWidth;
 
     private const int ItemWidth = 52;
     private const int ItemGap = 4;
-    private const int WindowPad = 20;
     private const int Stride = ItemWidth + ItemGap;
 
     private double _leadSpacerWidth => _visStart * Stride;
     private double _trailSpacerWidth => Math.Max(0, (Items.Count - _visEnd - 1) * Stride);
+
+    /// <summary>
+    /// Dynamically computed from ViewportWidth so the virtual window always
+    /// fills the filmstrip track — at the first/last image, there's no gap.
+    /// </summary>
+    private int WindowPad => Math.Max(5,
+        (int)Math.Ceiling(Math.Max(ViewportWidth, 800) / Stride / 2));
 
     protected override void OnParametersSet()
     {
@@ -63,14 +69,32 @@
             _initialized = true;
             CenterWindow(CurrentIndex >= 0 ? CurrentIndex : 0);
         }
+        else if (_initialized && Items.Count > 0 &&
+                 (_lastVpWidth <= 0 ||
+                  Math.Abs(_lastVpWidth - ViewportWidth) > 1))
+        {
+            CenterWindow(CurrentIndex >= 0 ? CurrentIndex : 0);
+        }
+        _lastVpWidth = ViewportWidth;
     }
 
     private void CenterWindow(int center)
     {
         if (Items.Count == 0) return;
+        // ViewportWidth may be 0 when the parameter hasn't propagated yet
+        // (e.g., after exiting stitch mode before the next render cycle).
+        // Fall back to a reasonable default so the window is never just 1 item.
+        float vw = ViewportWidth > 0 ? ViewportWidth : 1200;
         center = Math.Clamp(center, 0, Items.Count - 1);
-        _visStart = Math.Max(0, center - WindowPad);
-        _visEnd = Math.Min(Items.Count - 1, center + WindowPad);
+        int pad = Math.Max(5, (int)Math.Ceiling(Math.Max(vw, 800) / Stride / 2));
+        int minFill = (int)Math.Ceiling(Math.Max(vw, 800) / Stride);
+
+        _visStart = Math.Max(0, center - pad);
+        _visEnd = Math.Min(Items.Count - 1, _visStart + minFill - 1);
+        if (_visEnd - _visStart + 1 < minFill)
+            _visStart = Math.Max(0, _visEnd - minFill + 1);
+
+        Debug.WriteLine($"[Filmstrip] idx={center} vpW={ViewportWidth:F0} vw={vw:F0} pad={pad} minFill={minFill} visStart={_visStart} visEnd={_visEnd} cnt={_visEnd - _visStart + 1} total={Items.Count}");
     }
 
     /// <summary>
@@ -85,6 +109,7 @@
         if (Items.Count == 0) return;
 
         CenterWindow(index);
+        _initialized = true;  // OnParametersSet will skip its own CenterWindow
         _suppressScroll = true;
         StateHasChanged();
 

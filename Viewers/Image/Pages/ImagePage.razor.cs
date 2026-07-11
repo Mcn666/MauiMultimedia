@@ -161,23 +161,30 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 {
                     await _jsModule.InvokeVoidAsync("initGestureTracker",
                         _dotNetRef, ".image-viewport", 80);
+                    await _jsModule.InvokeVoidAsync("initResizeHandler",
+                        _dotNetRef);
 
-                    // Position the filmstrip at the current image *instantly* on
-                    // open. The child snaps scrollLeft (no animation) and
-                    // suppresses its own scroll-driven window recompute, so we
-                    // never animate 0 -> currentIndex or spam thumbnail loads.
-                    // Call the child directly (not via the _filmstripBuilt-gated
-                    // wrapper) so open positioning can't be skipped by build
-                    // timing — the child guards on Items.Count itself.
-                    if (!stitchMode && showFilmstrip && currentIndex >= 0 && filmstripRef != null)
-                        await filmstripRef.ScrollToIndexAsync(currentIndex, false);
+                    // Filmstrip positioning is deferred until after
+                    // RefreshViewportMetricsAsync below, so vpWidth is known.
                 }
             }
             catch { }
 
             StartHudTimer();
 
-            // Measure the viewport, then auto-select fit/1:1 for the current image
+            // Measure the viewport first so the filmstrip gets a correct
+            // ViewportWidth (vpWidth) for its minFill calculation.
+            await RefreshViewportMetricsAsync();
+
+            // Position the filmstrip at the current image — vpWidth is known,
+            // so the virtual window is sized correctly from the first render.
+            if (_jsModule != null)
+            {
+                if (!stitchMode && showFilmstrip && currentIndex >= 0 && filmstripRef != null)
+                    await filmstripRef.ScrollToIndexAsync(currentIndex, false);
+            }
+
+            // Auto-select fit/1:1 for the current image using the now-known
             // using the now-known geometry. ApplyDecoded may have run during
             // OnInitializedAsync before the viewport was measured (vpWidth was 0)
             // and bailed out, so this is where the correct zoom is first
@@ -296,6 +303,38 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         return await GetImageDataUriAsync(fileList[idx]);
     }
 
+    /// <summary>
+    /// Returns the zoom factor for the adjacent image peek preview, so the
+    /// peek renders at the same scale as the real image — avoiding a size
+    /// jump when the slide transition completes.
+    /// </summary>
+    [JSInvokable]
+    public double GetPeekZoom(int direction)
+    {
+        var idx = currentIndex + direction;
+        if (idx < 0 || idx >= fileList.Count) return 1;
+        var cached = DecodeCache.Get(fileList[idx]);
+        if (!cached.HasValue || cached.Value.Width <= 0 || cached.Value.Height <= 0)
+            return 1;
+        var z = ComputeAutoZoom(cached.Value.Width, cached.Value.Height);
+        return z.display;
+    }
+
+    /// <summary>
+    /// Called (debounced) after the window is resized. Refreshes viewport
+    /// metrics, recalculates fit zoom if in fit mode, and recenters the
+    /// filmstrip so the current thumbnail stays in view.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnWindowResize()
+    {
+        await RefreshViewportMetricsAsync();
+        RecomputeZoom();
+
+        if (showFilmstrip && !stitchMode && currentIndex >= 0 && filmstripRef != null)
+            await filmstripRef.ScrollToIndexAsync(currentIndex, false);
+    }
+
     [JSInvokable]
     public async Task OnGestureRelease(double offsetX, double velocity)
     {
@@ -321,8 +360,13 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                     await _jsModule.InvokeVoidAsync("clearSlideTransform");
                     await _jsModule.InvokeVoidAsync("hideOverscrollGuide");
                 }
-                if (overscroll > 0 && hasPrev) await GoPrev();
-                else if (overscroll < 0 && hasNext) await GoNext();
+                // Use slide transition (DoFadeNavigate) instead of GoPrev/GoNext
+                // (cylinder) for gesture-triggered navigation in free mode, so
+                // the animation is consistent regardless of zoom mode. The image
+                // may be small enough to fit entirely in the viewport at 1:1,
+                // and the cylinder flip looks out of place there.
+                if (overscroll > 0 && hasPrev) await DoFadeNavigate(-1, overscroll);
+                else if (overscroll < 0 && hasNext) await DoFadeNavigate(1, overscroll);
             }
             else if (_jsModule != null)
             {
@@ -395,8 +439,17 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         var targetPath = fileList[currentIndex + direction];
         var targetUri = await GetImageDataUriAsync(targetPath);
 
-        // Pre-compute the target image's zoom.
-        ApplyZoomFor(targetPath);
+        // Compute the target image's zoom WITHOUT calling ApplyZoomFor (which
+        // triggers a Blazor re-render that changes .img-wrap scale mid-slide).
+        // Instead, pre-compute just the numeric value for slideTransition,
+        // then apply the zoom after animation completes.
+        float targetZoom = displayZoom;
+        var cached = DecodeCache.Get(targetPath);
+        if (cached.HasValue && cached.Value.Width > 0 && cached.Value.Height > 0)
+        {
+            var z = ComputeAutoZoom(cached.Value.Width, cached.Value.Height);
+            targetZoom = z.display;
+        }
 
         // Hide the real wrap so the peek image shows through during the slide
         if (_jsModule != null) await _jsModule.InvokeVoidAsync("hideOverscrollGuide");
@@ -406,14 +459,14 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         // The JS handler pins img.src + wrap.transform before resetting the
         // slide position, so there's no frame of the old image flashing back.
         if (_jsModule != null && targetUri != null)
-            await _jsModule.InvokeVoidAsync("slideTransition", targetUri, direction, (double)vpWidth, displayZoom);
+            await _jsModule.InvokeVoidAsync("slideTransition", targetUri, direction, (double)vpWidth, targetZoom);
 
         // Clean up peek elements created during drag
         if (_jsModule != null) await _jsModule.InvokeVoidAsync("cleanupGesturePeek");
 
-        // Hide the (now empty) real wrap during the swap then immediately show it
-        // with the new image at the correct zoom — no flash because the browser
-        // already decoded targetUri from the peek preview.
+        // Now apply the target image's zoom (post-animation, no mid-slide
+        // Blazor re-render to compete with the CSS transition).
+        ApplyZoomFor(targetPath);
         if (_jsModule != null)
             await _jsModule.InvokeVoidAsync("waitFrame");
 
@@ -424,6 +477,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         ResetView();
         await LoadImageAsync();
         _isAnimating = false;
+        ResetHudTimer();
 
         await ScrollFilmstripToCurrentAsync();
     }
@@ -948,7 +1002,10 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         float cssFit = Math.Min(Math.Min(vpWidth / imageWidth, vpHeight / imageHeight), 1.0f);
         fitZoom = cssFit;
         if (zoomFitMode) displayZoom = cssFit;
-        displayZoom = Math.Clamp(displayZoom, MinZoom, MaxZoom);
+        // Only clamp in fit mode. In 1:1 mode the user's chosen zoom may be
+        // smaller than the new fitZoom (e.g. a small image in a large window),
+        // and clamping would push it up — breaking 1:1.
+        if (zoomFitMode) displayZoom = Math.Clamp(displayZoom, MinZoom, MaxZoom);
         ClampPan();
         _zoomComputed = true;
     }
@@ -1124,14 +1181,39 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         panY = desiredPanY;
         ClampPan();
 
-        // Elastic overscroll feedback when zoomed in: if pan is at horizontal
-        // boundary, give .img-slide a damped translate for the "pull" feel.
+        // Elastic overscroll / slide feedback in free mode:
+        //   maxX > 0 (image wider than viewport, can pan):
+        //     → damped overscroll transform + guide line (existing)
+        //   maxX == 0 (image fits viewport, no pan possible):
+        //     → full slide transform like fit mode (no damping, no line)
+        // Uses DecodeCache dimensions instead of imageWidth to avoid races
+        // when the field hasn't been updated yet (e.g. mid-navigation).
         if (!zoomFitMode && _jsModule != null)
         {
-            float damped = (desiredPanX - panX) * 0.3f;
-            float thresh = Math.Max(80f, vpWidth * 0.12f);
-            _ = _jsModule.InvokeVoidAsync("setSlideOverscroll", damped);
-            _ = _jsModule.InvokeVoidAsync("showOverscrollGuide", desiredPanX - panX, thresh);
+            float overscroll = desiredPanX - panX;
+            if (Math.Abs(overscroll) > 0.5f)
+            {
+                var cached = DecodeCache.Get(filePath);
+                float cachedW = cached.HasValue ? cached.Value.Width : 0;
+                float vw = vpWidth > 0 ? vpWidth : 800f;
+                float dispW = (cachedW > 0 ? cachedW : imageWidth) * displayZoom;
+                float maxX = Math.Max(0, (dispW - vw) / 2);
+                if (maxX > 0)
+                {
+                    float damped = overscroll * 0.3f;
+                    float thresh = Math.Max(80f, vpWidth * 0.12f);
+                    _ = _jsModule.InvokeVoidAsync("setSlideOverscroll", damped);
+                    _ = _jsModule.InvokeVoidAsync("showOverscrollGuide", overscroll, thresh);
+                }
+                else
+                {
+                    // Full slide (like fit mode) — no damping, no guide line.
+                    // C# is the sole controller here (JS pointermove doesn't
+                    // set .img-slide in free mode), so no transform conflict.
+                    _ = _jsModule.InvokeVoidAsync("setSlideTransform",
+                        $"translateX({overscroll}px)");
+                }
+            }
         }
 
         StateHasChanged();
@@ -1295,6 +1377,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         ResetView();
         await LoadImageAsync();
         _isAnimating = false;
+        ResetHudTimer();
 
         await ScrollFilmstripToCurrentAsync();
     }
@@ -1331,6 +1414,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         ResetView();
         await LoadImageAsync();
         _isAnimating = false;
+        ResetHudTimer();
 
         await ScrollFilmstripToCurrentAsync();
     }
@@ -1480,6 +1564,15 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             _stitchScrollPending = false;
             _stitchTop = Array.Empty<double>();
             _stitchTotalHeight = 0;
+            // Re-center the filmstrip — its window may be stale after
+            // stitch mode (especially if it was open before vpWidth was
+            // measured, leaving _visStart=_visEnd=0).
+            if (showFilmstrip && filmstripRef != null)
+            {
+                // Ensure the filmstrip has the current vpWidth before re-centering.
+                await RefreshViewportMetricsAsync();
+                await filmstripRef.ScrollToIndexAsync(currentIndex, false);
+            }
             return;
         }
 
@@ -1694,6 +1787,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
         if (_jsModule != null)
         {
+            try { await _jsModule.InvokeVoidAsync("disposeResizeHandler"); } catch { }
             try { await _jsModule.InvokeVoidAsync("disposeGestureTracker"); } catch { }
             try { await _jsModule.DisposeAsync(); } catch { }
         }
