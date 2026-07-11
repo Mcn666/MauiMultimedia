@@ -16,7 +16,7 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp4", ".webm", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".m4v",
-        ".3gp", ".ogv", ".mpg", ".mpeg", ".ts", ".mts"
+        ".3gp", ".ogv", ".mpg", ".mpeg", ".ts", ".mts", ".m2ts"
     };
 
     private readonly string _videoElementId = "video-player";
@@ -25,6 +25,7 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     private string filePath = "";
     private string fileName = "";
     private string? _videoUrl;
+    private string _mediaType = "native"; // native | flv | mpegts，决定 JS 侧走原生还是 mpegts.js 软解
     private string? _currentToken;     // 当前视频对应的文件服务令牌，离开时注销
     private string? errorMessage;
     private List<string> fileList = new();
@@ -60,24 +61,35 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
         {
             if (firstRender)
             {
-                // 导入 .razor.js 模块
+                // 导入 .razor.js 模块（RCL 静态资源用绝对路径 /_content/{Assembly}/...）
                 _jsModule = await JS.InvokeAsync<IJSObjectReference>("import",
-                    "./_content/MauiMultimedia.Viewers.Video/Pages/VideoPage.razor.js");
+                    "/_content/MauiMultimedia.Viewers.Video/Pages/VideoPage.razor.js");
 
-                // 自动播放下一个
-                await _jsModule.InvokeVoidAsync("setupAutoNext", _videoElementId);
+                // 自动播放下一个（失败不影响主流程）
+                try
+                {
+                    await _jsModule.InvokeVoidAsync("setupAutoNext", _videoElementId);
+                }
+                catch { }
             }
 
-            // 每次渲染后检查是否需要更新视频源
-            if (_videoUrl != null && _videoUrl != _lastUrl)
+            // 仅在 JS 模块已就绪且视频源真正变化时才调用 setVideoSource。
+            // firstRender 的 import 是异步挂起的，挂起期间 Blazor 可能先触发一次
+            // firstRender=false 的渲染，此时 _jsModule 仍为 null；若不加 _jsModule!=null
+            // 守卫会带着 null 去调 setVideoSource 抛 ArgumentNullException。模块就绪的那次
+            // 渲染会自然走到这里。用 _lastUrl 守，避免重复调用。
+            if (_jsModule != null && _videoUrl != null && _videoUrl != _lastUrl)
             {
                 _lastUrl = _videoUrl;
-                if (_jsModule != null)
+                var result = await _jsModule.InvokeAsync<string>(
+                    "setVideoSource", _videoElementId, _videoUrl, _mediaType);
+                if (result != "ok")
                 {
-                    var result = await _jsModule.InvokeAsync<string>(
-                        "setVideoSource", _videoElementId, _videoUrl);
-                    if (result != "ok")
-                        errorMessage = $"视频源设置失败：{result}";
+                    // 把 JS 侧的真实错误原样呈现（含“请转码”提示）
+                    errorMessage = result.StartsWith("error:")
+                        ? result.Substring("error:".Length)
+                        : $"视频源设置失败：{result}";
+                    StateHasChanged();
                 }
             }
         }
@@ -125,6 +137,14 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
             FileServer.UnregisterFile(_currentToken);
             _currentToken = null;
         }
+
+        // 根据容器决定播放路径：FLV / MPEG-TS 浏览器原生不支持，走 mpegts.js 软解
+        _mediaType = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant() switch
+        {
+            "flv" => "flv",
+            "ts" or "mts" or "m2ts" => "mpegts",
+            _ => "native"
+        };
 
         try
         {
@@ -196,4 +216,6 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
             catch { }
         }
     }
+
+    // ═══════════ 诊断（已移除：定位期用的 JS console 镜像与界面面板） ═══════════
 }

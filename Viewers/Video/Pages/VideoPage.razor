@@ -13,11 +13,13 @@
     else
     {
         <div class="video-container">
+            @* src 仅在原生路径下由 Blazor 绑定；FLV/TS 走 mpegts.js 经 MSE 接管，
+               此时不让 Blazor 管理 src，避免原生预加载失败与 MSE attach 冲突。 *@
             <video id="@_videoElementId"
                    class="video-player"
                    controls
                    preload="metadata"
-                   src="@_videoUrl">
+                   src="@(_mediaType == "native" ? _videoUrl : null)">
                 您的浏览器不支持视频播放。
             </video>
         </div>
