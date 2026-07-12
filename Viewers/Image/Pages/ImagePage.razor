@@ -1,6 +1,6 @@
 @* ImagePage.razor v2 — 8 层 z-index 组件化架构 *@
 
-<div class="viewer-page @(showToolbar ? "chrome-toolbar" : "") @(showFilmstrip ? "chrome-filmstrip" : "")"
+<div class="viewer-page @(showToolbar ? "chrome-toolbar" : "") @(showFilmstrip ? "chrome-filmstrip" : "") @(showDetails ? "chrome-details" : "")"
      @onclick="OnPageClick">
     @* z=0 *@
     <div class="viewport-bg"></div>
@@ -39,14 +39,6 @@
 
         @* z=4: Gesture Layer *@
         <GestureLayer />
-
-        @* z=5: Filmstrip *@
-        <ImageFilmstrip @ref="filmstripRef"
-                        Items="@_filmstripThumbnails"
-                        CurrentIndex="@currentIndex"
-                        Hidden="@(!showFilmstrip)"
-                        OnItemClick="OnFilmstripClick"
-                        ViewportWidth="@vpWidth" />
     }
     else
     {
@@ -78,6 +70,9 @@
 
                 <StitchToolbar PositionText="@(currentIndex >= 0 ? $"{currentIndex + 1}/{fileList.Count}" : "")"
                                ZoomDisplay="@GetDisplayZoom()"
+                               FitToggleText="@GetFitToggleText()"
+                               FitToggleTitle="@GetFitToggleTitle()"
+                               ZoomFitMode="@(_stitchZoom >= 1.0f)"
                                Hidden="@(!showToolbar)"
                                ZoomOutDisabled="@(_stitchZoom <= 0.1f)"
                                ZoomInDisabled="@(_stitchZoom >= 5.0f)"
@@ -85,6 +80,8 @@
                                OnExit="ToggleStitch"
                                OnZoomOut="ZoomOut"
                                OnZoomIn="ZoomIn"
+                               OnToggleFit="ToggleFitActual"
+                               OnToggleDetails="ToggleDetails"
                                OnGapUp="StitchGapUp"
                                OnGapDown="StitchGapDown" />
             </div>
@@ -94,6 +91,14 @@
             <div class="error-overlay">@stitchError</div>
         }
     }
+
+    @* z=5: Filmstrip (always mounted; hidden + slides down while in stitch mode) *@
+    <ImageFilmstrip @ref="filmstripRef"
+                    Items="@_filmstripThumbnails"
+                    CurrentIndex="@currentIndex"
+                    Hidden="@(!showFilmstrip || stitchMode)"
+                    OnItemClick="OnFilmstripClick"
+                    ViewportWidth="@vpWidth" />
 
     @* z=6: Toolbar *@
     <ImageToolbar FileList="@fileList"

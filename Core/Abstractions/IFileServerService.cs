@@ -26,6 +26,21 @@ public interface IFileServerService
     /// <summary>注销令牌，使其随后失效（如查看器离开页面时调用）。</summary>
     void UnregisterFile(string token);
 
+    /// <summary>
+    /// 注册一段内存字节（如查看器按显示尺寸动态解码生成的缩略图），返回一次性访问令牌。
+    /// 与 <see cref="RegisterFile"/> 共享同一令牌空间与安全模型：令牌由宿主（C#）持有，
+    /// WebView 内的 JS 无法枚举或构造其他令牌，杜绝越权访问。
+    /// 典型用途：把“不全解码”的显示尺寸缩略图以 served URL 形式喂给浏览器——
+    /// 零 C# 字符串内存、浏览器原生解码，与 direct-serve 原图体验完全一致。
+    /// </summary>
+    /// <param name="data">要提供的内存字节（如 JPEG 缩略图）</param>
+    /// <param name="mimeType">字节内容的 MIME 类型，由调用方（查看器）自行决定；传 <c>null</c> 回落标准表。</param>
+    /// <returns>访问令牌</returns>
+    string RegisterBytes(byte[] data, string? mimeType = null);
+
+    /// <summary>注销字节令牌，使其随后失效。与 <see cref="UnregisterFile"/> 同等语义。</summary>
+    void UnregisterBytes(string token);
+
     /// <summary>注册一个本地目录，返回目录级访问令牌。该目录下的任意文件可通过 <c>{BaseUrl}/dir/{token}/relative/path</c> 访问。</summary>
     /// <param name="dirPath">要提供的本地目录绝对路径</param>
     /// <param name="defaultMimeType">

@@ -10,7 +10,7 @@
             title="@_currentFileName"
             type="button">
         <span class="fnd-arrow">@(_isOpen ? "▲" : "▼")</span>
-        <span class="fnd-pos">@(CurrentIndex + 1) / @FileList.Count</span>
+        @if (!StitchMode) { <span class="fnd-pos">@(CurrentIndex + 1) / @FileList.Count</span> }
         <span class="fnd-sep"></span>
         <span class="fnd-name">@_currentFileName</span>
     </button>
@@ -42,6 +42,9 @@
 
     [Parameter]
     public int CurrentIndex { get; set; }
+
+    [Parameter]
+    public bool StitchMode { get; set; }
 
     [Parameter]
     public EventCallback<int> OnFileSelected { get; set; }

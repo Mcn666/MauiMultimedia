@@ -93,6 +93,11 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private float MinZoom => fitZoom;
     private float vpWidth, vpHeight;
     private float _dpr = 1f;
+    // Viewport top-left in window coordinates (from getBoundingClientRect).
+    // Used to convert e.ClientX/Y (window coords) into viewport-local coords
+    // for cursor-anchored zoom. The top bar pushes the viewport down (~44px),
+    // so without this the zoom anchor drifts vertically. Left is normally 0.
+    private float _vpOffX, _vpOffY;
     // True ONLY once a REAL fit/1:1 zoom has been computed (both the image
     // dimensions AND the viewport geometry were known). Drives ZoomReady: the
     // image stays hidden until this is true, so it can never flash a default
@@ -124,6 +129,16 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     // Skia/base64). Tokens live for the page lifetime (never individually
     // revoked) so a cached URL never goes stale; all are revoked on dispose.
     private readonly Dictionary<string, string> _servedTokens = new();
+
+    // 显示尺寸（不全解码）缩略图的 page-scoped 缓存：path → (token, decodeMax)。
+    // token 指向 FileServer 注册的内存字节；decodeMax 记录该图当前解码的最长边，
+    // 供 MaybeUpgradeDecode 判断是否需升级到全清。Dispose 时随 _dynTokens 吊销。
+    private readonly Dictionary<string, (string token, int decodeMax)> _dynCache = new();
+    private readonly List<string> _dynTokens = new();
+    // 当前显示图的解码最长边（== 原图最长边即表示已全清）。
+    private int _currentDecodeMax;
+    // 放大升级防重入。
+    private bool _upgrading;
 
     // ── Navigation ──
     private bool hasPrev => currentIndex > 0;
@@ -253,10 +268,12 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             var dims = _jsModule != null
                 ? await _jsModule.InvokeAsync<double[]>("getViewportMetrics")
                 : await JS.InvokeAsync<double[]>("eval",
-                    "new Promise(r => requestAnimationFrame(() => { var v = document.querySelector('.image-viewport'); r(v ? [v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1] : [0,0,1]); }))");
+                    "new Promise(r => requestAnimationFrame(() => { var v = document.querySelector('.image-viewport'); if(!v){r([0,0,1,0,0]);return;} var rb=v.getBoundingClientRect(); r([v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1, rb.left, rb.top]); }))");
             vpWidth = (float)dims[0];
             vpHeight = (float)dims[1];
             _dpr = (float)dims[2];
+            _vpOffX = (float)dims[3];
+            _vpOffY = (float)dims[4];
         }
         catch { }
     }
@@ -537,6 +554,9 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     // ═══════════ Filmstrip ═══════════
 
     private static readonly Dictionary<string, string> s_thumbCache = new();
+    // Capped (≤768px) decodes used only as the fast-passing pictures in the
+    // filmstrip multi-slide animation — never the real decode path.
+    private static readonly Dictionary<string, string> s_navSlideCache = new();
     private bool _filmstripBuilt;
     private ImageFilmstrip? filmstripRef;
 
@@ -624,39 +644,90 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         int dir = index > currentIndex ? 1 : -1;
         int dist = Math.Abs(index - currentIndex);
 
-        // Pick 2-4 evenly-spaced intermediate images for the flip *cards*.
-        // After P1 (HTTP loopback streaming) the real images are fetched over
-        // the FileServer — far too slow to load inside the 110ms-per-card flip,
-        // which made the animation show blank/janky frames. So the cards use
-        // cheap 120px thumbnails (instant data:URIs, ~tiny memory); the final
-        // real image is handed off to Blazor's LoadImageAsync below.
-        int steps = Math.Min(dist, 4);
-        var thumbUris = await Task.Run(() =>
+        // How many adjacent pictures to actually lay out in the slide
+        // direction. Bounded so a far click (e.g. 30 thumbnails away) doesn't
+        // decode 30 images — we sample `drawn` evenly-spaced pictures and whip
+        // through them; the visual reads as "sliding through many images"
+        // regardless of the true distance.
+        int drawn = Math.Min(dist, 8);
+
+        // Build the stream of passing images. The LAST entry is the target
+        // itself (full-res + its own zoom). Each intermediate is sampled at an
+        // evenly-spaced index and rendered at its OWN fit/1:1 zoom, so the
+        // slide shows real pictures — not stretched 120px thumbnails.
+        var streamUris = new List<string>(drawn);
+        var streamZooms = new List<double>(drawn);
+        for (int k = 0; k < drawn; k++)
         {
-            var list = new List<string>(steps);
-            for (int s = 1; s <= steps; s++)
+            double zoom;
+            string uri;
+            if (k == drawn - 1)
             {
-                int idx = currentIndex + dir * (int)Math.Round((double)dist * s / steps);
-                if (idx == currentIndex) idx += dir;
-                if (idx < 0 || idx >= fileList.Count) continue;
-                var t = GetThumbUri(fileList[idx]);
-                if (!string.IsNullOrEmpty(t)) list.Add(t);
+                // Target: full-res URI + its own fit/1:1 zoom.
+                uri = await GetImageDataUriAsync(fileList[index]) ?? "";
+                var tc = DecodeCache.Get(fileList[index]);
+                zoom = (tc.HasValue && tc.Value.Width > 0 && tc.Value.Height > 0)
+                    ? ComputeAutoZoom(tc.Value.Width, tc.Value.Height).display
+                    : displayZoom;
             }
-            return list;
-        });
+            else
+            {
+                int idx = currentIndex + dir * (int)Math.Round((double)dist * (k + 1) / drawn);
+                if (idx == currentIndex) idx += dir;
+                idx = Math.Max(0, Math.Min(fileList.Count - 1, idx));
 
-        // Apply the target image's fit/1:1 zoom before the transition so the
-        // real wrap is pinned to it the moment the cards are removed.
-        ApplyZoomFor(fileList[index]);
+                uri = GetNavSlideUri(fileList[idx]);   // capped decode (≤ NavThumbCap px) for the fast pass
+                var dims = ImageProcessingService.GetDirectServeInfo(fileList[idx]);
+                if (dims.width > 0 && dims.height > 0)
+                {
+                    var fullZoom = ComputeAutoZoom(dims.width, dims.height).display;
+                    // GetNavSlideUri returns a NavThumbCap-capped thumbnail, NOT the
+                    // full image. Scaling it by the *full-image* zoom would shrink
+                    // large pictures to a fraction of their true on-screen size
+                    // (e.g. a 4000px image decoded to 768px then ×0.25 fit-zoom =
+                    // 192px while the real image fills the viewport at ~1000px).
+                    // Correct the zoom by the decode ratio so the thumbnail renders
+                    // at the SAME size the real image would — the true "real zoom".
+                    int fullMax = Math.Max(dims.width, dims.height);
+                    int navMax = Math.Min(NavThumbCap, fullMax);
+                    zoom = navMax > 0 ? fullZoom * ((double)fullMax / navMax) : fullZoom;
+                }
+                else
+                {
+                    zoom = displayZoom;   // non-native format: fall back to current zoom
+                }
+            }
+            streamUris.Add(uri);
+            streamZooms.Add(zoom);
+        }
 
-        // Animate rapid card flip using thumbnails; hand off to the full-res
-        // target URI so the final frame shows the real image (not a thumbnail).
-        if (_jsModule != null && _navAnimationEnabled)
-            await _jsModule.InvokeVoidAsync("flipThroughTransition",
-                thumbUris.ToArray(),
-                await GetImageDataUriAsync(fileList[index]),
+        // Compute the target image's fit/1:1 zoom WITHOUT calling ApplyZoomFor
+        // (which would change the currently-displayed image's displayZoom and
+        // make it snap to the target zoom on the very first animation frame).
+        // We keep the current zoom for the whole slide, then apply the target
+        // zoom AFTER the animation completes — matching DoFadeNavigate.
+        float targetScale = displayZoom;
+        var tCached = DecodeCache.Get(fileList[index]);
+        if (tCached.HasValue && tCached.Value.Width > 0 && tCached.Value.Height > 0)
+        {
+            var z = ComputeAutoZoom(tCached.Value.Width, tCached.Value.Height);
+            targetScale = z.display;
+        }
+
+        // Slide: lay out current + the stream of adjacent images, then whip the
+        // whole track past so they slide through to the target. The last stream
+        // entry IS the target (full-res), so the resting frame is already sharp.
+        if (_jsModule != null && _navAnimationEnabled && streamUris.Count > 0)
+            await _jsModule.InvokeVoidAsync("multiSlideTransition",
+                streamUris.ToArray(),
+                streamZooms.ToArray(),
+                streamUris[streamUris.Count - 1],
                 dir > 0 ? "next" : "prev",
-                displayZoom, zoomFitMode);
+                targetScale, displayZoom);
+
+        // Apply the target zoom AFTER the animation so the on-screen image
+        // keeps its own scale during the flip (no mid-animation zoom jump).
+        ApplyZoomFor(fileList[index]);
 
         // Switch state
         currentIndex = index;
@@ -752,11 +823,11 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private void ToggleDetails()
     {
         showDetails = !showDetails;
-        if (showDetails) showFilmstrip = false;
-        else showFilmstrip = showToolbar;
+        // The thumbnail filmstrip is intentionally left visible while the detail
+        // panel is open — it is controlled only by the toolbar/immersive state.
         _ = RecomputeZoomForChromeAsync();
     }
-    private void CloseDetails() { showDetails = false; showFilmstrip = showToolbar; _ = RecomputeZoomForChromeAsync(); }
+    private void CloseDetails() { showDetails = false; _ = RecomputeZoomForChromeAsync(); }
 
     // P1: get (or create) a loopback FileServer URL for an image file. The token
     // is cached per path for the page lifetime so the same image never registers
@@ -775,6 +846,11 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     // dispose so the loopback server stops serving our files).
     private void RevokeServedTokens()
     {
+        foreach (var tok in _dynTokens)
+        {
+            try { FileServer.UnregisterBytes(tok); } catch { }
+        }
+        _dynTokens.Clear();
         foreach (var tok in _servedTokens.Values)
         {
             try { FileServer.UnregisterFile(tok); } catch { }
@@ -832,6 +908,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                     ? ServedUrl(filePath)
                     : cached.Value.DataUri;
                 ApplyDecoded(src, cached.Value.Width, cached.Value.Height);
+                _currentDecodeMax = Math.Max(cached.Value.Width, cached.Value.Height); // 全清命中
                 try
                 {
                     var fi = new FileInfo(filePath);
@@ -854,51 +931,85 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             _fileCreationTime = fileInfo.CreationTime.ToString("yyyy-MM-dd HH:mm:ss");
             _fileLastWriteTime = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
 
+            // 取原图尺寸（轻量 header parse，不解码像素）
+            var dims = await Task.Run(() => ImageProcessingService.GetDirectServeInfo(filePath));
+            int origW = dims.width, origH = dims.height;
+
+            // 按显示尺寸决定解码分辨率：只解“屏幕上真实铺开的那几个像素 × DPR”。
+            // fit 缩小的大图 → 生成显示尺寸缩略图（不全解码）；1:1/小图 → 走全清。
+            if (origW > 0 && origH > 0 && vpWidth > 0 && vpHeight > 0)
+            {
+                float dispZoom = ComputeAutoZoom(origW, origH).display;   // fit 时 < 1
+                int origMax = Math.Max(origW, origH);
+                int decodeBudget = (int)Math.Min(origMax,
+                    Math.Max(64, Math.Ceiling(origMax * dispZoom * _dpr)));
+
+                if (decodeBudget < origMax - 1)
+                {
+                    string? dynSrc = null;
+                    if (_dynCache.TryGetValue(filePath, out var dyn))
+                        dynSrc = $"{FileServer.BaseUrl}/file?token={dyn.token}";
+                    else
+                    {
+                        var jpeg = await Task.Run(() =>
+                            ImageProcessingService.GenerateThumbnailBytes(filePath, decodeBudget));
+                        if (jpeg != null && jpeg.Length > 0)
+                        {
+                            var tok = FileServer.RegisterBytes(jpeg, "image/jpeg");
+                            _dynCache[filePath] = (tok, decodeBudget);
+                            _dynTokens.Add(tok);
+                            dynSrc = $"{FileServer.BaseUrl}/file?token={tok}";
+                        }
+                    }
+                    if (dynSrc != null)
+                    {
+                        // 记录全清后备（direct-serve 可直出时），供放大升级使用
+                        if (dims.canServe) DecodeCache.SetDirectServe(filePath, origW, origH);
+                        ApplyDecoded(dynSrc, origW, origH);
+                        _currentDecodeMax = decodeBudget;
+                        _instantLoad = false;   // served URL 仍需加载；SetPlaceholderFor 已铺模糊占位避免闪
+                        isLoading = false;
+                        StateHasChanged();
+                        _ = PreloadAdjacentAsync();
+                        return;
+                    }
+                    // 生成失败 → 落空走下方全清路径
+                }
+            }
+
+            // 全清路径（1:1/小图，或显示尺寸生成失败，或首开视口未测退化为全清）
             await Task.Run(() =>
             {
                 try
                 {
-                    // P1 — fast path: serve the original file directly via the
-                    // loopback FileServer. The browser decodes natively (and honors
-                    // EXIF orientation itself), so we skip the Skia decode, the
-                    // base64 round-trip, and the C#→JS interop serialization of a
-                    // multi-MB string. Dimensions come from a cheap header parse.
                     var serve = ImageProcessingService.GetDirectServeInfo(filePath);
                     if (serve.canServe)
                     {
                         var url = ServedUrl(filePath);
-                        // Cache dimensions only — the token URL is page-scoped and
-                        // must be re-minted via ServedUrl() on each entry (a re-visit
-                        // would otherwise reuse a revoked token → 403).
                         DecodeCache.SetDirectServe(filePath, serve.width, serve.height);
                         ApplyDecoded(url, serve.width, serve.height);
                         return;
                     }
-
-                    // Slow path: Skia decodes (EXIF/downscale) into a data:URI.
-                    // DDS files are also handled here via ImageProcessingService.
                     var bytes = File.ReadAllBytes(filePath);
-                    var result = ImageProcessingService.DecodeImage(bytes, fileName);
+                    var result = ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath));
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     ApplyDecoded(result.DataUri, result.Width, result.Height);
                 }
                 catch
                 {
-                    // Last-resort: even if Skia fails, let the browser try the raw
-                    // file via FileServer (handles some formats Skia rejects).
                     try
                     {
                         var url = ServedUrl(filePath);
-                        var dims = ImageProcessingService.GetImageDimensions(File.ReadAllBytes(filePath));
-                        ApplyDecoded(url, dims.width, dims.height);
+                        var gd = ImageProcessingService.GetImageDimensions(File.ReadAllBytes(filePath));
+                        ApplyDecoded(url, gd.width, gd.height);
                     }
                     catch
                     {
-                        errorMessage = $"Cannot decode: {fileName}";
+                        errorMessage = $"Cannot decode: {Path.GetFileName(filePath)}";
                     }
                 }
             });
-
+            _currentDecodeMax = Math.Max(imageWidth, imageHeight);
             _ = PreloadAdjacentAsync();
         }
         catch (Exception ex)
@@ -910,6 +1021,54 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    // ═══ 放大时升级到全清（动态解码核心）═══
+    /// <summary>
+    /// 当 displayZoom 放大到超过当前“显示尺寸解码”的清晰度时，异步升级到全清图。
+    /// 替换 src 时旧图（显示尺寸）会持续显示直到全清解码完成（&lt;img&gt; 默认行为），
+    /// 配合 _instantLoad=true 跳过淡入 → 无闪、无空白。缩回 fit 不降级（保留更高质量）。
+    /// </summary>
+    private async Task MaybeUpgradeDecode()
+    {
+        if (_upgrading || stitchMode || vpWidth <= 0 || imageWidth <= 0 || imageHeight <= 0)
+            return;
+        int origMax = Math.Max(imageWidth, imageHeight);
+        if (_currentDecodeMax >= origMax - 1) return;            // 已是全清
+        float needEdge = origMax * displayZoom * _dpr;           // 实际需要显示的像素
+        if (needEdge <= _currentDecodeMax * 1.15f) return;        // 当前已足够清晰
+
+        _upgrading = true;
+        try
+        {
+            string? fullUrl = null;
+            var cached = DecodeCache.Get(filePath);
+            if (cached.HasValue && !cached.Value.IsDirectServe)
+                fullUrl = cached.Value.DataUri;                  // 已有全清 data URI
+            else
+            {
+                var serve = ImageProcessingService.GetDirectServeInfo(filePath);
+                if (serve.canServe)
+                    fullUrl = ServedUrl(filePath);               // direct-serve 全清
+                else
+                {
+                    var bytes = await File.ReadAllBytesAsync(filePath);
+                    var result = await Task.Run(() =>
+                        ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath)));
+                    DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
+                    fullUrl = result.DataUri;
+                }
+            }
+            if (!string.IsNullOrEmpty(fullUrl))
+            {
+                _currentDecodeMax = origMax;
+                _instantLoad = true;                             // 旧图持续显示直到全清就绪，无闪
+                imageSource = fullUrl;
+                StateHasChanged();
+            }
+        }
+        catch { }
+        finally { _upgrading = false; }
     }
 
     /// <summary>
@@ -1095,6 +1254,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         ExitFit(); displayZoom = Math.Min(displayZoom * ZoomStep, MaxZoom); ClampPan();
         if (_jsModule != null) await _jsModule.InvokeVoidAsync("showZoomPopup", GetDisplayZoom());
         StateHasChanged();
+        await MaybeUpgradeDecode();
     }
 
     private async Task ZoomOut()
@@ -1123,6 +1283,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
         ExitFit();
         displayZoom = Math.Max(1.0f / _dpr, 0.01f);
+        await MaybeUpgradeDecode();
     }
 
     private async Task ToggleFitActual()
@@ -1135,11 +1296,11 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
     // ═══════════ Wheel ═══════════
 
-    private void OnWheel(WheelEventArgs e)
+    private async void OnWheel(WheelEventArgs e)
     {
         ResetHudTimer();
-        float cx = (float)e.ClientX;
-        float cy = (float)e.ClientY;
+        float cx = (float)e.ClientX - _vpOffX;
+        float cy = (float)e.ClientY - _vpOffY;
         if (zoomFitMode) { zoomFitMode = false; panX = 0; panY = 0; }
         float oldZoom = displayZoom;
         float oldPanX = panX;
@@ -1154,6 +1315,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
         ClampPan();
         StateHasChanged();
+        await MaybeUpgradeDecode();
     }
 
     private async Task OnDoubleClick(MouseEventArgs e)
@@ -1261,7 +1423,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
     }
 
-    private void OnTouchMove(TouchEventArgs e)
+    private async void OnTouchMove(TouchEventArgs e)
     {
         if (e.Touches.Length == 2)
         {
@@ -1273,8 +1435,8 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             {
                 float oldZoom = displayZoom;
                 displayZoom = Math.Clamp(touchStartZoom * (dist / touchStartDist), MinZoom, MaxZoom);
-                float mx = (float)((e.Touches[0].ClientX + e.Touches[1].ClientX) / 2);
-                float my = (float)((e.Touches[0].ClientY + e.Touches[1].ClientY) / 2);
+                float mx = (float)((e.Touches[0].ClientX + e.Touches[1].ClientX) / 2) - _vpOffX;
+                float my = (float)((e.Touches[0].ClientY + e.Touches[1].ClientY) / 2) - _vpOffY;
                 if (vpWidth > 0 && vpHeight > 0 && oldZoom > 0.001f)
                 {
                     float localX = (mx - vpWidth / 2f - panX) / oldZoom;
@@ -1284,6 +1446,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 }
                 ClampPan();
                 StateHasChanged();
+                await MaybeUpgradeDecode();
             }
             return;
         }
@@ -1482,6 +1645,38 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
         catch { }
         return "";
+    }
+
+    /// <summary>
+    /// Returns a capped (≤768px) data:URI for one passing image in the
+    /// filmstrip multi-slide animation. Cheap (decodes at most to a 768px cap)
+    /// and cached, so the rapid visual pass never fetches/decodes the full-size
+    /// original over the loopback FileServer. Falls back to the 120px filmstrip
+    /// thumbnail if even the capped decode fails. Returns "" on total failure.
+    /// </summary>
+    // Decode cap (longest side, px) for the fast-pass images laid out during a
+    // filmstrip-slide navigation. Kept well below the viewport so whipping
+    // through several pictures stays cheap; the on-screen size is corrected in
+    // OnFilmstripClick via the decode ratio so the thumbnails render at the
+    // SAME size the real image would (true zoom ratio), not at native thumb size.
+    private const int NavThumbCap = 768;
+
+    private string GetNavSlideUri(string path)
+    {
+        if (s_navSlideCache.TryGetValue(path, out var cached) && !string.IsNullOrEmpty(cached))
+            return cached;
+        try
+        {
+            var thumb = ImageProcessingService.GenerateThumbnail(path, NavThumbCap);
+            if (!string.IsNullOrEmpty(thumb))
+            {
+                lock (s_navSlideCache) s_navSlideCache[path] = thumb;
+                return thumb;
+            }
+        }
+        catch { }
+        // Last-resort fallback so a broken decode never shows an empty <img>.
+        return GetThumbUri(path);
     }
 
     // ═══════════ Slide Helpers ═══════════

@@ -28,6 +28,10 @@ public sealed class FileServerService : IFileServerService, IDisposable
     // dirToken → 目录级默认 MIME（仅填补标准表未覆盖的查看器自有格式）。
     private readonly ConcurrentDictionary<string, string?> _dirMimeOverride = new();
 
+    // token → 查看器注册的内存字节（如按显示尺寸动态解码生成的缩略图）。
+    // 与 _tokenMap 共享令牌空间与安全模型；JS 无法枚举或构造令牌。
+    private readonly ConcurrentDictionary<string, (byte[] Data, string? Mime)> _bytesStore = new();
+
     public int Port { get; private set; }
     public bool IsRunning => Volatile.Read(ref _listener) != null;
     public string BaseUrl => $"http://127.0.0.1:{Port}";
@@ -95,6 +99,7 @@ public sealed class FileServerService : IFileServerService, IDisposable
         {
             _tokenMap.TryRemove(token, out _);
             _mimeOverride.TryRemove(token, out _);
+            _bytesStore.TryRemove(token, out _);
         }
     }
 
@@ -120,6 +125,29 @@ public sealed class FileServerService : IFileServerService, IDisposable
         {
             _dirTokenMap.TryRemove(token, out _);
             _dirMimeOverride.TryRemove(token, out _);
+        }
+    }
+
+    /// <inheritdoc/>
+    public string RegisterBytes(byte[] data, string? mimeType = null)
+    {
+        if (data == null || data.Length == 0)
+            throw new ArgumentException("字节数据不能为空", nameof(data));
+
+        var token = Guid.NewGuid().ToString("N");
+        _bytesStore[token] = (data, mimeType);
+        _mimeOverride[token] = mimeType;
+        Debug.WriteLine($"[FileServer] Registered bytes token ({data.Length} bytes)");
+        return token;
+    }
+
+    /// <inheritdoc/>
+    public void UnregisterBytes(string token)
+    {
+        if (!string.IsNullOrEmpty(token))
+        {
+            _bytesStore.TryRemove(token, out _);
+            _mimeOverride.TryRemove(token, out _);
         }
     }
 
@@ -222,6 +250,17 @@ public sealed class FileServerService : IFileServerService, IDisposable
                 if (method != "GET" || string.IsNullOrEmpty(token))
                 {
                     await WriteErrorAsync(stream, 400, "Bad Request", ct);
+                    return;
+                }
+
+                // 先查内存字节注册（查看器生成的显示尺寸缩略图等），再查文件路径注册。
+                if (_bytesStore.TryGetValue(token, out var bytesEntry))
+                {
+                    _mimeOverride.TryGetValue(token, out var bOverride);
+                    var bMime = bOverride ?? bytesEntry.Mime ?? MimeTypes.Fallback;
+                    var bRange = GetHeaderValue(headers, "Range");
+                    var (bHasRange, bStart, bEnd) = ParseRangeHeader(bRange);
+                    await ServeBytesAsync(stream, bytesEntry.Data, bHasRange, bStart, bEnd, bMime, ct);
                     return;
                 }
 
@@ -417,6 +456,56 @@ public sealed class FileServerService : IFileServerService, IDisposable
             using var fs = new FileStream(filePath, FileMode.Open,
                 FileAccess.Read, FileShare.ReadWrite);
             await fs.CopyToAsync(stream, 81920, ct);
+        }
+    }
+
+    // 服务内存字节（查看器生成的显示尺寸缩略图），与 ServeFileAsync 同构，源为 byte[]。
+    private static async Task ServeBytesAsync(
+        NetworkStream stream, byte[] data,
+        bool hasRange, long rangeStart, long? rangeEnd,
+        string mimeType,
+        CancellationToken ct)
+    {
+        var fileLength = data.Length;
+
+        if (hasRange)
+        {
+            var end = rangeEnd ?? (fileLength - 1);
+            end = Math.Min(end, fileLength - 1);
+
+            if (rangeStart >= fileLength || rangeStart > end)
+            {
+                await WriteErrorAsync(stream, 416, "Range Not Satisfiable", ct);
+                return;
+            }
+
+            var contentLength = end - rangeStart + 1;
+            var header = BuildHeader(206, "Partial Content", new()
+            {
+                ["Content-Type"] = mimeType,
+                ["Content-Range"] = $"bytes {rangeStart}-{end}/{fileLength}",
+                ["Content-Length"] = contentLength.ToString(),
+                ["Accept-Ranges"] = "bytes",
+                ["Access-Control-Allow-Origin"] = "*",
+                ["Connection"] = "close",
+            });
+
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(header), ct);
+            await stream.WriteAsync(data.AsMemory((int)rangeStart, (int)contentLength), ct);
+        }
+        else
+        {
+            var header = BuildHeader(200, "OK", new()
+            {
+                ["Content-Type"] = mimeType,
+                ["Content-Length"] = fileLength.ToString(),
+                ["Accept-Ranges"] = "bytes",
+                ["Access-Control-Allow-Origin"] = "*",
+                ["Connection"] = "close",
+            });
+
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(header), ct);
+            await stream.WriteAsync(data.AsMemory(0, data.Length), ct);
         }
     }
 

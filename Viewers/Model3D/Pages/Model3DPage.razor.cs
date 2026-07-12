@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Core.Utils;
-using MauiMultimedia.Viewers.Image.Services;
+using MauiMultimedia.Viewers.Shared.Services;
 using MauiMultimedia.Viewers.Model3D.Services;
 
 namespace MauiMultimedia.Viewers.Model3D.Pages;
@@ -157,7 +157,7 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
                 {
                     try
                     {
-                        var result = ImageProcessingService.DecodeDds(texFile);
+                        var result = DdsDecoder.DecodeDds(texFile);
                         if (result.dataUri != null)
                             texMap[Path.GetFileName(texFile)] = result.dataUri;
                     }

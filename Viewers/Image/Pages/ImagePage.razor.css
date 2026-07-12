@@ -286,12 +286,21 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-top: 0.5px solid rgba(255,255,255,0.08);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), right 0.25s ease;
     overflow: hidden;
 }
 
 ::deep .filmstrip-container.hidden {
     transform: translateY(100%);
+}
+
+/* Keep the thumbnail filmstrip visible while the detail panel is open:
+   lift it above the z-100 dim overlay and inset its right edge past the
+   panel (fixed at right:0, width 300px) so the two don't collide. The `right`
+   shift animates in step with the panel's 0.25s slide-in. */
+.viewer-page.chrome-details ::deep .filmstrip-container {
+    z-index: 103;
+    right: 300px;
 }
 
 ::deep .filmstrip-track {
@@ -522,6 +531,14 @@
 }
 
 ::deep .detail-close {
+    /* Pin to the same viewport slot as the toolbar's detail (ℹ) toggle button,
+       so opening the panel lines the close button up exactly under where the
+       toggle was. Toolbar is 44px tall with `padding: 0 12px` and the circular
+       button is 28px, hence center = top 8px / right 12px. */
+    position: fixed;
+    top: 8px;
+    right: 12px;
+    z-index: 102;
     width: 28px;
     height: 28px;
     display: flex;
@@ -531,8 +548,8 @@
     background: none;
     font-size: 16px;
     cursor: pointer;
-    border-radius: 6px;
-    color: var(--text-tertiary);
+    border-radius: 50%;
+    color: var(--text-primary);
     transition: background 0.12s;
 }
 ::deep .detail-close:hover { background: var(--hover-bg); }
@@ -637,10 +654,10 @@
 
 .v-stitch-progress {
     position: absolute;
-    top: 8px;
+    top: 52px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 5;
+    z-index: 7;
     padding: 6px 14px;
     color: var(--text-tertiary, #ccc);
     background: rgba(0,0,0,0.55);
@@ -669,11 +686,11 @@
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-::deep .stitch-toolbar.hidden {
-    transform: translateY(-100%);
-}
+    ::deep .stitch-toolbar.hidden {
+        transform: translateY(-100%);
+    }
 
-::deep .stitch-toolbar > * + * { margin-inline-start: 4px; }
+    ::deep .stitch-toolbar > * + * { margin-inline-start: 4px; }
 
 ::deep .stitch-tbar-left {
     display: flex;
@@ -700,6 +717,15 @@
     ::deep .image-toolbar {
         height: 40px;
         padding: 0 6px;
+    }
+    /* Keep the close button aligned with the shorter mobile toolbar's detail toggle. */
+    ::deep .detail-close {
+        top: 6px;
+        right: 6px;
+    }
+    /* Inset the filmstrip past the narrower mobile detail panel. */
+    .viewer-page.chrome-details ::deep .filmstrip-container {
+        right: 260px;
     }
     ::deep .toolbar-file-name { font-size: 12px; }
     .viewer-page.chrome-toolbar ::deep .image-viewport { top: 40px; }
