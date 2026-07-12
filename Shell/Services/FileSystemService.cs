@@ -99,6 +99,8 @@ public class FileSystemService : IFileSystemService
     {
         try
         {
+            if (string.Equals(path, GetAppPrivateRoot(), StringComparison.OrdinalIgnoreCase))
+                return null;
 #if ANDROID
             if (string.Equals(path, GetUserRoot(), StringComparison.OrdinalIgnoreCase))
                 return null;
@@ -116,6 +118,8 @@ public class FileSystemService : IFileSystemService
     {
         try
         {
+            if (string.Equals(path, GetAppPrivateRoot(), StringComparison.OrdinalIgnoreCase))
+                return true;
 #if ANDROID
             if (string.Equals(path, GetUserRoot(), StringComparison.OrdinalIgnoreCase))
                 return true;
@@ -147,15 +151,62 @@ public class FileSystemService : IFileSystemService
         }
     }
 
+    private string? _appDataDir;
+    private string? _appPrivateRoot;
+
     public string GetAppDataDirectory()
     {
+        if (_appDataDir != null) return _appDataDir;
         try
         {
-            return FileSystem.AppDataDirectory;
+            _appDataDir = FileSystem.AppDataDirectory;
         }
         catch
         {
-            return Path.Combine(Path.GetTempPath(), "MauiMultimedia");
+            _appDataDir = Path.Combine(Path.GetTempPath(), "MauiMultimedia");
+        }
+        return _appDataDir;
+    }
+
+    public string GetAppPrivateRoot()
+    {
+        if (_appPrivateRoot != null) return _appPrivateRoot;
+        try
+        {
+            // AppDataDirectory 是包名根目录下的 files 子目录，取父目录即得包名根目录
+            var files = GetAppDataDirectory();
+            var root = Path.GetDirectoryName(files);
+            _appPrivateRoot = string.IsNullOrEmpty(root) ? files : root;
+        }
+        catch
+        {
+            _appPrivateRoot = GetAppDataDirectory();
+        }
+        return _appPrivateRoot;
+    }
+
+    public bool IsAppPrivateDirectory(string path)
+    {
+        var priv = GetAppPrivateRoot();
+        if (string.Equals(path, priv, StringComparison.OrdinalIgnoreCase))
+            return true;
+        // 跨平台分隔符兼容（Windows '\' / 其它平台 '/'）
+        return path.StartsWith(priv + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(priv + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public string GetCacheDirectory()
+    {
+        try
+        {
+            return FileSystem.CacheDirectory;
+        }
+        catch
+        {
+            // 极少数环境 MAUI FileSystem 不可用时，退回私有目录下的 Cache 子目录（仍在沙盒内）
+            var dir = Path.Combine(GetAppDataDirectory(), "Cache");
+            try { Directory.CreateDirectory(dir); } catch { }
+            return dir;
         }
     }
 

@@ -75,33 +75,54 @@
             if (CSS && CSS.supports && CSS.supports('color', 'color-mix(in srgb, red, blue)'))
                 document.documentElement.classList.add('color-mix');
 
-            // Android 虚拟键盘：弹出时将 overlay 上移使输入框可见
+            // 软键盘处理：让弹窗内的输入框始终保持在键盘之上（原生般体验）。
+            // 依据 visualViewport 真实可视区域做几何位移，不依赖 pointer 类型判断——
+            // 桌面端无键盘时输入框永远在可视区内，天然不会上移；
+            // 移动端键盘遮住输入框底部时，自动把弹窗上推露出输入框。
+            var kbdOverlay = null;
+            var kbdInput = null;
+
+            function adjustForKeyboard() {
+                if (!kbdInput || !kbdOverlay) return;
+                var vv = window.visualViewport;
+                var visibleTop = vv ? vv.offsetTop : 0;
+                var visibleBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
+                var r = kbdInput.getBoundingClientRect();
+                var pad = 12;
+                // 输入框底部超出可视区 → 上移（负值）
+                var shift = 0;
+                if (r.bottom > visibleBottom - pad) {
+                    shift = visibleBottom - pad - r.bottom;
+                }
+                // 上移后顶部被顶出可视区 → 补正，确保输入框顶部也可见
+                if (r.top + shift < visibleTop + pad) {
+                    shift = visibleTop + pad - r.top;
+                }
+                kbdOverlay.style.transform = shift !== 0 ? 'translateY(' + shift + 'px)' : '';
+            }
+
             document.addEventListener('focusin', function (e) {
                 var el = e.target;
                 if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return;
                 var overlay = el.closest('.picker-overlay');
                 if (!overlay) return;
-                setTimeout(function () {
-                    // 尝试用 visualViewport 计算精确键盘高度
-                    var vv = window.visualViewport;
-                    var kbdH = vv ? window.innerHeight - vv.height : 0;
-                    if (kbdH > 50) {
-                        // 精确计算：输入框底部超出可视区域多少就上移多少
-                        var r = el.getBoundingClientRect();
-                        var overlap = r.bottom - (vv ? vv.height : window.innerHeight);
-                        if (overlap > 0) {
-                            overlay.style.setProperty('margin-top', (-overlap - 20) + 'px', 'important');
-                            return;
-                        }
-                    }
-                    // fallback: 直接上移 35%
-                    overlay.style.setProperty('margin-top', '-35vh', 'important');
-                }, 350);
+                kbdInput = el;
+                kbdOverlay = overlay;
+                // 键盘弹出有动画，等稳定后再测量一次；后续 resize/scroll 会持续校正
+                setTimeout(adjustForKeyboard, 300);
             });
+
             document.addEventListener('focusout', function (e) {
-                var overlay = e.target.closest('.picker-overlay');
-                if (overlay) overlay.style.removeProperty('margin-top');
+                var overlay = e.target.closest && e.target.closest('.picker-overlay');
+                if (overlay) overlay.style.transform = '';
+                kbdInput = null;
+                kbdOverlay = null;
             });
+
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', adjustForKeyboard);
+                window.visualViewport.addEventListener('scroll', adjustForKeyboard);
+            }
 
             const obs = new IntersectionObserver(async (entries) => {
                 for (const e of entries) {

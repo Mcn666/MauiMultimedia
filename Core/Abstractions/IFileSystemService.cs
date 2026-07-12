@@ -43,10 +43,31 @@ public interface IFileSystemService
     int? TryGetChildCount(string path);
 
     /// <summary>
-    /// 获取应用数据目录路径（MAUI 的 FileSystem.AppDataDirectory），
+    /// 获取应用数据目录路径（MAUI 的 FileSystem.AppDataDirectory，Android 上为 /data/data/&lt;包名&gt;/files），
     /// 各支持库可在此目录下创建自己的子目录存放缓存/临时文件。
+    /// 注意：这是包名根目录下的 files 子目录，并非私有目录根。
     /// </summary>
     string GetAppDataDirectory();
+
+    /// <summary>
+    /// 获取应用私有沙盒的根目录（包名根目录，Android 上为 /data/data/&lt;包名&gt;）。
+    /// 该目录下包含 files、cache、databases、shared_prefs 等子目录，是应用完全私有的范围。
+    /// Home 的"私有目录"入口导航到此，可浏览整个沙盒，而非仅 files 子目录。
+    /// </summary>
+    string GetAppPrivateRoot();
+
+    /// <summary>
+    /// 判断给定路径是否位于应用私有沙盒（包名根目录，含其自身）内；
+    /// 用于 Home 区分"设备存储"与"应用私有目录"两个根，控制入口显隐。
+    /// </summary>
+    bool IsAppPrivateDirectory(string path);
+
+    /// <summary>
+    /// 获取应用私有缓存目录（MAUI 的 FileSystem.CacheDirectory）。
+    /// 位于应用沙盒内，OS 可在低存储时自动清理；各 viewer 的临时缓存应写入此处，
+    /// 避免落到系统 Temp（沙盒外，对其他 app 可见且不会被自动清理）。
+    /// </summary>
+    string GetCacheDirectory();
 
     /// <summary>
     /// 检查存储权限是否已授予（Android 需要访问外部存储）

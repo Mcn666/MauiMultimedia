@@ -1,3 +1,4 @@
+using System.IO;
 using MauiMultimedia.Core.Models;
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Shell.Services;
@@ -13,6 +14,7 @@ public partial class Home
     private List<FileSystemItem> items = new();
     private bool isLoading = true;
     private bool isRoot = false;
+    private bool _inPrivate = false;
     private string? errorMessage;
     private string themeMode = "system"; // "light" | "dark" | "system"
     private bool showThemeMenu;
@@ -63,6 +65,25 @@ public partial class Home
         };
         currentPath = folder;
         await LoadItemsAsync();
+    }
+
+    private async Task NavigateToPrivateAsync()
+    {
+        currentPath = FileSystemService.GetAppPrivateRoot();
+        await LoadItemsAsync();
+    }
+
+    private async Task NavigateToDefaultAsync()
+    {
+        currentPath = FileSystemService.GetDefaultPath();
+        await LoadItemsAsync();
+    }
+
+    private string LocationLabel()
+    {
+        if (FileSystemService.IsAppPrivateDirectory(currentPath))
+            return "\U0001F512 私有目录";
+        return Path.GetFileName(currentPath.TrimEnd('\\', '/'));
     }
 
     private string GetItemIcon(FileSystemItem item)
@@ -388,6 +409,7 @@ public partial class Home
         isLoading = true;
         errorMessage = null;
         isRoot = FileSystemService.IsRootPath(currentPath);
+        _inPrivate = FileSystemService.IsAppPrivateDirectory(currentPath);
 
         try
         {

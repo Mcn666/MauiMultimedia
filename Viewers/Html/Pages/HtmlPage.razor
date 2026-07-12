@@ -7,6 +7,7 @@
 @inject IFileNavigationState NavState
 @inject IMauiNavigation MauiNav
 @inject IJSRuntime JS
+@inject IFileSystemService FileSystem
 @implements IDisposable
 
 <div class="v-page">
@@ -152,7 +153,7 @@
         var html = result.HtmlBody;
         if (result.Resources.Count == 0) return html;
 
-        var tempDir = Path.Combine(Path.GetTempPath(), "MauiMM_Html", Guid.NewGuid().ToString("N"));
+        var tempDir = Path.Combine(FileSystem.GetCacheDirectory(), "MauiMM_Html", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
         for (int i = 0; i < result.Resources.Count; i++)

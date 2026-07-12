@@ -16,6 +16,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
     [Inject] private IFileServerService FileServer { get; set; } = null!;
+    [Inject] private IFileSystemService FileSystem { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -991,7 +992,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                         return;
                     }
                     var bytes = File.ReadAllBytes(filePath);
-                    var result = ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath));
+                    var result = ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath), cacheDir: FileSystem.GetCacheDirectory());
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     ApplyDecoded(result.DataUri, result.Width, result.Height);
                 }
@@ -1054,7 +1055,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 {
                     var bytes = await File.ReadAllBytesAsync(filePath);
                     var result = await Task.Run(() =>
-                        ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath)));
+                        ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath), cacheDir: FileSystem.GetCacheDirectory()));
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     fullUrl = result.DataUri;
                 }
@@ -1198,7 +1199,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
                 var bytes = await File.ReadAllBytesAsync(p);
                 var result = await Task.Run(() =>
-                    ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p)));
+                    ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p), cacheDir: FileSystem.GetCacheDirectory()));
                 DecodeCache.Set(p, result.DataUri, result.Width, result.Height);
             }
             catch { }
@@ -1614,7 +1615,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
             var bytes = await File.ReadAllBytesAsync(path);
             var result = await Task.Run(() =>
-                ImageProcessingService.DecodeImage(bytes, Path.GetFileName(path)));
+                ImageProcessingService.DecodeImage(bytes, Path.GetFileName(path), cacheDir: FileSystem.GetCacheDirectory()));
             DecodeCache.Set(path, result.DataUri, result.Width, result.Height);
             return result.DataUri;
         }

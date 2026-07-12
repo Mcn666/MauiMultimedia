@@ -16,15 +16,28 @@
         @* 侧边栏：Windows 快捷访问 *@
         @if (OperatingSystem.IsWindows())
         {
-            <aside class="browser-sidebar">
-                <div class="sidebar-header">📌 快速访问</div>
-                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Desktop)">🖥️ 桌面</button>
-                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Downloads)">📥 下载</button>
-                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Documents)">📄 文档</button>
-                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Pictures)">🖼️ 图片</button>
-                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Music)">🎵 音乐</button>
-                <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Videos)">🎬 视频</button>
-            </aside>
+            <div class="browser-sidebar-rail">
+                <aside class="browser-sidebar">
+                    <div class="sidebar-header">📌 快速访问</div>
+                    <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Desktop)">🖥️ 桌面</button>
+                    <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Downloads)">📥 下载</button>
+                    <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Documents)">📄 文档</button>
+                    <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Pictures)">🖼️ 图片</button>
+                    <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Music)">🎵 音乐</button>
+                    <button class="sidebar-item" @onclick="() => NavigateToQuickAccess(WindowsQuickAccess.Videos)">🎬 视频</button>
+                </aside>
+                <aside class="browser-sidebar browser-sidebar-private">
+                    <div class="sidebar-header">🔒 存储位置</div>
+                    @if (_inPrivate)
+                    {
+                        <button class="sidebar-item" @onclick="NavigateToDefaultAsync">📱 设备存储</button>
+                    }
+                    else
+                    {
+                        <button class="sidebar-item" @onclick="NavigateToPrivateAsync">🔒 私有目录</button>
+                    }
+                </aside>
+            </div>
         }
 
         @* 主内容区 *@
@@ -34,14 +47,14 @@
                     <div class="path-bar">
                         <span class="path-label">📂 当前位置：</span>
                         <span class="path-text" title="@currentPath">@currentPath</span>
-                        <span class="path-short" title="@currentPath">@Path.GetFileName(currentPath.TrimEnd('\\'))</span>
+                        <span class="path-short" title="@currentPath">@LocationLabel()</span>
                     </div>
-                    <div class="browser-actions">
-                        <button class="btn btn-back" disabled="@isRoot" @onclick="GoBack">
-                            ⬆ 返回上级
-                        </button>
-                        <button class="btn btn-scan-panel" @onclick="ToggleScanPanel" title="文件筛选">⋮</button>
-                    </div>
+                <div class="browser-actions">
+                    <button class="btn btn-back" disabled="@isRoot" @onclick="GoBack">
+                        ⬆ 返回上级
+                    </button>
+                    <button class="btn btn-scan-panel" @onclick="ToggleScanPanel" title="文件筛选">⋮</button>
+                </div>
                 </div>
 
                 @* 排序栏 *@
@@ -125,6 +138,19 @@
                         </button>
                     }
                 </div>
+                @if (!OperatingSystem.IsWindows())
+                {
+                    <div class="scan-panel-footer scan-panel-private">
+                        @if (_inPrivate)
+                        {
+                            <button class="sidebar-item" @onclick="NavigateToDefaultAsync">📱 设备存储</button>
+                        }
+                        else
+                        {
+                            <button class="sidebar-item" @onclick="NavigateToPrivateAsync">🔒 私有目录</button>
+                        }
+                    </div>
+                }
             </div>
             @if (showScanPanel)
             {

@@ -16,6 +16,7 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private IFileServerService FileServer { get; set; } = null!;
+    [Inject] private IFileSystemService FileSystem { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -129,7 +130,7 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
         if (!ext.Equals(".glb") && !ext.Equals(".gltf") && !ext.Equals(".vrm") &&
             !ext.Equals(".stl") && !ext.Equals(".pmx") && !ext.Equals(".fbx") && !ext.Equals(".obj"))
         {
-            var converted = FbxConversionService.ConvertToGlb(filePath);
+            var converted = FbxConversionService.ConvertToGlb(filePath, FileSystem.GetCacheDirectory());
             if (converted != null)
             {
                 modelPath = converted;

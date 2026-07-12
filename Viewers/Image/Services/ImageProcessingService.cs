@@ -255,7 +255,7 @@ public static class ImageProcessingService
     /// <summary>
     /// 从字节数组解码图片（适用于已解密的内存数据）。
     /// </summary>
-    public static ImageResult DecodeImage(byte[] fileData, string fileName, int maxDimension = 4000)
+    public static ImageResult DecodeImage(byte[] fileData, string fileName, int maxDimension = 4000, string? cacheDir = null)
     {
         var ext = Path.GetExtension(fileName);
 
@@ -266,8 +266,8 @@ public static class ImageProcessingService
         // DDS: SKCodec doesn't support it, use manual decoder
         if (string.Equals(ext, ".dds", StringComparison.OrdinalIgnoreCase))
         {
-            // Write bytes to a temp file for DecodeDds
-            var tmpDir = Path.Combine(Path.GetTempPath(), "MauiMM_DdsDecode");
+            // Write bytes to a temp file for DecodeDds（落在应用私有缓存目录内，而非系统 Temp）
+            var tmpDir = Path.Combine(cacheDir ?? Path.GetTempPath(), "MauiMM_DdsDecode");
             Directory.CreateDirectory(tmpDir);
             var tmpPath = Path.Combine(tmpDir, Guid.NewGuid() + ".dds");
             try

@@ -21,14 +21,14 @@ public static class FbxConversionService
         return ConvertibleExts.Contains(ext);
     }
 
-    public static string? ConvertToGlb(string filePath)
+    public static string? ConvertToGlb(string filePath, string? cacheDir = null)
     {
         if (!File.Exists(filePath)) return null;
 
         var cacheKey = Path.GetFullPath(filePath).Replace(':', '_').Replace('\\', '_').Replace('/', '_');
-        var cacheDir = Path.Combine(Path.GetTempPath(), "MauiMM_ModelConvert");
-        Directory.CreateDirectory(cacheDir);
-        var glbPath = Path.Combine(cacheDir, cacheKey + ".glb");
+        var workDir = Path.Combine(cacheDir ?? Path.GetTempPath(), "MauiMM_ModelConvert");
+        Directory.CreateDirectory(workDir);
+        var glbPath = Path.Combine(workDir, cacheKey + ".glb");
 
         if (File.Exists(glbPath))
         {

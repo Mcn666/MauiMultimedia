@@ -453,6 +453,28 @@ h1:focus {
     cursor: not-allowed;
 }
 
+/* 低调的次要操作按钮（如“私有目录”入口），不抢“返回上级”的视觉权重 */
+.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    padding: 0 12px;
+    margin-right: 8px;
+    background: transparent;
+    border: 1px solid var(--btn-bg);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.btn-ghost:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
+
 .path-short {
     display: none;
     font-size: 14px;
@@ -614,6 +636,24 @@ h1:focus {
     flex-direction: column;
     gap: 2px;
     overflow-y: auto;
+}
+.scan-panel-footer.scan-panel-private {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border-primary);
+    padding: 12px;
+    background: var(--bg-secondary);
+}
+.scan-panel-footer.scan-panel-private .sidebar-item {
+    width: 100%;
+    justify-content: center;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    font-weight: 500;
+}
+.scan-panel-footer.scan-panel-private .sidebar-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-link);
 }
 .scan-type-btn {
     display: flex;
@@ -882,13 +922,19 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     padding: 10px 0;
 }
 
+.browser-sidebar-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
 @media (min-width: 769px) {
-    .browser-sidebar {
+    .browser-sidebar-rail {
         position: fixed;
         top: 36px;
         z-index: 1;
     }
 }
+html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 
 .sidebar-header {
     font-size: 12px;
