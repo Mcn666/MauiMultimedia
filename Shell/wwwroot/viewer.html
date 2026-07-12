@@ -7,13 +7,6 @@
     <base href="/" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MauiMultimedia.Shell.styles.css" />
-    <style>
-        :root { background: #1e1e1e; }
-        @media (prefers-color-scheme: light) {
-            :root { background: #ffffff; }
-        }
-        #blazor-error-ui { display: none; }
-    </style>
     <script>
         (function() {
             var saved = localStorage.getItem('filebrowser-theme');
@@ -39,9 +32,35 @@
             URL.revokeObjectURL(url);
         };
     </script>
+    <style>
+        /* 查看器页冷启动占位：中性旋转环，跟随主题（不显示刺眼的 "Loading..." 文本） */
+        #app { min-height: 100vh; }
+        .boot-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9a9a9a;
+        }
+        .boot-spinner {
+            width: 34px;
+            height: 34px;
+            border: 3px solid rgba(140, 140, 140, 0.28);
+            border-top-color: #9a9a9a;
+            border-radius: 50%;
+            animation: boot-spin 0.75s linear infinite;
+        }
+        @keyframes boot-spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-    <div id="app">Loading...</div>
+    <div id="app"><div class="boot-loading"><div class="boot-spinner"></div></div></div>
     <div id="blazor-error-ui" class="blazor-error">An error occurred.</div>
     <script>
         document.addEventListener('DOMContentLoaded', function() {

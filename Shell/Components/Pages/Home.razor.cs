@@ -371,6 +371,9 @@ public partial class Home
 
         await ApplyThemeDirect(isDark);
         await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-theme','{mode}')");
+        // 同步写入 Preferences：原生侧(MainPage/ViewerPageFactory 启动背景、状态栏)以 Preferences 为唯一主题来源，
+        // 必须与前端 localStorage 保持同一"应用主题"，否则会被 App 启动时的系统主题覆盖而冲突。
+        Preferences.Set("filebrowser-theme", mode);
     }
 
     private Task SetThemeLight() => SetTheme("light");

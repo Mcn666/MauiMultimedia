@@ -8,18 +8,6 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MauiMultimedia.Shell.styles.css" />
     <link rel="icon" href="data:,">
-    <style>
-        /* 默认深色背景，防止 Android WebView 白色闪烁。内联脚本会立刻纠正为正确值 */
-        :root {
-            background: #1e1e1e;
-        }
-
-        @media (prefers-color-scheme: light) {
-            :root {
-                background: #ffffff;
-            }
-        }
-    </style>
     <script>
         (function () {
             var saved = localStorage.getItem('filebrowser-theme');
@@ -55,7 +43,7 @@
     </script>
 </head>
 
-<body style="background:#1e1e1e;margin:0;">
+<body>
 
     <div class="status-bar-safe-area"></div>
 

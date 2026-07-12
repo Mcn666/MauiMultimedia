@@ -2,6 +2,9 @@ namespace MauiMultimedia.Shell;
 
 public partial class MainPage : ContentPage
 {
+    // 当前主题背景色(hex)，构造解析，供 WebView 原生背景复用（跟随应用主题，不写死）
+    private string _bg = "#1e1e1e";
+
     // Windows WebView2 虚拟主机映射，供 Blazor 组件（如 Model3DPage）调用
 #if WINDOWS
     private static Microsoft.Web.WebView2.Core.CoreWebView2? _coreWv2;
@@ -20,8 +23,8 @@ public partial class MainPage : ContentPage
         else if (saved == "light") dark = false;
         else dark = Application.Current?.RequestedTheme == AppTheme.Dark;
 
-        var bg = dark ? "#1e1e1e" : "#ffffff";
-        BackgroundColor = Color.FromArgb(bg);
+        _bg = dark ? "#1e1e1e" : "#ffffff";
+        BackgroundColor = Color.FromArgb(_bg);
 
         // WebView Handler 就绪时设置原生背景色 + Windows 虚拟主机映射
         blazorWebView.HandlerChanged += OnBlazorWebViewHandlerChanged;
@@ -32,7 +35,7 @@ public partial class MainPage : ContentPage
 #if ANDROID
         if (blazorWebView.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
         {
-            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor("#1e1e1e"));
+            nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor(_bg));
         }
 #elif WINDOWS
         if (blazorWebView.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.WebView2 wv2)

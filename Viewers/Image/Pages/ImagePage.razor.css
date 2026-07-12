@@ -34,6 +34,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    /* CRITICAL for touch: `touch-action` is NOT inherited, so the hit target
+       during a touch is usually the <img> itself (which keeps `auto` unless
+       set). On Android the browser then claims a horizontal drag as a
+       scroll/back gesture and fires `pointercancel`, aborting the swipe.
+       `none` tells the browser we handle pan/zoom/pinch ourselves. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+/* Cover descendants too — the touch hit target is the <img>/wrap, not the
+   viewport, and touch-action must be set on the actual target element. */
+::deep .image-viewport * {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 ::deep .image-viewport.fit {
