@@ -62,12 +62,20 @@ public static class ImageProcessingService
         // ── 慢速路径：需要缩放或 EXIF 校正 → SkiaSharp 解码 ──
         else
         {
-            using var bitmap = SKBitmap.Decode(codec);
-            if (bitmap == null)
-                throw new InvalidOperationException("无法解码位图");
+            // 按目标尺寸直接解码（避免全尺寸中间位图，防 OOM）
+            using var bitmap = DecodeScaled(codec, maxDimension);
 
-            using var orientedBitmap = ApplyOrientation(bitmap, origin);
-            using var displayBitmap = Downscale(orientedBitmap, maxDimension);
+            // EXIF 方向校正：TopLeft 无需旋转，复用 bitmap 避免多分配一份
+            using var orientedBitmap = (origin == SKEncodedOrigin.TopLeft)
+                ? null
+                : ApplyOrientation(bitmap, origin);
+            var source = orientedBitmap ?? bitmap;
+
+            // 精确收尾到 maxDimension（GetScaledDimensions 只给离散尺寸，可能略大）
+            using var downscaled = (source.Width > maxDimension || source.Height > maxDimension)
+                ? Downscale(source, maxDimension)
+                : null;
+            var displayBitmap = downscaled ?? source;
 
             bool hasAlpha = displayBitmap.AlphaType != SKAlphaType.Opaque;
             var encFormat = hasAlpha ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg;
@@ -310,12 +318,20 @@ public static class ImageProcessingService
         // ── 慢速路径 ──
         else
         {
-            using var bitmap = SKBitmap.Decode(codec);
-            if (bitmap == null)
-                throw new InvalidOperationException("无法解码位图");
+            // 按目标尺寸直接解码（避免全尺寸中间位图，防 OOM）
+            using var bitmap = DecodeScaled(codec, maxDimension);
 
-            using var orientedBitmap = ApplyOrientation(bitmap, origin);
-            using var displayBitmap = Downscale(orientedBitmap, maxDimension);
+            // EXIF 方向校正：TopLeft 无需旋转，复用 bitmap 避免多分配一份
+            using var orientedBitmap = (origin == SKEncodedOrigin.TopLeft)
+                ? null
+                : ApplyOrientation(bitmap, origin);
+            var source = orientedBitmap ?? bitmap;
+
+            // 精确收尾到 maxDimension（GetScaledDimensions 只给离散尺寸，可能略大）
+            using var downscaled = (source.Width > maxDimension || source.Height > maxDimension)
+                ? Downscale(source, maxDimension)
+                : null;
+            var displayBitmap = downscaled ?? source;
 
             bool hasAlpha = displayBitmap.AlphaType != SKAlphaType.Opaque;
             var encFormat = hasAlpha ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg;
@@ -427,6 +443,40 @@ public static class ImageProcessingService
 
     // ── 内部方法 ──────────────────────────────────────────
 
+    /// <summary>
+    /// 用 codec 直接按 <paramref name="maxDimension"/> 目标尺寸解码，利用
+    /// <see cref="SKCodec.GetScaledDimensions"/> 的原生下采样（JPEG 支持 1/2、1/4、1/8）
+    /// 让解码器一步到位输出接近目标尺寸的位图，避免"先解全尺寸再缩放"的内存峰值
+    /// （48MP 大图峰值内存可从 ~430MB 降到 ~140MB，显著降低 Android OOM 风险）。
+    /// 返回的位图<b>未做</b> EXIF 方向校正，尺寸可能略大于目标（离散缩放），
+    /// 由调用方再经 <see cref="Downscale"/> 精确收尾。
+    /// </summary>
+    private static SKBitmap DecodeScaled(SKCodec codec, int maxDimension)
+    {
+        int origW = codec.Info.Width;
+        int origH = codec.Info.Height;
+
+        // 计算目标缩放（不放大）
+        float scale = Math.Min(maxDimension / (float)origW, maxDimension / (float)origH);
+        scale = Math.Min(scale, 1f);
+
+        // 让 codec 给出它原生支持的最佳缩放尺寸（PNG 等不支持时会返回原尺寸）
+        var scaled = codec.GetScaledDimensions(scale);
+        int decodeW = Math.Max(1, scaled.Width);
+        int decodeH = Math.Max(1, scaled.Height);
+
+        var info = new SKImageInfo(decodeW, decodeH, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        var bitmap = new SKBitmap(info);
+        var result = codec.GetPixels(info, bitmap.GetPixels());
+
+        // GetPixels 对完整文件返回 Success；IncompleteInput 也接受（截断文件尽力而为）
+        if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+        {
+            bitmap.Dispose();
+            throw new InvalidOperationException("无法解码位图");
+        }
+        return bitmap;
+    }
 
     /// <summary>
     /// 如果图片超过最大尺寸则等比缩小。

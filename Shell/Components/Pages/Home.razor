@@ -204,7 +204,7 @@
                      @onkeydown="() => {}"
                      role="button"
                      tabindex="0"
-                     title="@item.FullPath">
+                     title="@item.Name">
                     @{
                         var snap = GetItemSnapshot(item);
                     }
@@ -256,7 +256,7 @@
                      @onkeydown="() => {}"
                      role="button"
                      tabindex="0"
-                     title="@item.FullPath">
+                     title="@item.Name">
                     <span class="col-icon item-icon">@GetItemIcon(item)</span>
                     <span class="col-name item-name">@GetDisplayName(item)</span>
                     <span class="col-count item-count">@item.ChildCountDisplay</span>

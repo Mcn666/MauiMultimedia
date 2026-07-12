@@ -44,8 +44,11 @@ public class MainActivity : MauiAppCompatActivity
     /// <summary>
     /// 跨版本键盘高度探测：对比根视图高度与可见显示区域底部，得到键盘高度，
     /// 并作为底部 padding 施加到 content，使 WebView 收缩到键盘之上。
-    /// - AdjustResize 已让窗口收缩：rootH≈rectBottom，keyboardH≈0，不重复收缩；
-    /// - AdjustPan / edge-to-edge 未收缩窗口：keyboardH&gt;0，施加 padding 收缩内容。
+    /// - 关键：GetWindowVisibleDisplayFrame 返回的可见区**本身已排除**状态栏与导航栏，
+    ///   故需从差值里减掉系统栏真实高度（从资源读取），否则键盘未弹出时
+    ///   rootH - rect.Bottom = 状态栏 + 导航栏，会被误当成键盘高度注入 padding，
+    ///   与页面 Padding(导航栏) 叠加成「约两倍导航栏」的底部留白。
+    /// - 剔除系统栏后：静止 → keyboardH=0；键盘弹出(AdjustResize) → keyboardH=真实键盘高度。
     /// </summary>
     private class KeyboardGlobalLayoutListener : Java.Lang.Object, ViewTreeObserver.IOnGlobalLayoutListener
     {
@@ -57,14 +60,27 @@ public class MainActivity : MauiAppCompatActivity
             var rect = new Android.Graphics.Rect();
             _content.GetWindowVisibleDisplayFrame(rect);
             int rootH = _content.RootView?.Height ?? _content.Height;
-            int keyboardH = rootH - rect.Bottom;
-            // 阈值过滤导航栏/状态栏造成的固定误差（无键盘时 keyboardH 可能为导航栏高度）
-            keyboardH = keyboardH < 80 ? 0 : keyboardH;
+            // 减去系统栏真实高度，避免把状态栏+导航栏误算成键盘
+            int sysBars = GetSystemBarHeightPx();
+            int keyboardH = rootH - rect.Bottom - sysBars;
+            if (keyboardH < 0) keyboardH = 0;
 
             // 仅变化时才设置，避免 relayout 触发的无限循环
             if (_content.PaddingBottom != keyboardH)
                 _content.SetPadding(_content.PaddingLeft, _content.PaddingTop,
                     _content.PaddingRight, keyboardH);
+        }
+
+        private static int GetSystemBarHeightPx()
+        {
+            var resources = Android.App.Application.Context?.Resources;
+            if (resources == null) return 0;
+            int h = 0;
+            int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
+            if (rid > 0) h += resources.GetDimensionPixelSize(rid);
+            int navRid = resources.GetIdentifier("navigation_bar_height", "dimen", "android");
+            if (navRid > 0) h += resources.GetDimensionPixelSize(navRid);
+            return h;
         }
     }
 

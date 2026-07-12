@@ -254,6 +254,20 @@ public class FileSystemService : IFileSystemService
         }, ct);
     }
 
+    /// <summary>
+    /// 判断目录是否为 reparse point（Windows junction/symlink 或类 Unix 符号链接）。
+    /// 递归扫描时必须跳过，否则用户建的循环链接（如文件夹指向其父目录）会导致
+    /// 无限递归 → 不可捕获的 StackOverflowException 直接崩进程。
+    /// </summary>
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch { return false; }
+    }
+
     private static void CountDirByTypes(string dir, IReadOnlyList<string[]> extensionGroups, int[] counts, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -293,6 +307,9 @@ public class FileSystemService : IFileSystemService
                 string.Equals(name, "Android", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(name, "data", StringComparison.OrdinalIgnoreCase))
                 continue;
+
+            // 跳过 junction/符号链接，防止循环链接导致无限递归崩溃
+            if (IsReparsePoint(d)) continue;
 
             CountDirByTypes(d, extensionGroups, counts, ct);
         }
@@ -354,6 +371,9 @@ public class FileSystemService : IFileSystemService
                 string.Equals(name, "Android", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(name, "data", StringComparison.OrdinalIgnoreCase))
                 continue;
+
+            // 跳过 junction/符号链接，防止循环链接导致无限递归崩溃
+            if (IsReparsePoint(d)) continue;
 
             ScanDir(d, extensions, results, ct);
         }

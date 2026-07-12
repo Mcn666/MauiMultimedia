@@ -37,7 +37,7 @@
 
   <ItemGroup>
     <!-- MAUI 类库标准引用：触发完整 MAUI SDK targets，使 Platforms/{TFM} 自动分桶生效 -->
-    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.70" />
   </ItemGroup>
 
   <ItemGroup>
