@@ -70,6 +70,10 @@
                         项目数 @GetSortArrow("count")
                     </button>
                     <span class="sort-sep"></span>
+                    <button class="btn-sort @GetSortClass("size")" @onclick="OnSortBySize" title="按文件大小排序">
+                        大小 @GetSortArrow("size")
+                    </button>
+                    <span class="sort-sep"></span>
                     <button class="btn-sort @GetSortClass("date")" @onclick="OnSortByDate" title="按修改时间排序">
                         修改时间 @GetSortArrow("date")
                     </button>
@@ -252,6 +256,9 @@
                 <span class="col-count sortable" @onclick="OnSortByCount">
                     项目数 @GetSortArrow("count")
                 </span>
+                <span class="col-size sortable" @onclick="OnSortBySize">
+                    大小 @GetSortArrow("size")
+                </span>
                 <span class="col-date sortable" @onclick="OnSortByDate">
                     修改时间 @GetSortArrow("date")
                 </span>
@@ -273,6 +280,7 @@
                     <span class="col-icon item-icon">@GetItemIcon(item)</span>
                     <span class="col-name item-name">@GetDisplayName(item)</span>@if (HasAlias(item)) { <span class="alias-flag-inline" title="已设置别名">✏️</span> }
                     <span class="col-count item-count">@item.ChildCountDisplay</span>
+                    <span class="col-size item-size">@item.SizeDisplay</span>
                     <span class="col-date item-date">@item.LastModifiedDisplay</span>
                 </div>
             </Virtualize>

@@ -1110,17 +1110,40 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     display: flex;
     align-items: center;
     padding: 10px 16px;
-    border-bottom: 1px solid var(--border-secondary);
     cursor: pointer;
+    border-radius: 8px; /* 悬停/选中时底色为圆角高亮，而非生硬矩形 */
+    position: relative;
     transition: background 0.12s;
 }
 
-.item-row:last-child {
-    border-bottom: none;
+/* 分类色点：行首小圆点，按类型着色，替代纯灰图标带来的重复感 */
+.item-row::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #888;
 }
+.item-row.type-folder::before { background: #efc675; }
+.item-row.type-image::before  { background: #8ab4f8; }
+.item-row.type-video::before  { background: #f09595; }
+.item-row.type-audio::before  { background: #5dcaa5; }
+.item-row.type-model::before  { background: #afa9ec; }
+.item-row.type-html::before   { background: #6fd0e0; }
+.item-row.type-doc::before    { background: #97c459; }
+.item-row.type-other::before  { background: #888; }
 
 .item-row:hover {
     background: var(--bg-hover);
+}
+
+.item-row.folder {
+    /* 列表里文件夹同样用一层暖色淡底，强化「容器」语义 */
+    background: rgba(239,199,117,0.06);
 }
 
 .item-row.folder:hover {
@@ -1299,6 +1322,20 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     color: var(--text-tertiary);
 }
 
+.col-size {
+    width: 96px;
+    flex-shrink: 0;
+    text-align: right;
+    padding: 0 4px;
+    font-variant-numeric: tabular-nums;
+}
+
+.item-size {
+    font-size: 13px;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
 /* --- View Toggle Button --- */
 
 .btn-view {
@@ -1328,6 +1365,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
     gap: 10px;
+    padding-top: 16px; /* 第一行与吸顶栏之间留足间距：需覆盖浮起 translateY(-2px) 及 box-shadow 向上扩散(~8px)，避免悬停浮起时顶部被吸顶栏裁切 */
     background: var(--bg-primary);
 }
 
@@ -1338,10 +1376,10 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     justify-content: center;
     gap: 8px;
     padding: 12px;
-    border: 1px solid var(--border-primary);
+    border: 1px solid transparent; /* 平时隐藏边框，靠留白分隔；悬停/选中才显描边，消除棋盘格线条噪音 */
     border-radius: 10px;
     cursor: pointer;
-    transition: background 0.12s, border-color 0.12s, transform 0.12s;
+    transition: background 0.12s, border-color 0.12s, transform 0.12s, box-shadow 0.12s;
     text-align: center;
     min-width: 0;
     aspect-ratio: 1;
@@ -1354,9 +1392,34 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     contain-intrinsic-size: 128px;
 }
 
+/* 分类色点：左上角小圆点，按类型着色，悬停/缩略图之上都可见 */
+.grid-item::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #888;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+    z-index: 2;
+    pointer-events: none;
+}
+.grid-item.type-folder::after { background: #efc675; }
+.grid-item.type-image::after  { background: #8ab4f8; }
+.grid-item.type-video::after  { background: #f09595; }
+.grid-item.type-audio::after  { background: #5dcaa5; }
+.grid-item.type-model::after  { background: #afa9ec; }
+.grid-item.type-html::after   { background: #6fd0e0; }
+.grid-item.type-doc::after    { background: #97c459; }
+.grid-item.type-other::after  { background: #888; }
+
 .grid-item:hover {
     background: var(--bg-hover);
     border-color: var(--text-link);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.28);
 }
 
 .grid-item.active-file {
@@ -1378,6 +1441,11 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     background: var(--bg-hover);
     border-color: var(--text-link);
     transform: translateY(-2px);
+}
+
+.grid-item.folder {
+    /* 文件夹用一层暖色淡底，与普通文件拉开「这是容器」的语义 */
+    background: rgba(239,199,117,0.10);
 }
 
 .grid-item.folder:hover {
@@ -1480,8 +1548,13 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     .item-row .col-date { display: none; }
     .items-header { padding: 12px 10px; font-size: 11px; }
     .item-row { padding: 12px 10px; }
+    .item-row::before { left: 4px; }
     .col-icon { width: 28px; }
     .item-icon { font-size: 16px; }
+
+    /* 移动端：把「项目数」与「大小」两列拉近，避免中间留白过宽 */
+    .col-count { width: 44px; padding-right: 0; }
+    .col-size { margin-left: -10px; padding-left: 0; }
 
     .browser-grid {
         grid-template-columns: repeat(3, 1fr);

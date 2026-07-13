@@ -82,7 +82,8 @@ public class FileSystemService : IFileSystemService
                     Name = fileInfo.Name,
                     FullPath = fileInfo.FullName,
                     IsFolder = false,
-                    LastModified = fileInfo.LastWriteTime
+                    LastModified = fileInfo.LastWriteTime,
+                    Size = GetFileSize(fullPath)
                 };
             }
         }
@@ -91,6 +92,66 @@ public class FileSystemService : IFileSystemService
             return null;
         }
     }
+
+    /// <summary>
+    /// 获取文件字节数。优先用 FileInfo.Length；若为 0（Android scoped storage /
+    /// MediaStore 虚拟文件经 System.IO 取长度常为 0）则回退到打开流读取真实长度，
+    /// 在 Android 上再回退到 MediaStore 查询 SIZE 列。任何一步失败都安全降级为 0，
+    /// 不抛异常（避免整条文件被 SafeCreateItem 丢弃）。
+    /// </summary>
+    private static long GetFileSize(string fullPath)
+    {
+        try
+        {
+            var fi = new FileInfo(fullPath);
+            if (fi.Exists)
+            {
+                var len = fi.Length;
+                if (len > 0) return len; // 仅当 >0 才采用；为 0 时继续走回退
+            }
+        }
+        catch { }
+
+        // 回退 1：直接打开流读取真实长度（部分平台 FileInfo.Length 缓存/返回 0 时更可靠）
+        try
+        {
+            using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return fs.Length;
+        }
+        catch { }
+
+#if ANDROID
+        // 回退 2：MediaStore 查询（Android 上部分媒体文件只有此路能拿到真实大小）
+        var mediaSize = GetAndroidMediaSize(fullPath);
+        if (mediaSize > 0) return mediaSize;
+#endif
+
+        return 0;
+    }
+
+#if ANDROID
+    private static long GetAndroidMediaSize(string path)
+    {
+        try
+        {
+            var ctx = Android.App.Application.Context;
+            var resolver = ctx?.ContentResolver;
+            if (resolver == null) return 0;
+            var uri = Android.Provider.MediaStore.Files.GetContentUri("external");
+            if (uri == null) return 0;
+            var sizeCol = Android.Provider.MediaStore.IMediaColumns.Size;
+            var dataCol = Android.Provider.MediaStore.IMediaColumns.Data;
+            using var cursor = resolver.Query(uri, new[] { sizeCol }, dataCol + " = ?", new[] { path }, null);
+            if (cursor != null && cursor.MoveToFirst())
+            {
+                int idx = cursor.GetColumnIndex(sizeCol);
+                if (idx >= 0) return cursor.GetLong(idx);
+            }
+        }
+        catch { }
+        return 0;
+    }
+#endif
 
     public string GetPathRoot(string path)
     {
@@ -417,7 +478,8 @@ public class FileSystemService : IFileSystemService
                         Name = fi.Name,
                         FullPath = fi.FullName,
                         IsFolder = false,
-                        LastModified = fi.LastWriteTime
+                        LastModified = fi.LastWriteTime,
+                        Size = GetFileSize(f)
                     });
                 }
                 catch { }

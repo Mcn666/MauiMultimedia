@@ -284,9 +284,32 @@ public partial class Home
         var cls = item.IsFolder ? "folder" : "file";
         foreach (var p in ItemPresenters)
             if (p.CanHandle(item)) { var e = p.GetItemCssClass(item); if (e != null) cls += " " + e; }
+        cls += " " + GetItemTypeClass(item);
         if (_activeFilePath != null && string.Equals(item.FullPath, _activeFilePath, StringComparison.OrdinalIgnoreCase))
             cls += " active-file";
         return cls;
+    }
+
+    /// <summary>
+    /// 返回条目的大类，用于网格/列表的「分类色点」。<br/>
+    /// folder=暖黄, image=蓝, video=红, audio=青, model=紫, html=浅青, doc=绿, 其余=灰。
+    /// </summary>
+    private static string GetItemTypeClass(FileSystemItem item)
+    {
+        if (item.IsFolder) return "type-folder";
+        var ext = Path.GetExtension(item.Name).ToLowerInvariant();
+        return ext switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" or ".heic" or ".heif" or ".tiff" or ".tif" => "type-image",
+            ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm" or ".m4v" or ".wmv" or ".flv" or ".m2ts" or ".ts" => "type-video",
+            ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" or ".m4a" or ".opus" or ".wma" => "type-audio",
+            ".glb" or ".gltf" or ".pmx" or ".vrm" or ".fbx" or ".obj" or ".stl" or ".dae" or ".3ds" => "type-model",
+            ".html" or ".htm" or ".xhtml" => "type-html",
+            ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx"
+                or ".txt" or ".md" or ".markdown" or ".json" or ".xml" or ".csv" or ".log"
+                or ".cs" or ".js" or ".ts" or ".tsx" or ".py" or ".c" or ".cpp" or ".h" or ".hpp" or ".java" or ".go" or ".rs" => "type-doc",
+            _ => "type-other"
+        };
     }
 
     protected override async Task OnInitializedAsync()
@@ -398,6 +421,7 @@ public partial class Home
     private Task OnSortByName() => OnSortClick("name");
     private Task OnSortByType() => OnSortClick("type");
     private Task OnSortByCount() => OnSortClick("count");
+    private Task OnSortBySize() => OnSortClick("size");
     private Task OnSortByDate() => OnSortClick("date");
 
     private async Task OnSortClick(string col)
@@ -439,6 +463,12 @@ public partial class Home
                 items = (sortDirection == "asc")
                     ? items.OrderBy(i => i.IsFolder ? (i.ChildCount ?? 0) : int.MaxValue).ToList()
                     : items.OrderByDescending(i => i.IsFolder ? (i.ChildCount ?? 0) : int.MinValue).ToList();
+                break;
+            case "size":
+                // 文件夹 size 视为 0 分组（与 count 排序一致：升序时文件夹在前，降序时文件在前）
+                items = (sortDirection == "asc")
+                    ? items.OrderBy(i => i.IsFolder ? 0 : i.Size).ToList()
+                    : items.OrderByDescending(i => i.IsFolder ? 0 : i.Size).ToList();
                 break;
             case "date":
                 items = (sortDirection == "asc")
