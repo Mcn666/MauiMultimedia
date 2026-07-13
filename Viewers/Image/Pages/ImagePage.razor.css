@@ -303,7 +303,7 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-top: 0.5px solid rgba(255,255,255,0.08);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), right 0.25s ease;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
 }
 
@@ -311,13 +311,16 @@
     transform: translateY(100%);
 }
 
-/* Keep the thumbnail filmstrip visible while the detail panel is open:
-   lift it above the z-100 dim overlay and inset its right edge past the
-   panel (fixed at right:0, width 300px) so the two don't collide. The `right`
-   shift animates in step with the panel's 0.25s slide-in. */
+/* Keep the thumbnail filmstrip visible & usable while the detail panel is open,
+   but do NOT shrink the strip: the panel now OVERLAYS the filmstrip (covering
+   its right 300px) instead of pushing it left. The strip stays at full width,
+   so its clientWidth never changes when the panel opens/closes — that width
+   stability is what prevents the virtualized window + centering slack from
+   being recomputed (the thumbnail churn bug). The strip sits just above the
+   z-100 dim overlay (stays bright & clickable) and just below the z-102 panel
+   (which covers its right edge). */
 .viewer-page.chrome-details ::deep .filmstrip-container {
-    z-index: 103;
-    right: 300px;
+    z-index: 101;
 }
 
 ::deep .filmstrip-track {
@@ -523,7 +526,7 @@
     right: 0;
     width: 300px;
     height: 100vh;
-    z-index: 101;
+    z-index: 102;
     background: var(--bg-primary);
     border-left: 1px solid var(--border-primary);
     display: flex;
@@ -740,10 +743,7 @@
         top: 6px;
         right: 6px;
     }
-    /* Inset the filmstrip past the narrower mobile detail panel. */
-    .viewer-page.chrome-details ::deep .filmstrip-container {
-        right: 260px;
-    }
+    /* On mobile the panel (260px) overlays the full-width strip too — no inset. */
     ::deep .toolbar-file-name { font-size: 12px; }
     .viewer-page.chrome-toolbar ::deep .image-viewport { top: 40px; }
     .viewer-page.chrome-filmstrip ::deep .image-viewport { bottom: 64px; }

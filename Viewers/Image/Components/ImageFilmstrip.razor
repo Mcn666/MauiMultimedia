@@ -8,6 +8,7 @@
             var idx = i;
             var item = Items[i];
             <div class="filmstrip-item @(idx == CurrentIndex ? "active" : "")"
+                 data-index="@idx"
                  @onclick="() => OnItemClick.InvokeAsync(idx)"
                  @onclick:preventDefault>
                 @if (!string.IsNullOrEmpty(item))
@@ -47,13 +48,28 @@
     private bool _initialized;
     private bool _suppressScroll;
     private float _lastVpWidth;
+    // Set when a genuine viewport resize re-laid the window; the actual scroll
+    // to center is deferred to OnAfterRenderAsync so it runs AFTER Blazor has
+    // painted the re-laid cards — never racing the re-window computation.
+    private bool _pendingResizeScroll;
+    // Equal "centering slack" added to BOTH lead/trailing spacers so the first
+    // and last thumbnails can scroll to the dead-center of the track (there is
+    // no content beyond them to fill the other side). Derived from ViewportWidth
+    // (a parameter), so it is stable and does NOT create the clientWidth read-
+    // back feedback loop that JS-applied padding caused on desktop window resize.
+    private double _centeringPad;
 
     private const int ItemWidth = 52;
     private const int ItemGap = 4;
-    private const int Stride = ItemWidth + ItemGap;
+    // Must match the CSS: desktop items are 52px wide, the mobile media query
+    // (max-width:600px) shrinks them to 44px, gap stays 4px -> stride 48.
+    // The leading/trailing spacer widths are derived from this, so it MUST equal
+    // the actually-rendered stride or the virtualization coordinate system drifts
+    // (8px per index on phones) and centering/snap go wrong.
+    private int Stride => (ViewportWidth > 0 && ViewportWidth <= 600) ? 48 : 56;
 
-    private double _leadSpacerWidth => _visStart * Stride;
-    private double _trailSpacerWidth => Math.Max(0, (Items.Count - _visEnd - 1) * Stride);
+    private double _leadSpacerWidth => _visStart * Stride + _centeringPad;
+    private double _trailSpacerWidth => Math.Max(0, (Items.Count - _visEnd - 1) * Stride) + _centeringPad;
 
     /// <summary>
     /// Dynamically computed from ViewportWidth so the virtual window always
@@ -74,6 +90,15 @@
                   Math.Abs(_lastVpWidth - ViewportWidth) > 1))
         {
             CenterWindow(CurrentIndex >= 0 ? CurrentIndex : 0);
+            // A genuine viewport resize (not the initial population): schedule a
+            // single recenter in OnAfterRenderAsync. The capacity/window is already
+            // recomputed above; deferring the scroll avoids a second, competing
+            // re-window and the thumbnail churn it caused during a shrink.
+            if (_lastVpWidth > 0 && Math.Abs(_lastVpWidth - ViewportWidth) > 1)
+            {
+                _pendingResizeScroll = true;
+                Debug.WriteLine($"[Filmstrip] resize relayout scheduled vpW={ViewportWidth:F0} (was {_lastVpWidth:F0})");
+            }
         }
         _lastVpWidth = ViewportWidth;
     }
@@ -88,13 +113,16 @@
         center = Math.Clamp(center, 0, Items.Count - 1);
         int pad = Math.Max(5, (int)Math.Ceiling(Math.Max(vw, 800) / Stride / 2));
         int minFill = (int)Math.Ceiling(Math.Max(vw, 800) / Stride);
+        // Centering slack = half the empty space beside one thumbnail so the
+        // first/last item can reach the center. itemW = Stride - ItemGap.
+        _centeringPad = Math.Max(0, (vw - (Stride - ItemGap)) / 2);
 
         _visStart = Math.Max(0, center - pad);
         _visEnd = Math.Min(Items.Count - 1, _visStart + minFill - 1);
         if (_visEnd - _visStart + 1 < minFill)
             _visStart = Math.Max(0, _visEnd - minFill + 1);
 
-        Debug.WriteLine($"[Filmstrip] idx={center} vpW={ViewportWidth:F0} vw={vw:F0} pad={pad} minFill={minFill} visStart={_visStart} visEnd={_visEnd} cnt={_visEnd - _visStart + 1} total={Items.Count}");
+        Debug.WriteLine($"[Filmstrip] idx={center} vpW={ViewportWidth:F0} vw={vw:F0} pad={pad} minFill={minFill} centerPad={_centeringPad:F1} visStart={_visStart} visEnd={_visEnd} cnt={_visEnd - _visStart + 1} total={Items.Count}");
     }
 
     /// <summary>
@@ -167,6 +195,25 @@
             _visStart = newStart;
             _visEnd = newEnd;
             StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// After a viewport resize, the window was re-laid in OnParametersSet; this
+    /// runs once (driven by _pendingResizeScroll) to recenter the active
+    /// thumbnail. Deferring to here guarantees the re-laid cards are already in
+    /// the DOM when scrollFilmstripToElement measures them, so resize produces a
+    /// single coherent re-layout instead of overlapping passes that churn cards.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingResizeScroll)
+        {
+            _pendingResizeScroll = false;
+            if (!Hidden && Items.Count > 0 && CurrentIndex >= 0)
+            {
+                await ScrollToIndexAsync(CurrentIndex, false);
+            }
         }
     }
 }

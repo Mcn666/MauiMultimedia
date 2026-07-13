@@ -6,6 +6,7 @@ using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Core.Utils;
 using MauiMultimedia.Viewers.Image.Components;
 using MauiMultimedia.Viewers.Image.Services;
+using System.Collections.Concurrent;
 
 namespace MauiMultimedia.Viewers.Image.Pages;
 
@@ -69,7 +70,10 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private CancellationTokenSource? _stitchCts;
     private class StitchImageInfo
     {
-        public string BlobUrl { get; set; } = "";
+        // Served HTTP URL (token-based, Range-streamed from disk) instead of a
+        // blob: URL — avoids reading the whole file into memory. The previous
+        // createBlobUrl bridge did streamRef.arrayBuffer() of the entire image.
+        public string Url { get; set; } = "";
         public int Width { get; init; }
         public int Height { get; init; }
         public string FileName { get; init; } = "";
@@ -129,7 +133,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     // P1: maps filePath -> FileServer token for images served directly (no
     // Skia/base64). Tokens live for the page lifetime (never individually
     // revoked) so a cached URL never goes stale; all are revoked on dispose.
-    private readonly Dictionary<string, string> _servedTokens = new();
+    private readonly ConcurrentDictionary<string, string> _servedTokens = new();
 
     // 显示尺寸（不全解码）缩略图的 page-scoped 缓存：path → (token, decodeMax)。
     // token 指向 FileServer 注册的内存字节；decodeMax 记录该图当前解码的最长边，
@@ -350,8 +354,14 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         await RefreshViewportMetricsAsync();
         RecomputeZoom();
 
-        if (showFilmstrip && !stitchMode && currentIndex >= 0 && filmstripRef != null)
-            await filmstripRef.ScrollToIndexAsync(currentIndex, false);
+        // Propagate the new viewport width to the filmstrip. Its OnParametersSet
+        // then recomputes how many thumbnails fit and re-lays the window ONCE,
+        // and the child recenters in its own OnAfterRenderAsync — a single,
+        // coherent pass. We deliberately do NOT call ScrollToIndexAsync here:
+        // doing so inline would race with the child's parameter-driven re-window
+        // and (with the JS resize storm) spawn overlapping passes that churn
+        // thumbnails during a shrink.
+        StateHasChanged();
     }
 
     [JSInvokable]
@@ -1711,16 +1721,13 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
     // ═══════════ Stitch Mode ═══════════
 
-    private async Task RevokeBlobUrls()
+    // Stitch image tokens live in _servedTokens and are revoked together with the
+    // main viewer's tokens by RevokeServedTokens() (on dispose / go-back). Nothing
+    // to revoke here beyond cancelling the background load loop.
+    private void CancelStitchLoad()
     {
         _stitchCts?.Cancel();
         _stitchCts = null;
-        if (stitchImages != null)
-        {
-            var urls = stitchImages.Select(si => si.BlobUrl).Where(u => !string.IsNullOrEmpty(u)).ToArray();
-            if (urls.Length > 0 && _jsModule != null)
-                await _jsModule.InvokeVoidAsync("revokeBlobUrls", urls);
-        }
     }
 
 
@@ -1747,7 +1754,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         if (!stitchMode)
         {
             _stitchCts?.Cancel();
-            await RevokeBlobUrls();
+            CancelStitchLoad();
             stitchImages = null;
             stitchError = null;
             _stitchLoadedCount = 0;
@@ -1779,7 +1786,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
         if (dims.Count < 2) { stitchError = "Need at least 2 images"; return; }
 
-        stitchImages = dims.Select(d => new StitchImageInfo { BlobUrl = "", Width = d.w, Height = d.h, FileName = Path.GetFileName(d.path) }).ToList();
+        stitchImages = dims.Select(d => new StitchImageInfo { Url = "", Width = d.w, Height = d.h, FileName = Path.GetFileName(d.path) }).ToList();
         _stitchLoadedCount = 0;
         stitchError = null;
         _stitchContentWidth = vpWidth > 0 ? vpWidth : 0;
@@ -1859,35 +1866,25 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private async Task LoadStitchItemAsync(int i, CancellationToken ct)
     {
         if (stitchImages == null || i < 0 || i >= stitchImages.Count) return;
-        if (!string.IsNullOrEmpty(stitchImages[i].BlobUrl)) return;
+        if (!string.IsNullOrEmpty(stitchImages[i].Url)) return;
         try
         {
             ct.ThrowIfCancellationRequested();
             var path = fileList[i];
-            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            await using var _ = stream.ConfigureAwait(false);
             if (stitchImages == null) return;
-            var streamRef = new DotNetStreamReference(stream);
-            var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-            var blobUrl = await JS.InvokeAsync<string>("createBlobUrl", streamRef, MimeTypes.Get(ext));
-            if (stitchImages == null) { await RevokeBlobUrlAsync(blobUrl); return; }
-            stitchImages[i].BlobUrl = blobUrl;
+            // Register the file with the local HTTP server and get a token-based
+            // served URL. The browser streams the image over HTTP (Range-supported),
+            // so the full file is NEVER read into a C#/JS buffer — this replaces the
+            // previous createBlobUrl bridge which did streamRef.arrayBuffer() of the
+            // entire image (memory explosion for large / many images).
+            var url = ServedUrl(path);
+            if (stitchImages == null) return;
+            stitchImages[i].Url = url;
             _stitchLoadedCount++;
             await InvokeAsync(StateHasChanged);
         }
         catch (OperationCanceledException) { throw; }
-        catch { Debug.WriteLine($"[Stitch] Failed to load: {fileList[i]}"); }
-    }
-
-    private async Task RevokeBlobUrlAsync(string url)
-    {
-        if (!string.IsNullOrEmpty(url))
-        {
-            if (_jsModule != null)
-                await _jsModule.InvokeVoidAsync("revokeBlobUrls", new object[] { url });
-            else
-                await JS.InvokeVoidAsync("eval", $"URL.revokeObjectURL('{url}')");
-        }
+        catch { Debug.WriteLine($"[Stitch] Failed to register: {fileList[i]}"); }
     }
 
     private void RecomputeStitchLayout()
@@ -1936,8 +1933,8 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     }
 
     private string? GetStitchSrc(int i) =>
-        (stitchImages != null && i >= 0 && i < stitchImages.Count && !string.IsNullOrEmpty(stitchImages[i].BlobUrl))
-            ? stitchImages[i].BlobUrl : null;
+        (stitchImages != null && i >= 0 && i < stitchImages.Count && !string.IsNullOrEmpty(stitchImages[i].Url))
+            ? stitchImages[i].Url : null;
 
     private async Task OnStitchScroll()
     {
@@ -1983,15 +1980,6 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         }
 
         RevokeServedTokens();
-
         _stitchCts?.Cancel();
-        if (stitchImages != null)
-        {
-            var urls = stitchImages.Select(si => si.BlobUrl).Where(u => !string.IsNullOrEmpty(u)).ToArray();
-            if (urls.Length > 0 && _jsModule != null)
-            {
-                try { await _jsModule.InvokeVoidAsync("revokeBlobUrls", urls); } catch { }
-            }
-        }
     }
 }

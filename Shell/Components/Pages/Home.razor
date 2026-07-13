@@ -202,6 +202,13 @@
                 <div class="grid-item @GetItemRowClass(item)"
                      @onclick="() => OnItemClick(item)"
                      @onkeydown="() => {}"
+                     @oncontextmenu="(e) => OnItemContextMenu(e, item)"
+                     @oncontextmenu:preventDefault="true"
+                     @onpointerdown="(e) => OnItemPointerDown(e, item)"
+                     @onpointerup="OnItemPointerUp"
+                     @onpointermove="OnItemPointerMove"
+                     @onpointercancel="OnItemPointerUp"
+                     @onpointerleave="OnItemPointerUp"
                      role="button"
                      tabindex="0"
                      title="@item.Name">
@@ -229,10 +236,11 @@
                         <span class="grid-icon">@GetItemIcon(item)</span>
                         <span class="grid-name">@GetDisplayName(item)</span>
                         <span class="grid-count">@item.ChildCountDisplay</span>
+                        @if (HasAlias(item))
+                        {
+                            <span class="alias-flag" title="已设置别名">✏️</span>
+                        }
                     }
-                    <span class="grid-alias-btn" @onclick:stopPropagation="true"
-                          @onclick="() => OnItemRightClick(item)"
-                          title="设置别名">✏️</span>
                 </div>
             }
         </div>
@@ -248,22 +256,25 @@
                 <span class="col-date sortable" @onclick="OnSortByDate">
                     修改时间 @GetSortArrow("date")
                 </span>
-                <span class="col-header-action" title="别名"></span>
             </div>
             <Virtualize Items="items" Context="item" ItemSize="44" OverscanCount="20">
                 <div class="item-row @GetItemRowClass(item)"
                      @onclick="() => OnItemClick(item)"
                      @onkeydown="() => {}"
+                     @oncontextmenu="(e) => OnItemContextMenu(e, item)"
+                     @oncontextmenu:preventDefault="true"
+                     @onpointerdown="(e) => OnItemPointerDown(e, item)"
+                     @onpointerup="OnItemPointerUp"
+                     @onpointermove="OnItemPointerMove"
+                     @onpointercancel="OnItemPointerUp"
+                     @onpointerleave="OnItemPointerUp"
                      role="button"
                      tabindex="0"
                      title="@item.Name">
                     <span class="col-icon item-icon">@GetItemIcon(item)</span>
-                    <span class="col-name item-name">@GetDisplayName(item)</span>
+                    <span class="col-name item-name">@GetDisplayName(item)</span>@if (HasAlias(item)) { <span class="alias-flag-inline" title="已设置别名">✏️</span> }
                     <span class="col-count item-count">@item.ChildCountDisplay</span>
                     <span class="col-date item-date">@item.LastModifiedDisplay</span>
-                    <span class="col-alias" @onclick:stopPropagation="true"
-                          @onclick="() => OnItemRightClick(item)"
-                          title="设置别名">✏️</span>
                 </div>
             </Virtualize>
         </div>
@@ -316,6 +327,26 @@ else if (showViewerPicker && pendingItem != null)
     </div>
 }
 
+@* 上下文菜单（桌面：右键 / 长按左键；移动端：长按） *@
+@if (_showContextMenu && _contextMenuTarget != null)
+{
+    <div class="ctx-overlay"
+         @onpointerdown="CloseContextMenu"
+         @oncontextmenu:preventDefault="true"
+         @oncontextmenu="CloseContextMenu"></div>
+    <div class="ctx-menu" style="left:@(_ctxX)px;top:@(_ctxY)px;">
+        <div class="ctx-menu-title" title="@_contextMenuTarget.Name">@GetDisplayName(_contextMenuTarget)</div>
+        <button class="ctx-item" @onclick="OnCtxOpen">
+            <span class="ctx-item-icon">@GetItemIcon(_contextMenuTarget)</span>
+            <span>打开</span>
+        </button>
+        <button class="ctx-item" @onclick="OnCtxSetAlias">
+            <span class="ctx-item-icon">✏️</span>
+            <span>设置别名</span>
+        </button>
+    </div>
+}
+
 @* 设置别名对话框 *@
 @if (_showAliasDialog && _aliasTarget != null)
 {
@@ -326,10 +357,9 @@ else if (showViewerPicker && pendingItem != null)
                 <button class="picker-close" @onclick="CloseAliasDialog">✕</button>
             </div>
             <div class="picker-body">
-                <div class="picker-file">@_aliasTarget.Name</div>
                 <input class="alias-input" @bind="_aliasText"
                        @onkeydown="OnAliasKeyDown"
-                       placeholder="输入别名（留空清除）"
+                       placeholder="@_aliasTarget.Name"
                        autofocus />
                 <div style="display:flex;gap:8px;margin-top:8px;">
                     <button class="btn btn-back" style="flex:1;justify-content:center;"

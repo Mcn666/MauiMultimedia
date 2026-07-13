@@ -29,6 +29,18 @@ public partial class Home
     private bool _showAliasDialog;
     private FileSystemItem? _aliasTarget;
     private string _aliasText = "";
+
+    // ── 上下文菜单（右键 / 长按）状态 ──
+    private bool _showContextMenu;
+    private FileSystemItem? _contextMenuTarget;
+    private int _ctxX, _ctxY;
+    private bool _ctxJustShown;
+    // 长按检测：桌面左键长按与移动端触摸长按统一走 pointer 事件
+    private CancellationTokenSource? _longPressCts;
+    private bool _longPressFired;
+    private double _lpStartX, _lpStartY;
+    private const double LongPressMoveThreshold = 10; // 移动超过该像素视为滚动/拖拽，取消长按
+    private const int LongPressDelayMs = 500;
     private bool permissionDenied;
     private bool showScanPanel;
     private bool isScanning;
@@ -100,7 +112,14 @@ public partial class Home
         return alias ?? item.Name;
     }
 
-    private async Task OnItemRightClick(FileSystemItem item)
+    /// <summary>该项是否已设置别名（用于显示 ✏️ 识别标志，纯展示、不响应点击）。</summary>
+    private bool HasAlias(FileSystemItem item)
+    {
+        var alias = Alias.GetAlias(item.FullPath);
+        return !string.IsNullOrEmpty(alias);
+    }
+
+    private async Task OpenAliasDialog(FileSystemItem item)
     {
         _aliasTarget = item;
         _aliasText = Alias.GetAlias(item.FullPath) ?? "";
@@ -110,6 +129,98 @@ public partial class Home
         await Task.Delay(100);
         await JS.InvokeVoidAsync("eval",
             "var el=document.querySelector('.alias-input');if(el)el.focus()");
+    }
+
+    // ────────── 上下文菜单：右键（桌面）/ 长按（桌面左键 & 移动端触摸） ──────────
+
+    /// <summary>桌面端鼠标右键：在光标处弹出菜单。</summary>
+    private void OnItemContextMenu(MouseEventArgs e, FileSystemItem item)
+    {
+        CancelLongPress();
+        ShowContextMenuAt((int)e.ClientX, (int)e.ClientY, item);
+    }
+
+    /// <summary>
+    /// 指针按下：启动长按计时。仅主键（鼠标左键 button==0）或触摸/笔启动；
+    /// 鼠标右键/中键交给 contextmenu 处理，不在此触发。
+    /// </summary>
+    private void OnItemPointerDown(Microsoft.AspNetCore.Components.Web.PointerEventArgs e, FileSystemItem item)
+    {
+        if (e.Button > 0) return; // 排除中键(1)/右键(2)；触摸/左键为 0（部分实现为 -1）均放行
+        _longPressFired = false;
+        _lpStartX = e.ClientX;
+        _lpStartY = e.ClientY;
+        _longPressCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _longPressCts = cts;
+        var token = cts.Token;
+        var x = (int)e.ClientX;
+        var y = (int)e.ClientY;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(LongPressDelayMs, token); }
+            catch { return; }
+            if (token.IsCancellationRequested) return;
+            await InvokeAsync(() =>
+            {
+                if (token.IsCancellationRequested) return;
+                _longPressFired = true;
+                ShowContextMenuAt(x, y, item);
+            });
+        });
+    }
+
+    /// <summary>指针移动超过阈值（滚动/拖拽）：取消长按。</summary>
+    private void OnItemPointerMove(Microsoft.AspNetCore.Components.Web.PointerEventArgs e)
+    {
+        if (_longPressCts == null) return;
+        var dx = e.ClientX - _lpStartX;
+        var dy = e.ClientY - _lpStartY;
+        if (dx * dx + dy * dy > LongPressMoveThreshold * LongPressMoveThreshold)
+            CancelLongPress();
+    }
+
+    /// <summary>指针抬起/取消/离开：结束长按计时。</summary>
+    private void OnItemPointerUp() => CancelLongPress();
+
+    private void CancelLongPress()
+    {
+        _longPressCts?.Cancel();
+        _longPressCts = null;
+    }
+
+    private void ShowContextMenuAt(int x, int y, FileSystemItem item)
+    {
+        _contextMenuTarget = item;
+        _ctxX = x;
+        _ctxY = y;
+        _showContextMenu = true;
+        _ctxJustShown = true; // 触发 OnAfterRender 中的边界修正
+        StateHasChanged();
+    }
+
+    private void CloseContextMenu()
+    {
+        _showContextMenu = false;
+        _contextMenuTarget = null;
+        StateHasChanged();
+    }
+
+    /// <summary>菜单项「打开」：等价于单击该项。</summary>
+    private async Task OnCtxOpen()
+    {
+        var item = _contextMenuTarget;
+        _longPressFired = false; // 允许后续 OnItemClick 正常执行
+        CloseContextMenu();
+        if (item != null) await OnItemClick(item);
+    }
+
+    /// <summary>菜单项「设置别名」：打开别名对话框。</summary>
+    private async Task OnCtxSetAlias()
+    {
+        var item = _contextMenuTarget;
+        CloseContextMenu();
+        if (item != null) await OpenAliasDialog(item);
     }
 
     private async Task SaveParentState()
@@ -257,6 +368,19 @@ public partial class Home
 
             await JS.InvokeVoidAsync("eval",
                 "document.getElementById('app').style.opacity = '1'");
+        }
+
+        // 上下文菜单刚显示：按视口边界修正位置，避免溢出屏幕
+        if (_ctxJustShown)
+        {
+            _ctxJustShown = false;
+            await JS.InvokeVoidAsync("eval",
+                "(function(){var m=document.querySelector('.ctx-menu');if(!m)return;" +
+                "var r=m.getBoundingClientRect();var vw=window.innerWidth,vh=window.innerHeight;" +
+                "var l=r.left,t=r.top;" +
+                "if(r.right>vw-6)l=Math.max(6,vw-r.width-6);" +
+                "if(r.bottom>vh-6)t=Math.max(6,vh-r.height-6);" +
+                "m.style.left=l+'px';m.style.top=t+'px';})();");
         }
     }
 
@@ -494,6 +618,9 @@ public partial class Home
 
     private async Task OnItemClick(FileSystemItem item)
     {
+        // 长按已弹出菜单：吞掉随后抬起产生的 click，避免误打开
+        if (_longPressFired) { _longPressFired = false; return; }
+
         if (item.IsFolder)
         {
             await SaveParentState();

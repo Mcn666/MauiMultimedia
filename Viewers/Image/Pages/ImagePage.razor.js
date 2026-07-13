@@ -309,11 +309,19 @@ export function initResizeHandler(dotNetRef) {
   // the initial filmstrip positioning after measuring the viewport.
   try {
     var first = true;
+    var timer = null;
     _resizeObserver = new ResizeObserver(function () {
       if (first) { first = false; return; }
-      if (_resizeDotNetRef) {
-        _resizeDotNetRef.invokeMethodAsync('OnWindowResize');
-      }
+      // Debounce: ResizeObserver fires once per animation frame while the user
+      // is dragging the window edge, which would otherwise flood OnWindowResize
+      // and spawn overlapping filmstrip re-window + scroll passes (occasional
+      // thumbnail churn on shrink). Fire only after the size has settled.
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        if (_resizeDotNetRef) {
+          _resizeDotNetRef.invokeMethodAsync('OnWindowResize');
+        }
+      }, 120);
     });
     _resizeObserver.observe(vp);
   } catch (_) { /* ResizeObserver not available — skip */ }
@@ -868,45 +876,66 @@ export function multiSlideTransition(uris, zooms, targetUri, direction, targetSc
 
 // ── Filmstrip ──
 
-// Scroll the (virtualized) filmstrip so `index` is centered. `el` is the
-// track ElementReference passed from Blazor. The track uses leading/trailing
-// spacers + a small real-item window, so strip.children[index] is NOT the
-// i-th thumbnail — compute the target scrollLeft from the known stride.
-// Keep these in sync with ImageFilmstrip (ItemWidth = 52, ItemGap = 4).
+// Scroll the (virtualized) filmstrip so `index` is ALWAYS centered in the
+// viewport — including the very FIRST and very LAST thumbnail, which on a plain
+// scroll would be pinned to the edges because there is no content beyond them.
+//
+// How: the C# side (ImageFilmstrip.CenterWindow) adds an equal "centering pad"
+// to the lead/trailing SPACERS — i.e. empty scroll space with no thumbnails — so
+// the first item can scroll until its center hits the viewport center (scrollLeft
+// 0) and the last item until its center hits the center (scrollLeft max). Every
+// other item then centers via the same scroll math. Whether 2 or 2000 thumbnails,
+// the target ends up dead-center.
+//
+// IMPORTANT: this function must NEVER set paddingLeft/Right from JS. Setting it
+// here (reading clientWidth, writing huge symmetric padding on a scroll container)
+// created a scrollbar show/hide + layout feedback loop on desktop window resize,
+// which made the virtualized window recompute endlessly and replace thumbnails.
+// So we only MEASURE and SCROLL. The centering slack lives in the C# spacers.
+//
+// Centering uses the element's ACTUAL rendered geometry (data-index +
+// getBoundingClientRect + current scrollLeft), so it is correct on desktop and
+// mobile regardless of the virtualized lead-spacer width or item size.
 export function scrollFilmstripToElement(el, index, smooth = false) {
   const strip = el;
   if (!strip) return;
-  const stride = 56;   // ItemWidth + ItemGap
-  const itemW = 52;    // ItemWidth
+
+  const target = strip.querySelector('.filmstrip-item[data-index="' + index + '"]');
+  if (!target) {
+    console.log('[Filmstrip] index=' + index + ' -> NO DOM element (window not covering it?)');
+    return;
+  }
+
+  // Centering slack is provided by the C# lead/trailing spacers, NOT by JS
+  // padding — so we only measure and scroll here.
   const max = strip.scrollWidth - strip.clientWidth;
+  const trackRect = strip.getBoundingClientRect();
+  const r = target.getBoundingClientRect();
+  const itemW = r.width;
+  // Item's left edge within the FULL scrollable content (spacers + items), by
+  // adding the current scroll offset back to the on-screen position.
+  const itemLeftInContent = (r.left - trackRect.left) + strip.scrollLeft;
+  let dest = itemLeftInContent - strip.clientWidth / 2 + itemW / 2;
+  dest = Math.max(0, Math.min(dest, max));
 
-    // Few items: the whole strip fits inside the track (max <= 0), so every
-    // thumbnail is already visible and there is nothing to scroll. Leave the
-    // strip in its natural layout — the active thumbnail is simply highlighted
-    // in place. The previous behavior recentered per-index here (paddingLeft =
-    // clientWidth/2 - itemW/2 - index*stride), which made the ENTIRE strip slide
-    // left/right on every prev/next press and read as "jumping". Don't do that.
-    // Clear any inline padding so we fall back to the CSS `padding: 0 12px`.
-    if (max <= 0) {
-        strip.style.paddingLeft = '';
-        strip.style.paddingRight = '';
-        return;
-    }
+  console.log('[Filmstrip] index=' + index +
+    ' clientWidth=' + strip.clientWidth +
+    ' itemW=' + Math.round(itemW) +
+    ' scrollWidth=' + strip.scrollWidth +
+    ' max=' + Math.round(max) +
+    ' itemLeftInContent=' + Math.round(itemLeftInContent) +
+    ' dest=' + Math.round(dest) +
+    ' was=' + Math.round(strip.scrollLeft));
 
-  // Many items: clear any leading pad we may have added for the few-items case
-  // and scroll the active thumbnail to the center of the track.
-  strip.style.paddingLeft = '';
-  strip.style.paddingRight = '';
-  const target = Math.max(0, Math.min(index * stride - strip.clientWidth / 2 + itemW / 2, max));
   if (smooth) {
-    strip.scrollTo({ left: target, behavior: 'smooth' });
+    strip.scrollTo({ left: dest, behavior: 'smooth' });
   } else {
     // Assigning scrollLeft is instant in EVERY WebView, unlike
     // scrollTo({behavior:'instant'}) which some embedded WebViews silently
     // ignore and fall back to a smooth (animated) scroll — that animation is
     // exactly what used to spam viewport thumbnail loads. So we set the
     // property directly to guarantee a jump with no intermediate scroll events.
-    strip.scrollLeft = target;
+    strip.scrollLeft = dest;
   }
 }
 
@@ -969,13 +998,6 @@ export function getViewportMetrics() {
       resolve([v.offsetWidth, v.offsetHeight, window.devicePixelRatio || 1, r.left, r.top]);
     });
   });
-}
-
-export function revokeBlobUrls(urls) {
-  if (!urls) return;
-  for (const u of urls) {
-    try { URL.revokeObjectURL(u); } catch (e) { /* noop */ }
-  }
 }
 
 export function getStitchMetrics() {
