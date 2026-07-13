@@ -992,7 +992,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                         return;
                     }
                     var bytes = File.ReadAllBytes(filePath);
-                    var result = ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath), cacheDir: FileSystem.GetCacheDirectory());
+                    var result = ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath), cacheDir: FileSystem.GetScratchDirectory("DdsDecode"));
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     ApplyDecoded(result.DataUri, result.Width, result.Height);
                 }
@@ -1055,7 +1055,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 {
                     var bytes = await File.ReadAllBytesAsync(filePath);
                     var result = await Task.Run(() =>
-                        ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath), cacheDir: FileSystem.GetCacheDirectory()));
+                        ImageProcessingService.DecodeImage(bytes, Path.GetFileName(filePath), cacheDir: FileSystem.GetScratchDirectory("DdsDecode")));
                     DecodeCache.Set(filePath, result.DataUri, result.Width, result.Height);
                     fullUrl = result.DataUri;
                 }
@@ -1199,7 +1199,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
                 var bytes = await File.ReadAllBytesAsync(p);
                 var result = await Task.Run(() =>
-                    ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p), cacheDir: FileSystem.GetCacheDirectory()));
+                    ImageProcessingService.DecodeImage(bytes, Path.GetFileName(p), cacheDir: FileSystem.GetScratchDirectory("DdsDecode")));
                 DecodeCache.Set(p, result.DataUri, result.Width, result.Height);
             }
             catch { }
@@ -1615,7 +1615,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
             var bytes = await File.ReadAllBytesAsync(path);
             var result = await Task.Run(() =>
-                ImageProcessingService.DecodeImage(bytes, Path.GetFileName(path), cacheDir: FileSystem.GetCacheDirectory()));
+                ImageProcessingService.DecodeImage(bytes, Path.GetFileName(path), cacheDir: FileSystem.GetScratchDirectory("DdsDecode")));
             DecodeCache.Set(path, result.DataUri, result.Width, result.Height);
             return result.DataUri;
         }

@@ -25,8 +25,13 @@ public static class FbxConversionService
     {
         if (!File.Exists(filePath)) return null;
 
+        // 必须传入应用私有目录内的缓存目录（由 IFileSystemService.GetScratchDirectory 提供），
+        // 禁止退回系统 Temp，否则转换产物会逃逸到沙盒之外。
+        if (string.IsNullOrEmpty(cacheDir))
+            throw new ArgumentNullException(nameof(cacheDir),
+                "转换 GLB 需要提供 cacheDir（应用私有目录内的临时目录），请勿传空或依赖系统 Temp。");
         var cacheKey = Path.GetFullPath(filePath).Replace(':', '_').Replace('\\', '_').Replace('/', '_');
-        var workDir = Path.Combine(cacheDir ?? Path.GetTempPath(), "MauiMM_ModelConvert");
+        var workDir = Path.Combine(cacheDir, "MauiMM_ModelConvert");
         Directory.CreateDirectory(workDir);
         var glbPath = Path.Combine(workDir, cacheKey + ".glb");
 

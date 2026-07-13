@@ -274,8 +274,11 @@ public static class ImageProcessingService
         // DDS: SKCodec doesn't support it, use manual decoder
         if (string.Equals(ext, ".dds", StringComparison.OrdinalIgnoreCase))
         {
-            // Write bytes to a temp file for DecodeDds（落在应用私有缓存目录内，而非系统 Temp）
-            var tmpDir = Path.Combine(cacheDir ?? Path.GetTempPath(), "MauiMM_DdsDecode");
+            // Write bytes to a temp file for DecodeDds（必须位于应用私有缓存目录内）。
+            // cacheDir 由调用方通过 IFileSystemService.GetScratchDirectory 提供，禁止为空/系统 Temp。
+            if (string.IsNullOrEmpty(cacheDir))
+                throw new InvalidOperationException("解码 DDS 需要 cacheDir（应用私有目录内的临时目录），请勿传空。");
+            var tmpDir = Path.Combine(cacheDir, "MauiMM_DdsDecode");
             Directory.CreateDirectory(tmpDir);
             var tmpPath = Path.Combine(tmpDir, Guid.NewGuid() + ".dds");
             try

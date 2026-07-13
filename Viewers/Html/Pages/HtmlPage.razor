@@ -153,7 +153,9 @@
         var html = result.HtmlBody;
         if (result.Resources.Count == 0) return html;
 
-        var tempDir = Path.Combine(FileSystem.GetCacheDirectory(), "MauiMM_Html", Guid.NewGuid().ToString("N"));
+        // 基目录统一走 GetScratchDirectory（cache/MauiMM_Html，保证在沙盒内且被启动清扫覆盖）；
+        // 每个 MHTML 再建独立 Guid 子目录，避免资源互相覆盖。
+        var tempDir = Path.Combine(FileSystem.GetScratchDirectory("Html"), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
         for (int i = 0; i < result.Resources.Count; i++)

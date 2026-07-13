@@ -1,5 +1,7 @@
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.IO;
 using MauiMultimedia.Core.Models;
+using System.Threading;
 
 namespace MauiMultimedia.Shell.Services;
 
@@ -163,7 +165,11 @@ public class FileSystemService : IFileSystemService
         }
         catch
         {
-            _appDataDir = Path.Combine(Path.GetTempPath(), "MauiMultimedia");
+            // MAUI FileSystem 不可用时的兜底：退回 LocalApplicationData 下的固定子目录。
+            // 该位置仍位于用户/应用空间内（非系统 Temp），避免输出逃逸到应用私有目录之外。
+            _appDataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MauiMultimedia", "files");
         }
         return _appDataDir;
     }
@@ -208,6 +214,67 @@ public class FileSystemService : IFileSystemService
             try { Directory.CreateDirectory(dir); } catch { }
             return dir;
         }
+    }
+
+    public string GetScratchDirectory(string scope)
+    {
+        // 始终落在 cache 目录下（cache 本身位于应用私有沙盒内），并带 MauiMM_ 前缀
+        // 以确保被 CleanupViewerCache 启动清扫覆盖。PathSandbox 做最后一道越界校验。
+        var safeScope = PathSandbox.SanitizeScope(scope);
+        var dir = Path.Combine(GetCacheDirectory(), "MauiMM_" + safeScope);
+        dir = PathSandbox.EnsureWithin(GetCacheDirectory(), dir);
+        try { Directory.CreateDirectory(dir); } catch { }
+        return dir;
+    }
+
+    private static int _cacheCleaned;
+
+    /// <summary>
+    /// 进程启动时一次性清扫查看器遗留的临时/缓存目录。
+    /// 这些目录（MauiMM_DdsDecode 图片DDS解码 / MauiMM_Html mhtml抽取 / MauiMM_ModelConvert FBX转换 / MauiMM_Archive 压缩包解压）
+    /// 原本仅在正常 DisposeAsync / 页面释放时清理；程序崩溃、被强杀或 OOM 终止时这些路径不执行，
+    /// 残留会越积越多。此处在任何 viewer 创建目录之前，删除缓存目录下所有 MauiMM_ 前缀的残留项。
+    /// 幂等：整个进程生命周期内仅真正执行一次。
+    /// </summary>
+    public static void CleanupViewerCache()
+    {
+        // 仅执行一次（进程内）。Interlocked 保证多线程安全。
+        if (Interlocked.Exchange(ref _cacheCleaned, 1) == 1) return;
+
+        string cacheDir;
+        try { cacheDir = FileSystem.CacheDirectory; }
+        catch { return; }
+        if (string.IsNullOrEmpty(cacheDir) || !Directory.Exists(cacheDir)) return;
+
+        try
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(cacheDir))
+            {
+                var name = Path.GetFileName(entry);
+                if (string.IsNullOrEmpty(name)) continue;
+                if (!name.StartsWith("MauiMM_", StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    if ((File.GetAttributes(entry) & FileAttributes.Directory) != 0)
+                        Directory.Delete(entry, recursive: true);
+                    else
+                        File.Delete(entry);
+                }
+                catch { /* 单条清理失败不影响其余项与启动 */ }
+            }
+        }
+        catch { /* 枚举失败忽略 */ }
+
+        // 旧版本兼容清理：Archive 查看器曾把解压产物写在 AppData/MauiArchive（持久 data 目录），
+        // 该目录不被系统回收、也不在上一段 cache 清扫覆盖范围内。一次性删除，清掉升级前的历史残留
+        // （新版 Archive 已改用 cache/MauiMM_Archive，会被上一段自动覆盖）。
+        try
+        {
+            var legacyArchiveDir = Path.Combine(FileSystem.AppDataDirectory, "MauiArchive");
+            if (Directory.Exists(legacyArchiveDir))
+                Directory.Delete(legacyArchiveDir, recursive: true);
+        }
+        catch { /* 忽略：无残留或权限问题都不影响启动 */ }
     }
 
     public async Task<bool> CheckStoragePermissionAsync()

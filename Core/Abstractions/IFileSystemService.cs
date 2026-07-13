@@ -70,6 +70,18 @@ public interface IFileSystemService
     string GetCacheDirectory();
 
     /// <summary>
+    /// 获取"查看器可写输出目录"的唯一 sanctioned 出口。
+    /// 始终返回 <c>cache/MauiMM_&lt;scope&gt;</c> 形态的路径，天然位于应用私有沙盒内，
+    /// 且带 <c>MauiMM_</c> 前缀，会被进程启动时的 <see cref="CleanupViewerCache"/> 自动清扫。
+    /// 各查看器（Image DDS 解码、Model3D 转换、Html 抽取、Archive 解压等）都应通过此 API
+    /// 取得临时/缓存目录，禁止自行调用 <c>Path.GetTempPath()</c> 或任意绝对路径，
+    /// 以防输出逃逸到应用私有目录之外。
+    /// </summary>
+    /// <param name="scope">查看器/用途标识（如 "DdsDecode"、"ModelConvert"、"Html"、"Archive"），会被清洗掉路径分隔符。</param>
+    /// <returns>已创建、保证位于沙盒内的目录绝对路径。</returns>
+    string GetScratchDirectory(string scope);
+
+    /// <summary>
     /// 检查存储权限是否已授予（Android 需要访问外部存储）
     /// </summary>
     Task<bool> CheckStoragePermissionAsync();

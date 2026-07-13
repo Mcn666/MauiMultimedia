@@ -130,7 +130,7 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
         if (!ext.Equals(".glb") && !ext.Equals(".gltf") && !ext.Equals(".vrm") &&
             !ext.Equals(".stl") && !ext.Equals(".pmx") && !ext.Equals(".fbx") && !ext.Equals(".obj"))
         {
-            var converted = FbxConversionService.ConvertToGlb(filePath, FileSystem.GetCacheDirectory());
+            var converted = FbxConversionService.ConvertToGlb(filePath, FileSystem.GetScratchDirectory("ModelConvert"));
             if (converted != null)
             {
                 modelPath = converted;

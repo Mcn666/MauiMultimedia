@@ -4,6 +4,7 @@ using SharpCompress.Archives;
 using SharpCompress.Common;
 using SharpCompress.Readers;
 using MauiMultimedia.Core.Abstractions;
+using MauiMultimedia.Core.IO;
 using System.Linq;
 using System.Text;
 using System.Globalization;
@@ -254,9 +255,8 @@ public partial class ArchivePage : ComponentBase, IDisposable
             try
             {
                 loaded.Add(n.Full);
-                var tmp = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
-                    Path.GetFileNameWithoutExtension(fileName));
-                var outPath = Path.Combine(tmp, n.Full);
+                var tmp = FileSystem.GetScratchDirectory("Archive");
+                var outPath = PathSandbox.EnsureWithin(tmp, Path.Combine(tmp, n.Full));
                 var dir = Path.GetDirectoryName(outPath);
                 if (dir != null) Directory.CreateDirectory(dir);
 
@@ -306,12 +306,11 @@ public partial class ArchivePage : ComponentBase, IDisposable
                 return;
             }
 
-            var tmp = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
-                Path.GetFileNameWithoutExtension(fileName));
+            var tmp = FileSystem.GetScratchDirectory("Archive");
 
             // 仅提取当前点击的文件，立即导航（直接从档案文件读取，不再把整包字节驻留内存）
             var srcPath = n.Source ?? filePath;
-            var outPath = Path.Combine(tmp, n.Full);
+            var outPath = PathSandbox.EnsureWithin(tmp, Path.Combine(tmp, n.Full));
             var dir = Path.GetDirectoryName(outPath);
             if (dir != null) Directory.CreateDirectory(dir);
             using (var fs = new FileStream(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -462,8 +461,7 @@ public partial class ArchivePage : ComponentBase, IDisposable
         try
         {
             // 仅删除当前档案对应的子目录，避免误删其他（嵌套/多）归档已提取的文件。
-            var archiveSubDir = Path.Combine(FileSystem.GetAppDataDirectory(), "MauiArchive",
-                Path.GetFileNameWithoutExtension(fileName));
+            var archiveSubDir = FileSystem.GetScratchDirectory("Archive");
             if (Directory.Exists(archiveSubDir))
                 Directory.Delete(archiveSubDir, true);
         }
