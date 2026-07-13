@@ -42,32 +42,10 @@ public class ViewerPageFactory
 #if ANDROID
     private static void SetupAndroid(BlazorWebView bwv, ContentPage page, bool isDark)
     {
-        var resources = Android.App.Application.Context.Resources;
-        if (resources != null)
-        {
-            int top = 0, bottom = 0;
-
-            // 状态栏高度（顶部）
-            int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
-            if (rid > 0)
-            {
-                int hPx = resources.GetDimensionPixelSize(rid);
-                float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
-                top = (int)(hPx / density);
-            }
-
-            // 导航栏高度（底部）
-            int navRid = resources.GetIdentifier("navigation_bar_height", "dimen", "android");
-            if (navRid > 0)
-            {
-                int hPx = resources.GetDimensionPixelSize(navRid);
-                float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
-                bottom = (int)(hPx / density);
-            }
-
-            if (top > 0 || bottom > 0)
-                page.Padding = new Thickness(0, top, 0, bottom);
-        }
+        // 状态栏 + 导航栏 inset（dp）。非三键导航忽略导航栏高度。
+        var (top, bottom) = NavigationInsets.GetSystemBarInsetsDp();
+        if (top > 0 || bottom > 0)
+            page.Padding = new Thickness(0, top, 0, bottom);
 
         if (bwv.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
         {

@@ -91,30 +91,9 @@ public partial class MainPage : ContentPage
 #if ANDROID
         if (Handler?.MauiContext?.Services != null)
         {
-            var resources = Android.App.Application.Context.Resources;
-            if (resources != null)
-            {
-                int top = 0, bottom = 0;
-
-                int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
-                if (rid > 0)
-                {
-                    int hPx = resources.GetDimensionPixelSize(rid);
-                    float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
-                    top = (int)(hPx / density);
-                }
-
-                int navRid = resources.GetIdentifier("navigation_bar_height", "dimen", "android");
-                if (navRid > 0)
-                {
-                    int hPx = resources.GetDimensionPixelSize(navRid);
-                    float density = (float)DeviceDisplay.Current.MainDisplayInfo.Density;
-                    bottom = (int)(hPx / density);
-                }
-
-                if (top > 0 || bottom > 0)
-                    Padding = new Thickness(0, top, 0, bottom);
-            }
+            var (top, bottom) = NavigationInsets.GetSystemBarInsetsDp();
+            if (top > 0 || bottom > 0)
+                Padding = new Thickness(0, top, 0, bottom);
         }
 #endif
     }
