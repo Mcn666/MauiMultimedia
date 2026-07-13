@@ -76,14 +76,11 @@
                                Hidden="@(!showToolbar)"
                                ZoomOutDisabled="@(_stitchZoom <= 0.1f)"
                                ZoomInDisabled="@(_stitchZoom >= 5.0f)"
-                               Gap="@_stitchGap"
                                OnExit="ToggleStitch"
                                OnZoomOut="ZoomOut"
                                OnZoomIn="ZoomIn"
                                OnToggleFit="ToggleFitActual"
-                               OnToggleDetails="ToggleDetails"
-                               OnGapUp="StitchGapUp"
-                               OnGapDown="StitchGapDown" />
+                               OnToggleDetails="ToggleDetails" />
             </div>
         }
         else if (stitchError != null)

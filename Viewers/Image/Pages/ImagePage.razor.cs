@@ -1731,22 +1731,6 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     }
 
 
-    private async Task StitchGapUp()
-    {
-        _stitchGap = Math.Min(_stitchGap + 2, 20);
-        RecomputeStitchLayout();
-        StateHasChanged();
-        await AnchorStitchScroll();
-    }
-
-    private async Task StitchGapDown()
-    {
-        _stitchGap = Math.Max(_stitchGap - 2, 0);
-        RecomputeStitchLayout();
-        StateHasChanged();
-        await AnchorStitchScroll();
-    }
-
     private async Task ToggleStitch()
     {
         stitchMode = !stitchMode;

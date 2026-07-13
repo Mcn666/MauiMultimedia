@@ -727,6 +727,24 @@
 }
 ::deep .stitch-tbar-right > * + * { margin-inline-start: 4px; }
 
+/* 工具栏「⋯」溢出菜单：桌面端次要操作内联显示，⋯ 按钮隐藏 */
+::deep .tbar-more-wrap { position: relative; display: inline-flex; align-items: center; }
+::deep .tbar-more {
+    display: inline-flex;
+    align-items: center;
+}
+::deep .tbar-more > * + * { margin-inline-start: 4px; }
+::deep .tbar-more-btn { display: none; }
+::deep .tbar-more-backdrop { display: none; }
+::deep .tbar-ico { flex-shrink: 0; line-height: 1; }
+/* 溢出菜单项文本：桌面内联与移动弹层都显示文字说明。
+   不复用 .tbar-label —— 后者在移动端媒体查询里被 display:none 隐藏。 */
+::deep .tbar-more-label {
+    margin-inline-start: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
 /* ── Responsive ── */
 @media (max-width: 600px) {
     ::deep .detail-panel { width: 260px; }
@@ -745,6 +763,38 @@
     }
     /* On mobile the panel (260px) overlays the full-width strip too — no inset. */
     ::deep .toolbar-file-name { font-size: 12px; }
+
+    /* 移动端：文字按钮改图标、次要操作收进 ⋯ 弹出菜单 */
+    ::deep .tbar-label { display: none; }
+    ::deep .tbar-more-btn { display: inline-flex; }
+    ::deep .tbar-more {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        padding: 6px;
+        background: rgba(20, 20, 22, 0.96);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        z-index: 20;
+    }
+    ::deep .tbar-more.open { display: flex; }
+    ::deep .tbar-more > * + * { margin-inline-start: 0; }
+    ::deep .tbar-more .toolbar-sep { display: none; }
+    ::deep .tbar-more .tbar-btn { width: 100%; justify-content: flex-start; }
+    ::deep .tbar-more-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        background: transparent;
+    }
     .viewer-page.chrome-toolbar ::deep .image-viewport { top: 40px; }
     .viewer-page.chrome-filmstrip ::deep .image-viewport { bottom: 64px; }
 }

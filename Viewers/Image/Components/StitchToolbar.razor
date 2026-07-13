@@ -1,17 +1,21 @@
 <div class="stitch-toolbar @(Hidden ? "hidden" : "")">
     <div class="stitch-tbar-left">
-        <button class="tbar-btn" @onclick="OnExit" title="离开拼接 (Esc)">← 返回</button>
+        <button class="tbar-btn" @onclick="OnExit" title="离开拼接 (Esc)">← <span class="tbar-label">返回</span></button>
         <span class="toolbar-file-name">@PositionText</span>
     </div>
     <div class="stitch-tbar-right">
         <span class="tbar-zoom-display">@ZoomDisplay</span>
         <button class="tbar-btn tbar-btn-icon" disabled="@ZoomOutDisabled" @onclick="OnZoomOut">-</button>
         <button class="tbar-btn tbar-btn-icon" disabled="@ZoomInDisabled" @onclick="OnZoomIn">+</button>
-        <button class="tbar-btn tbar-btn-icon" @onclick="OnGapDown" title="减小间距">◀▶</button>
-        <span style="font-size:11px;color:rgba(255,255,255,0.5);min-width:20px;text-align:center;">@Gap</span>
-        <button class="tbar-btn tbar-btn-icon" @onclick="OnGapUp" title="增大间距">▶◀</button>
-        <button class="tbar-btn tbar-btn-toggle @(ZoomFitMode ? "tbar-btn-active" : "")"
-                @onclick="OnToggleFit" title="@FitToggleTitle">@FitToggleText</button>
+
+        <div class="tbar-more-wrap">
+            <button class="tbar-btn tbar-more-btn" @onclick="ToggleMore" title="更多操作" type="button">⋯</button>
+
+            <div class="tbar-more @(_moreOpen ? "open" : "")">
+                <button class="tbar-btn tbar-btn-toggle @(ZoomFitMode ? "tbar-btn-active" : "")"
+                        @onclick="@(() => RunAndClose(OnToggleFit))" title="@FitToggleTitle">@FitToggleText</button>
+            </div>
+        </div>
 
         <span class="toolbar-sep"></span>
         <button class="tbar-btn tbar-btn-toggle tbar-btn-active" @onclick="OnExit" title="退出拼接模式">📐</button>
@@ -19,6 +23,10 @@
         <span class="toolbar-sep"></span>
         <button class="tbar-btn tbar-btn-toggle tbar-btn-circle" @onclick="OnToggleDetails" title="详情">ℹ</button>
     </div>
+    @if (_moreOpen)
+    {
+        <div class="tbar-more-backdrop" @onclick="CloseMore"></div>
+    }
 </div>
 
 @code {
@@ -30,12 +38,14 @@
     [Parameter] public bool Hidden { get; set; }
     [Parameter] public bool ZoomOutDisabled { get; set; }
     [Parameter] public bool ZoomInDisabled { get; set; }
-    [Parameter] public int Gap { get; set; } = 4;
     [Parameter] public EventCallback OnExit { get; set; }
     [Parameter] public EventCallback OnZoomOut { get; set; }
     [Parameter] public EventCallback OnZoomIn { get; set; }
     [Parameter] public EventCallback OnToggleFit { get; set; }
     [Parameter] public EventCallback OnToggleDetails { get; set; }
-    [Parameter] public EventCallback OnGapUp { get; set; }
-    [Parameter] public EventCallback OnGapDown { get; set; }
+
+    private bool _moreOpen;
+    private void ToggleMore() => _moreOpen = !_moreOpen;
+    private void CloseMore() => _moreOpen = false;
+    private void RunAndClose(EventCallback cb) { _ = cb.InvokeAsync(); _moreOpen = false; }
 }

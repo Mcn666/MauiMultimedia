@@ -1,7 +1,9 @@
 .fnd-container {
     position: relative;
     display: flex;
-    flex: 1 1 auto;
+    /* basis 0 让下拉始终以“吃掉工具栏剩余空间”为目标，而非依赖内容宽度，
+       避免在某些父级 flex 上下文里退化成内容宽度。 */
+    flex: 1 1 0%;
     min-width: 0;
 }
 
@@ -54,6 +56,10 @@
 }
 
 .fnd-name {
+    /* flex 增长：优先占满触发按钮内的剩余宽度显示完整文件名；
+       仅在工具栏真的被其他按钮挤满时（flex-shrink）才回退为 ellipsis 收起，
+       而不会像以前那样被媒体查询直接 display:none 砍掉。 */
+    flex: 1 1 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -77,6 +83,7 @@
     top: calc(100% + 4px);
     left: 0;
     min-width: 100%;
+    width: 500px;
     max-width: 500px;
     background: var(--bg-secondary, #2c2c2a);
     border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.12));
@@ -107,7 +114,7 @@
 
 .fnd-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     padding: 7px 12px;
     cursor: pointer;
     font-size: 12px;
@@ -146,8 +153,19 @@
 }
 
 .fnd-item-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+
+/* 移动端：下拉列表用视口感知的固定宽度，避免被（此时很窄的）触发按钮
+   shrink-to-fit。留出 ~64px 给返回按钮，使其右边缘留在屏内（无横向位移）。
+   用 calc() —— 老 Android 9 WebView 也支持（不像 min()）。
+   注：触发按钮本身不再隐藏文件名 / 不再收缩为内容宽——文件名靠 flex 增长
+   自适应占满剩余空间，仅在被其他按钮真正挤满时才 ellipsis，逻辑与桌面一致。 */
+@media (max-width: 600px) {
+    .fnd-dropdown { width: calc(100vw - 64px); }
 }

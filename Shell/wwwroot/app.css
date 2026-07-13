@@ -3,6 +3,17 @@
 /* 主题切换时平滑过渡 */
 * { transition: background-color .25s ease, color .25s ease, border-color .25s ease; }
 
+/* Android 9 系统 WebView (Chromium < 84) 兼容：
+   原生 <button> 带 appearance:button，会干扰 flex 的 align/justify-content 居中，
+   导致按钮内文本偏上/不对齐（仅 <button> 受影响，<div> 类组件正常）。
+   重置 appearance 后按钮即按普通 flex 容器渲染，与现代浏览器行为一致。 */
+button {
+    -webkit-appearance: none;
+    appearance: none;
+    line-height: normal;
+    text-align: center;
+}
+
 /* Light theme (default + explicit) */
 :root,
 [data-theme="light"] {
@@ -1265,23 +1276,12 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     border-color: var(--text-link);
 }
 
-/* ── 移动端文件名换行 ── */
+/* ── 移动端：列表视图文件名换行（网格项已在所有 viewport 统一多行显示） ── */
 @media (max-width: 600px) {
     .item-name {
         white-space: normal !important;
         word-break: break-all !important;
         line-height: 1.3;
-    }
-    .grid-name {
-        white-space: normal !important;
-        word-break: break-all !important;
-        line-height: 1.3;
-    }
-    .grid-thumb-label {
-        white-space: normal !important;
-        word-break: break-all !important;
-        line-height: 1.3;
-        padding: 4px 6px;
     }
 }
 
@@ -1345,13 +1345,13 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     text-align: center;
     min-width: 0;
     aspect-ratio: 1;
-    height: 110px; /* fallback: Chrome < 88 忽略 aspect-ratio 时保底 */
+    height: 128px; /* 容纳 2 行文件名 + 图标 + 项目数，保持方块瓦片 */
     min-height: 100px;
     position: relative;
     overflow: hidden;
     box-sizing: border-box;
     content-visibility: auto;
-    contain-intrinsic-size: 110px;
+    contain-intrinsic-size: 128px;
 }
 
 .grid-item:hover {
@@ -1423,19 +1423,33 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     color: #fff;
     font-size: 11px;
     line-height: 1.3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    /* 外层仅做底部覆盖层；行数限制放在内层 .grid-thumb-text 上。
+       原因：-webkit-line-clamp 在 position:absolute 元素上不可靠（会溢出多行），
+       而内层是普通 in-flow 元素，line-clamp 稳定生效。 */
     pointer-events: none;
+}
+.grid-thumb-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    max-height: 2.6em; /* 安全网：2 × 行高(1.3) = 2 行；个别 WebView 失效时仍硬裁 2 行 */
+    overflow: hidden;
+    white-space: normal;
+    word-break: break-all;
 }
 
 .grid-name {
     font-size: 12px;
     color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     max-width: 100%;
+    /* 桌面多行显示文件名，最多 2 行，超出省略（与移动端一致） */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    max-height: 2.6em; /* 安全网：个别 WebView 的 line-clamp 失效时仍严格限制 2 行 */
+    overflow: hidden;
+    white-space: normal;
+    line-height: 1.3;
     word-break: break-all;
 }
 

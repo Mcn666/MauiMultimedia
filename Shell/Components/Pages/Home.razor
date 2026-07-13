@@ -218,7 +218,7 @@
                     {
                         <div class="grid-thumb">
                             <img src="@snap" class="grid-thumb-img" alt="" loading="lazy" />
-                            <div class="grid-thumb-label">@GetDisplayName(item)</div>
+                            <div class="grid-thumb-label"><span class="grid-thumb-text">@GetDisplayName(item)</span></div>
                         </div>
                     }
                     else if (CanProvideSnapshot(item))
@@ -227,7 +227,7 @@
                         <div class="grid-thumb" data-thumb-path="@item.FullPath"
                              data-thumb-asm="@snapInv.Assembly" data-thumb-method="@snapInv.Method">
                             <div class="grid-thumb-placeholder-icon">@GetItemIcon(item)</div>
-                            <div class="grid-thumb-label">@GetDisplayName(item)</div>
+                            <div class="grid-thumb-label"><span class="grid-thumb-text">@GetDisplayName(item)</span></div>
                         </div>
                     }
                     else
