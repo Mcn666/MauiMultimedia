@@ -1,7 +1,18 @@
 /* ===== Theme Variables ===== */
 
-/* 主题切换时平滑过渡 */
-* { transition: background-color .25s ease, color .25s ease, border-color .25s ease; }
+/* 主题平滑过渡（参考 MauiThemeSwitchingAnimation 的 CSS Transition 方案）：
+   - allow-transition 常驻在 <html> 上，仅提供「过渡能力」；
+   - 仅当切换主题的瞬间（Home.razor.cs 挂上 theme-switching 类，500ms 后摘除）才真正启用过渡，
+     避免把全站 hover/选中态也拖慢成 0.5s。 */
+html.allow-transition.theme-switching,
+html.allow-transition.theme-switching *,
+html.allow-transition.theme-switching *::before,
+html.allow-transition.theme-switching *::after {
+    transition: background-color 0.5s ease,
+                color 0.5s ease,
+                border-color 0.5s ease,
+                box-shadow 0.5s ease;
+}
 
 /* Android 9 系统 WebView (Chromium < 84) 兼容：
    原生 <button> 带 appearance:button，会干扰 flex 的 align/justify-content 居中，

@@ -504,9 +504,12 @@ public partial class Home
     private async Task ApplyThemeDirect(bool isDark)
     {
         await JS.InvokeVoidAsync("eval",
+            // 切换主题前挂 theme-switching 类，承载颜色渐变过渡（0.5s 后自动摘除以免拖慢 hover）
+            "document.documentElement.classList.add('theme-switching');" +
             $"document.documentElement.setAttribute('data-theme','{(isDark ? "dark" : "light")}');" +
             $"document.documentElement.style.background='{(isDark ? "#1e1e1e" : "#ffffff")}';" +
-            $"localStorage.setItem('filebrowser-theme-resolved','{(isDark ? "dark" : "light")}');");
+            $"localStorage.setItem('filebrowser-theme-resolved','{(isDark ? "dark" : "light")}');" +
+            "setTimeout(function(){document.documentElement.classList.remove('theme-switching');},500);");
 
         // 同步 Android 状态栏
 #if ANDROID

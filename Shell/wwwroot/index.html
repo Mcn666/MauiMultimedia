@@ -29,6 +29,8 @@
             var bg = dark ? '#1e1e1e' : '#ffffff';
             document.documentElement.style.background = bg;
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+            // 永久开启主题过渡能力（实际过渡在切换主题时由 theme-switching 类触发，避免拖慢 hover）
+            document.documentElement.classList.add('allow-transition');
         })();
 
         // 通过 DotNetStreamReference 创建 blob URL
