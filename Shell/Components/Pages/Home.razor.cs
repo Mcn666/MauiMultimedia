@@ -52,6 +52,27 @@ public partial class Home
     private int[]? _scanCategoryCounts;
     private bool _scanCountsLoading;
     private string? _activeFilePath;
+    // 轻提示 toast（点击不支持的文件等场景）。序列号用于防止旧计时器误清新提示。
+    private string? _toastMessage;
+    private int _toastSeq;
+
+    private void ShowToast(string message)
+    {
+        _toastMessage = message;
+        var seq = ++_toastSeq;
+        StateHasChanged();
+        // 不使用 CancellationToken：避免计时到期前被取消时抛 first-chance 异常（见长按计时修复）。
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(2200);
+            if (_toastSeq == seq)
+            {
+                _toastMessage = null;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+    }
+
     // 多级父目录滚动位置栈：进入子文件夹时入栈，返回时出栈恢复
     private readonly Stack<double> _parentScrollStack = new();
     private bool _skipRender;
@@ -153,17 +174,18 @@ public partial class Home
         _longPressCts?.Cancel();
         var cts = new CancellationTokenSource();
         _longPressCts = cts;
-        var token = cts.Token;
         var x = (int)e.ClientX;
         var y = (int)e.ClientY;
+        // 不用 CancellationToken 取消 Task.Delay：指针抬起取消计时会抛出已被 catch、
+        // 但仍会以 first-chance 形式打印到调试输出的 TaskCanceledException。
+        // 改用 _longPressCts 引用比较判断本次计时是否已被新的按下/抬起取代。
         _ = Task.Run(async () =>
         {
-            try { await Task.Delay(LongPressDelayMs, token); }
-            catch { return; }
-            if (token.IsCancellationRequested) return;
+            await Task.Delay(LongPressDelayMs);
+            if (_longPressCts != cts) return;
             await InvokeAsync(() =>
             {
-                if (token.IsCancellationRequested) return;
+                if (_longPressCts != cts) return;
                 _longPressFired = true;
                 ShowContextMenuAt(x, y, item);
             });
@@ -673,6 +695,13 @@ public partial class Home
             pendingItem = item;
             availableViewers = viewers;
             showViewerPicker = true;
+        }
+        else
+        {
+            var ext = Path.GetExtension(item.Name);
+            ShowToast(string.IsNullOrEmpty(ext)
+                ? $"暂不支持预览该文件：{item.Name}"
+                : $"暂不支持预览该文件类型（{ext}）");
         }
     }
 

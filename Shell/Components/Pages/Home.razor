@@ -379,3 +379,9 @@ else if (showViewerPicker && pendingItem != null)
     </div>
 }
 
+@* 轻提示 toast（点击不支持的文件等场景） *@
+@if (!string.IsNullOrEmpty(_toastMessage))
+{
+    <div class="toast">@_toastMessage</div>
+}
+
