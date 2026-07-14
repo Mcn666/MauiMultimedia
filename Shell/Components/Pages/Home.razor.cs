@@ -290,6 +290,14 @@ public partial class Home
     }
 
     /// <summary>
+    /// 网格项是否为「无缩略图」纯图标条目（文件夹 / 无快照的普通文件）。
+    /// 这类条目整个瓦片只有图标 + 文件名，垂直空间充裕，文件名可多显示几行；
+    /// 有缩略图 / 占位符的条目仍限制在 2 行。
+    /// </summary>
+    private bool HasNoThumb(FileSystemItem item)
+        => GetItemSnapshot(item) == null && !CanProvideSnapshot(item);
+
+    /// <summary>
     /// 解析负责该文件快照的查看器程序集与方法名，供网格数据驱动地触发快照，
     /// 使 Shell 无需硬编码扩展名→程序集路由（零侵入）。
     /// </summary>
