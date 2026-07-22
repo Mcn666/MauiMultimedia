@@ -105,6 +105,7 @@ let _gestureSwipeThreshold = 0; // min px for swipe detect
 let _peekPrev = null;   // <img> for the previous image (left side)
 let _peekNext = null;   // <img> for the next image (right side)
 let _peekViewport = null; // container element
+let _pendingFilmstripReveal = false; // filmstrip click: hide real wrap, reveal pre-scaled at slide finish
 
 function _gestureReset() {
   _gestureActive = false;
@@ -633,6 +634,18 @@ export function slideTransition(imageUrl, direction, viewportWidth, targetScale 
       // target image at the correct zoom — no frame of old image visible.
       img.src = imageUrl;
       wrap.style.transform = `translate(0px,0px) scale(${targetScale})`;
+      if (_pendingFilmstripReveal) {
+        // Reveal the real wrap (already pre-scaled to targetScale, hidden during
+        // the slide) and drop the frozen clone + peek in the SAME frame so there
+        // is no post-reset blank gap. This is what makes a far filmstrip click
+        // land without the zoom snap the old single-slide path showed.
+        wrap.style.visibility = '';
+        _pendingFilmstripReveal = false;
+        if (_peekViewport && _peekViewport.parentNode) {
+          _peekViewport.parentNode.removeChild(_peekViewport);
+          _peekViewport = null;
+        }
+      }
       slide.style.transform = '';
       slide.style.transition = '';
       slide.classList.remove('tracking');
@@ -648,231 +661,97 @@ export function cleanupGesturePeek() {
   _gestureCleanupPeek();
 }
 
-// ── Flip-Through Transition (filmstrip click) ──
-
-export function flipThroughTransition(thumbUris, targetUri, direction, targetScale = 1, targetFit = true, outgoingScale = 1) {
-  return new Promise(resolve => {
-    const slide = document.querySelector('.img-slide');
-    const imageUris = thumbUris;   // cards render these 120px thumbnails
-    if (!slide || !imageUris || !imageUris.length) { resolve(); return; }
-
-    const isNext = direction === 'next';
-    const cardMs = 110;  // ms per card
-    const n = imageUris.length;
-
-    // Setup container
-    slide.style.overflow = 'hidden';
-    const displayImg = slide.querySelector('.img-display');
-
-    const wrap = displayImg ? (displayImg.closest('.img-wrap') || slide.querySelector('.img-wrap')) : slide.querySelector('.img-wrap');
-
-    // ── Independent zoom for source vs target (eliminates scale jitter) ──
-    // The two images must NOT share one DOM node's scale. We freeze the CURRENT
-    // image into its OWN layer that keeps whatever scale+pan it already has and
-    // never changes during the flip. The REAL .img-wrap is repointed at the
-    // TARGET image and set to the TARGET scale up-front, but stays hidden behind
-    // the frozen layer — so its scale jump (outgoingScale → targetScale) happens
-    // off-screen and is never seen. Hand-off then just cross-fades the frozen
-    // layer away, revealing the already-correct target layer; no visible node
-    // ever changes scale, so neither image jitters.
-    let frozen = null;
-    if (wrap) {
-      frozen = wrap.cloneNode(true);
-      frozen.classList.add('flip-frozen-current');
-      frozen.style.position = 'absolute';
-      frozen.style.top = '0'; frozen.style.right = '0';
-      frozen.style.bottom = '0'; frozen.style.left = '0';
-      frozen.style.margin = '0';
-      frozen.style.width = '100%'; frozen.style.height = '100%';
-      frozen.style.zIndex = '5';
-      frozen.style.pointerEvents = 'none';
-      // Keep the wrap's current transform (outgoingScale + current pan) as-is.
-      slide.appendChild(frozen);
-
-      wrap.style.transition = 'none';
-      wrap.style.transform = `translate(0px,0px) scale(${targetScale})`;
-      wrap.style.visibility = 'hidden';
-    }
-    if (displayImg && targetUri) {
-      displayImg.src = targetUri;   // target content ready behind the frozen layer
-    }
-
-    const cards = imageUris.map((uri, i) => {
-      const card = document.createElement('div');
-      card.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;backface-visibility:hidden;';
-      card.style.transform = `translateX(${isNext ? '120%' : '-120%'})`;
-      card.style.transition = `transform ${cardMs}ms ease-out, opacity ${cardMs}ms ease-out`;
-      card.style.opacity = '0.7';
-      card.style.zIndex = (10 + n - i);
-
-      // The flip cards are decorative eye-candy, so they show the 120px
-      // thumbnail (thumbUris) scaled to FILL the viewport via object-fit:contain
-      // — NOT scaled by targetScale (which assumes the full natural image size
-      // and would shrink a 120px thumb to a speck). Decoupling the cards from
-      // targetScale also frees the animation from the full-res HTTP fetch, so
-      // the flip is instant after P1's streaming change. The real, correctly-
-      // zoomed image is shown on the final frame by Blazor (displayImg.src =
-      // targetUri below).
-      const inner = document.createElement('div');
-      inner.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;height:100%;';
-      const img = document.createElement('img');
-      img.src = uri;
-      img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:2px;';
-      img.draggable = false;
-      inner.appendChild(img);
-      card.appendChild(inner);
-
-      slide.appendChild(card);
-      return card;
-    });
-
-    // Force layout
-    cards[0].offsetHeight;
-
-    let i = 0;
-    const advance = () => {
-      if (i >= n) {
-        // Hand off: cross-fade the frozen CURRENT layer OUT, revealing the real
-        // TARGET layer underneath (already at targetScale). Neither layer ever
-        // changes scale while visible, so there is no jitter on either image.
-        if (frozen) {
-          frozen.style.transition = 'opacity 180ms ease-out';
-          frozen.style.opacity = '0';
-        }
-        if (wrap) wrap.style.visibility = '';   // reveal target layer
-        setTimeout(() => {
-          if (frozen && frozen.parentNode) frozen.parentNode.removeChild(frozen);
-          cards.forEach(c => { try { slide.removeChild(c); } catch (_) {} });
-          slide.style.overflow = '';
-          if (wrap) wrap.style.transition = '';   // hand control back to Blazor / CSS class
-          resolve();
-        }, 200);
-        return;
-      }
-
-      // Slide in current card
-      cards[i].style.transform = 'translateX(0)';
-      cards[i].style.opacity = '1';
-
-      // Push out previous card
-      if (i > 0) {
-        cards[i - 1].style.transform = `translateX(${isNext ? '-20%' : '20%'})`;
-        cards[i - 1].style.opacity = '0.4';
-      }
-
-      setTimeout(() => {
-        if (i > 0) {
-          cards[i - 1].style.transition = `opacity 40ms ease-in`;
-          cards[i - 1].style.opacity = '0';
-        }
-      }, cardMs * 0.6);
-
-      i++;
-      if (i < n) setTimeout(advance, cardMs);
-      else advance();
-    };
-
-    requestAnimationFrame(() => advance());
-  });
-}
-
-// ── Multi-Slide Transition (filmstrip click) ──
-// Lays the CURRENT image as layer 0 plus a STREAM of adjacent images in the
-// slide direction, then translates the whole track so the pictures whip past
-// and land on the target — like dragging a film roll. Unlike the old flip,
-// EVERY passing image renders at its OWN fit/1:1 zoom (an intrinsic <img>
-// inside a scale(zoom) inner), so there is no "120px thumb stretched to fill
-// the viewport" speck and no zoom discontinuity between pictures.
+// ── Single Peek (filmstrip click → slide) ──
+// Builds ONE preview card of `uri` at `scale`, parked one viewport away in the
+// slide direction (left:-100% for prev, right:100% for next) — exactly like the
+// gesture peek. slideTransition() then translates .img-slide by one viewport so
+// this preview slides into view, giving a filmstrip click the SAME single-slide
+// animation as a swipe gesture. Removed by cleanupGesturePeek().
 //
-// Zoom independence (the rule that killed the old jitter): the current image's
-// layer keeps its own scale (outgoingScale) and the target uses targetScale;
-// the real .img-wrap underneath is pre-set to EXACTLY targetScale and only
-// revealed at the end, so the final frame is pixel-identical to what Blazor
-// will render next — no node ever changes scale while visible, so neither
-// image jitters.
-export function multiSlideTransition(uris, zooms, targetUri, direction, targetScale = 1, outgoingScale = 1) {
+// Returns a Promise that resolves only AFTER the peek <img> bitmap is decoded,
+// so the caller (OnFilmstripClick) can await it before starting slideTransition
+// and the image is paint-ready on the FIRST animation frame. This mirrors the
+// time a gesture peek gets during the drag (built at pointer-down, decoded long
+// before release): without it the large data:URI is still decoding during the
+// 280ms slide and "pops" into view mid-slide already-scaled — which reads as
+// zoom jitter. The decode is done on THIS element (not a separate preloader) so
+// there is no dependency on the browser's per-URI decoded-bitmap cache.
+export function createSinglePeek(uri, scale, direction) {
+  _gestureCleanupPeek();
+  const slide = document.querySelector('.img-slide');
+  if (!slide) return Promise.resolve();
+  const wrap = slide.querySelector('.img-wrap');
+  if (!wrap || !uri) return Promise.resolve();
+
+  const isNext = direction > 0;
+  const container = document.createElement('div');
+  container.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;' +
+    'pointer-events:none;display:flex;align-items:center;justify-content:center;';
+
+  const card = document.createElement('div');
+  card.style.cssText = 'position:absolute;top:0;bottom:0;' +
+    (isNext ? 'left:100%' : 'left:-100%') +
+    ';width:100%;display:flex;align-items:center;justify-content:center;';
+
+  const inner = document.createElement('div');
+  inner.style.cssText = 'display:flex;align-items:center;justify-content:center;';
+  inner.style.transform = 'scale(' + scale + ')';
+
+  const img = document.createElement('img');
+  img.draggable = false;
+  img.style.cssText = 'max-width:none;max-height:none;border-radius:2px;';
+
+  inner.appendChild(img);
+  card.appendChild(inner);
+  container.appendChild(card);
+
+  // Freeze the CURRENT image as a plain clone that slides out at its OWN zoom
+  // (displayZoom), and HIDE the real .img-wrap pre-scaled to targetScale so the
+  // end-of-slide zoom swap is invisible. This mirrors the old multi-slide
+  // reveal: there the real wrap was hidden + pre-scaled and revealed at the
+  // finish frame, so a far filmstrip click (current zoom far from target zoom)
+  // never shows the real wrap snapping displayZoom -> targetScale. Without it
+  // the visible real wrap snaps scale at the finish frame = zoom jitter;
+  // adjacent gesture swipes hide it only because their zooms are near-equal.
+  // NOTE: the frozen clone uses NO .img-wrap / .img-display class so it cannot
+  // collide with slideTransition's slide.querySelector('.img-wrap'/.img-display')
+  // (which must keep resolving to the REAL wrap/img).
+  var frozenImg = wrap.querySelector('.img-display');
+  var frozen = document.createElement('div');
+  frozen.className = 'filmstrip-frozen-current';
+  frozen.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;' +
+    'display:flex;align-items:center;justify-content:center;pointer-events:none;' +
+    'transform:' + (wrap.style.transform || 'none') + ';';
+  var frozenPic = document.createElement('img');
+  frozenPic.src = frozenImg ? frozenImg.src : '';
+  frozenPic.draggable = false;
+  frozenPic.style.cssText = 'max-width:none;max-height:none;border-radius:2px;';
+  frozen.appendChild(frozenPic);
+  container.appendChild(frozen);
+
+  wrap.style.visibility = 'hidden';
+  wrap.style.transform = 'translate(0px,0px) scale(' + scale + ')';
+
+  slide.insertBefore(container, wrap);
+  _peekViewport = container;
+  _pendingFilmstripReveal = true;
+
   return new Promise((resolve) => {
-    const slide = document.querySelector('.img-slide');
-    const wrap = slide && slide.querySelector('.img-wrap');
-    const img = slide && slide.querySelector('.img-display');
-    if (!slide || !wrap || !img || !uris || !uris.length) { resolve(); return; }
-
-    const isNext = direction === 'next';
-    const n = uris.length;            // #stream images (target is the LAST one)
-    const duration = 380;
-
-    slide.style.overflow = 'hidden';
-
-    // ── Real wrap: pre-set to target zoom, hide behind the track ──
-    wrap.style.transition = 'none';
-    wrap.style.transform = `translate(0px,0px) scale(${targetScale})`;
-    wrap.style.visibility = 'hidden';
-    if (targetUri) img.src = targetUri;   // target ready behind the track
-
-    // ── Track: current image (layer 0) + stream (layers 1..n) ──
-    const track = document.createElement('div');
-    track.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;' +
-      'pointer-events:none;will-change:transform;';
-
-    // Layer 0: current image clone — keeps its OWN scale (outgoingScale), so
-    // it slides out at the same zoom it was shown at (no jump).
-    const cur = wrap.cloneNode(true);
-    cur.classList.add('multi-current');
-    cur.style.position = 'absolute';
-    cur.style.top = '0'; cur.style.right = '0';
-    cur.style.bottom = '0'; cur.style.left = '0';
-    cur.style.margin = '0';
-    cur.style.width = '100%'; cur.style.height = '100%';
-    cur.style.transform = `translate(0px,0px) scale(${outgoingScale})`;
-    cur.style.zIndex = '1';
-    track.appendChild(cur);
-
-    // Stream layers 1..n: each positioned at (i+1)*100% in the slide direction,
-    // each rendered at its OWN zoom so it looks like a real picture, not a speck.
-    uris.forEach((uri, i) => {
-      const pos = (i + 1) * 100;
-      const card = document.createElement('div');
-      card.style.cssText = 'position:absolute;top:0;bottom:0;' +
-        (isNext ? `left:${pos}%` : `right:${pos}%`) +
-        ';width:100%;display:flex;align-items:center;justify-content:center;';
-      card.style.zIndex = '2';
-      const inner = document.createElement('div');
-      inner.style.cssText = 'display:flex;align-items:center;justify-content:center;';
-      inner.style.transform = `scale(${zooms[i] != null ? zooms[i] : 1})`;
-      const im = document.createElement('img');
-      im.src = uri;
-      im.draggable = false;
-      im.style.cssText = 'max-width:none;max-height:none;border-radius:2px;';
-      inner.appendChild(im);
-      card.appendChild(inner);
-      track.appendChild(card);
-    });
-
-    slide.appendChild(track);
-    void track.offsetHeight;
-
-    // Slide the whole track by n viewports. Each passing picture is briefly
-    // centered as it crosses 0 — a fast "film roll" whip.
-    const endX = isNext ? -n * 100 : n * 100;
-    requestAnimationFrame(() => {
-      track.style.transition = `transform ${duration}ms cubic-bezier(0.4,0,0.2,1)`;
-      track.style.transform = `translateX(${endX}%)`;
-    });
-
     let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      if (wrap) wrap.style.visibility = '';     // reveal target layer (already at targetScale)
-      if (track.parentNode) track.parentNode.removeChild(track);
-      slide.style.overflow = '';
-      if (wrap) wrap.style.transition = '';
-      resolve();
-    };
-    track.addEventListener('transitionend', finish);
-    setTimeout(finish, duration + 140);
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    img.onload = finish;
+    img.onerror = finish;
+    // IMPORTANT: set src BEFORE decode() — decode() rejects on a blank image.
+    img.src = uri;
+    if (typeof img.decode === 'function') {
+      img.decode().then(finish).catch(finish);
+    }
+    // Safety net: never block the slide longer than this if decode stalls.
+    setTimeout(finish, 400);
   });
 }
+
+
 
 // ── Filmstrip ──
 

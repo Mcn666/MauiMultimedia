@@ -565,9 +565,6 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     // ═══════════ Filmstrip ═══════════
 
     private static readonly Dictionary<string, string> s_thumbCache = new();
-    // Capped (≤768px) decodes used only as the fast-passing pictures in the
-    // filmstrip multi-slide animation — never the real decode path.
-    private static readonly Dictionary<string, string> s_navSlideCache = new();
     private bool _filmstripBuilt;
     private ImageFilmstrip? filmstripRef;
 
@@ -653,70 +650,23 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         _isAnimating = true;
 
         int dir = index > currentIndex ? 1 : -1;
-        int dist = Math.Abs(index - currentIndex);
 
-        // How many adjacent pictures to actually lay out in the slide
-        // direction. Bounded so a far click (e.g. 30 thumbnails away) doesn't
-        // decode 30 images — we sample `drawn` evenly-spaced pictures and whip
-        // through them; the visual reads as "sliding through many images"
-        // regardless of the true distance.
-        int drawn = Math.Min(dist, 8);
+        // Materialize the target image FIRST so its real dimensions are known
+        // before we compute the fit/1:1 zoom. GetImageDataUriAsync caches the
+        // native dims via a header-only read (no pixel decode) or decodes
+        // non-native formats and stores (w,h) in DecodeCache — so targetScale
+        // below is always the TARGET image's own fit/1:1, never the current
+        // image's displayZoom fallback. Computing targetScale before this was
+        // the residual jitter source: when the target wasn't in DecodeCache yet,
+        // targetScale fell back to displayZoom, the peek/real layer were
+        // pre-scaled wrong, and ApplyZoomFor (called after the slide) then
+        // snapped displayZoom to the real zoom = a visible second jump.
+        var targetUri = await GetImageDataUriAsync(fileList[index]);
 
-        // Build the stream of passing images. The LAST entry is the target
-        // itself (full-res + its own zoom). Each intermediate is sampled at an
-        // evenly-spaced index and rendered at its OWN fit/1:1 zoom, so the
-        // slide shows real pictures — not stretched 120px thumbnails.
-        var streamUris = new List<string>(drawn);
-        var streamZooms = new List<double>(drawn);
-        for (int k = 0; k < drawn; k++)
-        {
-            double zoom;
-            string uri;
-            if (k == drawn - 1)
-            {
-                // Target: full-res URI + its own fit/1:1 zoom.
-                uri = await GetImageDataUriAsync(fileList[index]) ?? "";
-                var tc = DecodeCache.Get(fileList[index]);
-                zoom = (tc.HasValue && tc.Value.Width > 0 && tc.Value.Height > 0)
-                    ? ComputeAutoZoom(tc.Value.Width, tc.Value.Height).display
-                    : displayZoom;
-            }
-            else
-            {
-                int idx = currentIndex + dir * (int)Math.Round((double)dist * (k + 1) / drawn);
-                if (idx == currentIndex) idx += dir;
-                idx = Math.Max(0, Math.Min(fileList.Count - 1, idx));
-
-                uri = GetNavSlideUri(fileList[idx]);   // capped decode (≤ NavThumbCap px) for the fast pass
-                var dims = ImageProcessingService.GetDirectServeInfo(fileList[idx]);
-                if (dims.width > 0 && dims.height > 0)
-                {
-                    var fullZoom = ComputeAutoZoom(dims.width, dims.height).display;
-                    // GetNavSlideUri returns a NavThumbCap-capped thumbnail, NOT the
-                    // full image. Scaling it by the *full-image* zoom would shrink
-                    // large pictures to a fraction of their true on-screen size
-                    // (e.g. a 4000px image decoded to 768px then ×0.25 fit-zoom =
-                    // 192px while the real image fills the viewport at ~1000px).
-                    // Correct the zoom by the decode ratio so the thumbnail renders
-                    // at the SAME size the real image would — the true "real zoom".
-                    int fullMax = Math.Max(dims.width, dims.height);
-                    int navMax = Math.Min(NavThumbCap, fullMax);
-                    zoom = navMax > 0 ? fullZoom * ((double)fullMax / navMax) : fullZoom;
-                }
-                else
-                {
-                    zoom = displayZoom;   // non-native format: fall back to current zoom
-                }
-            }
-            streamUris.Add(uri);
-            streamZooms.Add(zoom);
-        }
-
-        // Compute the target image's fit/1:1 zoom WITHOUT calling ApplyZoomFor
-        // (which would change the currently-displayed image's displayZoom and
-        // make it snap to the target zoom on the very first animation frame).
-        // We keep the current zoom for the whole slide, then apply the target
-        // zoom AFTER the animation completes — matching DoFadeNavigate.
+        // Compute the target's fit/1:1 zoom WITHOUT calling ApplyZoomFor (which
+        // would change the currently-displayed image's displayZoom and make it
+        // snap to the target zoom on the first frame). Dims come from DecodeCache
+        // populated above, so targetScale is the correct target zoom.
         float targetScale = displayZoom;
         var tCached = DecodeCache.Get(fileList[index]);
         if (tCached.HasValue && tCached.Value.Width > 0 && tCached.Value.Height > 0)
@@ -725,20 +675,24 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             targetScale = z.display;
         }
 
-        // Slide: lay out current + the stream of adjacent images, then whip the
-        // whole track past so they slide through to the target. The last stream
-        // entry IS the target (full-res), so the resting frame is already sharp.
-        if (_jsModule != null && _navAnimationEnabled && streamUris.Count > 0)
-            await _jsModule.InvokeVoidAsync("multiSlideTransition",
-                streamUris.ToArray(),
-                streamZooms.ToArray(),
-                streamUris[streamUris.Count - 1],
-                dir > 0 ? "next" : "prev",
-                targetScale, displayZoom);
+        // Gesture-style single slide: park a preview of the target one viewport
+        // away in the slide direction, then translate .img-slide by one viewport
+        // so the target slides into view — the SAME animation as a swipe gesture.
+        // createSinglePeek awaits its own <img> decode and resolves only when the
+        // bitmap is paint-ready, so the slide starts with the image on frame 1
+        // (mirrors the gesture peek, built at pointer-down and decoded during the
+        // drag). Without this the large data:URI pops in mid-slide = zoom jitter.
+        if (_jsModule != null && _navAnimationEnabled && targetUri != null)
+        {
+            await _jsModule.InvokeVoidAsync("createSinglePeek", targetUri, (double)targetScale, dir);
+            await _jsModule.InvokeVoidAsync("slideTransition", targetUri, dir, (double)vpWidth, targetScale);
+            await _jsModule.InvokeVoidAsync("cleanupGesturePeek");
+        }
 
         // Apply the target zoom AFTER the animation so the on-screen image
-        // keeps its own scale during the flip (no mid-animation zoom jump).
+        // keeps its own scale during the slide (no mid-animation zoom jump).
         ApplyZoomFor(fileList[index]);
+        if (_jsModule != null) await _jsModule.InvokeVoidAsync("waitFrame");
 
         // Switch state
         currentIndex = index;
@@ -1630,64 +1584,6 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             return result.DataUri;
         }
         catch { return null; }
-    }
-
-    /// <summary>
-    /// Returns a small (120px) data:URI thumbnail for <paramref name="path"/>,
-    /// generating + caching it on first use (s_thumbCache). Used by the filmstrip
-    /// flip-through so the rapid animation cards render instantly without
-    /// fetching/decoding the full-size image over the loopback FileServer — which,
-    /// after P1's streaming change, would stall the 110ms-per-card flip and show
-    /// blank/janky frames. Cheap: decodes at most to a 1024px cap and emits a
-    /// tiny data:URI. Returns "" if generation fails.
-    /// </summary>
-    private string GetThumbUri(string path)
-    {
-        if (s_thumbCache.TryGetValue(path, out var cached) && !string.IsNullOrEmpty(cached))
-            return cached;
-        try
-        {
-            var thumb = ImageProcessingService.GenerateThumbnail(path, 120);
-            if (!string.IsNullOrEmpty(thumb))
-            {
-                lock (s_thumbCache) s_thumbCache[path] = thumb;
-                return thumb;
-            }
-        }
-        catch { }
-        return "";
-    }
-
-    /// <summary>
-    /// Returns a capped (≤768px) data:URI for one passing image in the
-    /// filmstrip multi-slide animation. Cheap (decodes at most to a 768px cap)
-    /// and cached, so the rapid visual pass never fetches/decodes the full-size
-    /// original over the loopback FileServer. Falls back to the 120px filmstrip
-    /// thumbnail if even the capped decode fails. Returns "" on total failure.
-    /// </summary>
-    // Decode cap (longest side, px) for the fast-pass images laid out during a
-    // filmstrip-slide navigation. Kept well below the viewport so whipping
-    // through several pictures stays cheap; the on-screen size is corrected in
-    // OnFilmstripClick via the decode ratio so the thumbnails render at the
-    // SAME size the real image would (true zoom ratio), not at native thumb size.
-    private const int NavThumbCap = 768;
-
-    private string GetNavSlideUri(string path)
-    {
-        if (s_navSlideCache.TryGetValue(path, out var cached) && !string.IsNullOrEmpty(cached))
-            return cached;
-        try
-        {
-            var thumb = ImageProcessingService.GenerateThumbnail(path, NavThumbCap);
-            if (!string.IsNullOrEmpty(thumb))
-            {
-                lock (s_navSlideCache) s_navSlideCache[path] = thumb;
-                return thumb;
-            }
-        }
-        catch { }
-        // Last-resort fallback so a broken decode never shows an empty <img>.
-        return GetThumbUri(path);
     }
 
     // ═══════════ Slide Helpers ═══════════
