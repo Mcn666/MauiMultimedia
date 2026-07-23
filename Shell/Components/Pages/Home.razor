@@ -39,8 +39,8 @@
             </div>
         }
 
-        @* 主内容区 *@
-        <main class="browser-main">
+        @* 主内容区：第二块（地址栏 + 排序栏）与第三块（列表/网格视图） *@
+        <div class="browser-topbar">
             <div class="browser-sticky">
                 <div class="browser-header">
                     <div class="path-bar">
@@ -95,6 +95,9 @@
                     </button>
                 </div>
             </div>
+        </div>
+
+        <div class="browser-content">
 
             @* 扫描类型筛选面板 *@
             <div class="scan-panel @(showScanPanel ? "open" : "")">
@@ -286,7 +289,7 @@
             </Virtualize>
         </div>
     }
-    </main>
+    </div>
 </div>
 </div>
 

@@ -249,7 +249,7 @@ public partial class Home
     {
         try
         {
-            var scrollY = await JS.InvokeAsync<double>("eval", "window.scrollY");
+            var scrollY = await JS.InvokeAsync<double>("eval", "var c=document.querySelector('.browser-content'); return c?c.scrollTop:0;");
             _parentScrollStack.Push(scrollY);
         }
         catch { }
@@ -363,7 +363,7 @@ public partial class Home
         }
 
         await JS.InvokeVoidAsync("eval",
-            "document.documentElement.style.overflowY='scroll'");
+            "document.documentElement.style.overflowY='hidden'");
 
         if (BrowserState.CurrentPath != null)
         {
@@ -620,7 +620,7 @@ public partial class Home
 
             // 重置滚动位置（子文件夹/新导航都滚到顶部，父目录恢复由 GoBack 负责）
             await JS.InvokeVoidAsync("eval",
-                "requestAnimationFrame(() => window.scrollTo(0,0))");
+                "requestAnimationFrame(() => { var c=document.querySelector('.browser-content'); if(c)c.scrollTop=0; })");
 
             // Phase 3：子文件夹计数（后台不阻塞）
             _ = LoadChildCountsAsync(items);
@@ -768,7 +768,7 @@ public partial class Home
         if (showScanPanel)
         {
             await JS.InvokeVoidAsync("eval",
-                "document.querySelector('.browser-main').classList.add('panel-open')");
+                "document.querySelector('.browser-content').classList.add('panel-open')");
             // 在后台计算各类别的文件数量（一次遍历）
             _ = RefreshScanCountsAsync();
         }
@@ -779,7 +779,7 @@ public partial class Home
         _scanCategoryCounts = null;
         _scanCountsLoading = false;
         await JS.InvokeVoidAsync("eval",
-            "document.querySelector('.browser-main').classList.remove('panel-open')");
+            "document.querySelector('.browser-content').classList.remove('panel-open')");
     }
 
     /// <summary>
@@ -824,7 +824,7 @@ public partial class Home
     {
         showScanPanel = false;
         await JS.InvokeVoidAsync("eval",
-            "document.querySelector('.browser-main').classList.remove('panel-open')");
+            "document.querySelector('.browser-content').classList.remove('panel-open')");
         scanCts?.Cancel();
         scanCts = new CancellationTokenSource();
         var ct = scanCts.Token;
@@ -876,7 +876,7 @@ public partial class Home
             if (_parentScrollStack.TryPop(out var scrollY))
             {
                 await JS.InvokeVoidAsync("eval",
-                    $"requestAnimationFrame(() => window.scrollTo(0, {scrollY}))");
+                    $"requestAnimationFrame(() => {{ var c=document.querySelector('.browser-content'); if(c)c.scrollTop={scrollY}; }})");
             }
         }
     }

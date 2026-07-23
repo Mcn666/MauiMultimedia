@@ -391,7 +391,9 @@ h1:focus {
     padding: 20px 24px;
     color: var(--text-primary);
     background: var(--bg-primary);
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* --- Header --- */
@@ -410,13 +412,10 @@ h1:focus {
     position: relative; /* 移动端下拉菜单位置基准 */
 }
 
-/* 地址栏 + 排序栏固定容器 */
+/* 地址栏 + 排序栏容器（位于独立的 topbar 网格块内，不再随内容滚动） */
 .browser-sticky {
-    position: sticky;
-    top: 0;
-    z-index: 10;
     background: var(--bg-primary);
-    padding-bottom: 8px;
+    padding-bottom: 4px;
 }
 
 .path-bar {
@@ -782,11 +781,11 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     z-index: 998;
 }
 /* 面板打开时：拦截主内容区点击，仅 overlay 和 panel 可点 */
-.browser-main.panel-open {
+.browser-content.panel-open {
     pointer-events: none;
 }
-.browser-main.panel-open .scan-overlay,
-.browser-main.panel-open .scan-panel {
+.browser-content.panel-open .scan-overlay,
+.browser-content.panel-open .scan-panel {
     pointer-events: auto;
 }
 
@@ -919,20 +918,47 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
 
 /* --- Sidebar (Quick Access) --- */
 
+/* 三块布局：侧边栏 | 地址栏+排序栏 / 列表网格视图，彼此为独立网格单元，互不重叠 */
 .browser-layout {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+        "topbar"
+        "content";
     gap: 16px;
-    align-items: flex-start;
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
 }
 
-.browser-main {
-    flex: 1;
+/* 第三块：列表/网格视图（独立滚动容器，滚动被限定在本块内，绝不侵入其它块） */
+.browser-content {
+    grid-area: content;
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* 预留滚动条轨道：内容长短变化时滚动条出现/消失不再导致网格横向抖动 */
+    scrollbar-gutter: stable;
+    background: var(--bg-primary);
+}
+
+/* 第二块：地址栏 + 排序栏（独立块，位于内容块之上，始终可见） */
+.browser-topbar {
+    grid-area: topbar;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-primary);
+    padding-bottom: 0;
 }
 
 @media (min-width: 769px) {
-    .browser-main {
-        margin-left: 186px;
+    .browser-layout {
+        grid-template-columns: 186px minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-areas:
+            "sidebar topbar"
+            "sidebar content";
     }
 }
 
@@ -945,15 +971,15 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
 }
 
 .browser-sidebar-rail {
+    grid-area: sidebar;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    align-self: start;
 }
-@media (min-width: 769px) {
+@media (max-width: 768px) {
     .browser-sidebar-rail {
-        position: fixed;
-        top: 36px;
-        z-index: 1;
+        display: none;
     }
 }
 html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
@@ -1387,10 +1413,20 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 
 .browser-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 10px;
-    padding-top: 16px; /* 第一行与吸顶栏之间留足间距：需覆盖浮起 translateY(-2px) 及 box-shadow 向上扩散(~8px)，避免悬停浮起时顶部被吸顶栏裁切 */
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    /* 横向间距随窗口宽度增大而拉开（column-gap 用 vw 计算，resize 即时响应；row-gap 固定） */
+    column-gap: clamp(14px, 1.6vw, 48px);
+    row-gap: 14px;
+    padding-top: 12px; /* 第一行与吸顶栏之间留足间距：需覆盖浮起 translateY(-2px) 及 box-shadow 向上扩散(~8px)，避免悬停浮起时顶部被吸顶栏裁切 */
     background: var(--bg-primary);
+}
+
+/* 更宽窗口：进一步拉开网格横向间距 */
+@media (min-width: 1100px) {
+    .browser-grid { column-gap: clamp(20px, 1.8vw, 64px); }
+}
+@media (min-width: 1600px) {
+    .browser-grid { column-gap: clamp(28px, 2.4vw, 96px); }
 }
 
 .grid-item {
@@ -1580,6 +1616,19 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     line-height: 1;
 }
 
+/* 键盘焦点可见性（无障碍）：Tab 导航时显示统一描边；鼠标点击不触发 */
+.grid-item:focus-visible,
+.sidebar-item:focus-visible,
+.btn-sort:focus-visible,
+.btn-back:focus-visible,
+.btn-sort-icon:focus-visible,
+.scan-type-btn:focus-visible,
+.theme-option:focus-visible,
+.picker-item:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 2px;
+}
+
 /* ===== Responsive ===== */
 
 @media (max-width: 768px) {
@@ -1651,7 +1700,6 @@ html.no-flex-gap .picker-item > * + *   { margin-inline-start: 10px; }
 html.no-flex-gap .scan-type-btn > * + * { margin-inline-start: 12px; }
 html.no-flex-gap .scan-header > * + *   { margin-inline-start: 8px; }
 html.no-flex-gap .btn-sort > * + *      { margin-inline-start: 3px; }
-html.no-flex-gap .browser-layout > * + * { margin-inline-start: 16px; }
 html.no-flex-gap .sidebar-item > * + *  { margin-inline-start: 8px; }
 html.no-flex-gap .theme-option > * + *  { margin-inline-start: 6px; }
 
