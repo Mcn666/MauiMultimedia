@@ -94,12 +94,14 @@ export async function initThree(canvasId, modelUrl, ext, textureDataJson) {
     const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
     camera.position.set(5, 5, 10);
 
-    const ambient = new THREE.AmbientLight(0x404040);
+    // 柔和光照：MMD/PMX 的 MeshToonMaterial 对光照极敏感，过强会整体过曝发白。
+    // 总强度控制在 ~1.2（远低于原来的 1.75：0.25+1.0+0.5），立体感保留且不再偏白。
+    const ambient = new THREE.AmbientLight(0x666666);
     scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 1);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
     dir.position.set(5, 10, 7);
     scene.add(dir);
-    const dir2 = new THREE.DirectionalLight(0xffffff, 0.5);
+    const dir2 = new THREE.DirectionalLight(0xffffff, 0.2);
     dir2.position.set(-5, -5, -5);
     scene.add(dir2);
 
@@ -158,6 +160,18 @@ export async function initThree(canvasId, modelUrl, ext, textureDataJson) {
             mesh = new THREE.Mesh(obj, new THREE.MeshStandardMaterial({ color: 0x88aaff, roughness: 0.4, metalness: 0.1 }));
         } else {
             mesh = obj;
+        }
+
+        // PMX(MMD) 材质：MMDLoader 只把“有贴图”材质的 emissive(=PMX ambient)压到 0.2，
+        // 无贴图材质未压，叠加场景光照后整模型偏白。这里统一把无贴图材质的 emissive 也压到 0.2。
+        if (ext === '.pmx' && mesh.traverse) {
+            mesh.traverse(function (o) {
+                if (!o.isMesh || !o.material) return;
+                var mats = Array.isArray(o.material) ? o.material : [o.material];
+                mats.forEach(function (m) {
+                    if (m.emissive && !m.map) m.emissive.multiplyScalar(0.2);
+                });
+            });
         }
 
         var box = new THREE.Box3().setFromObject(mesh);
