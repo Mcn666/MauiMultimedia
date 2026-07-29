@@ -17,8 +17,10 @@ html.allow-transition.theme-switching *::after {
 /* Android 9 系统 WebView (Chromium < 84) 兼容说明：
    原生 <button> 一旦设 display:flex，内部匿名文本不会生成 flex item，
    align/justify-content 对文本完全失效，按钮内文字偏上/不居中（仅 <button> 受影响，<div> 类组件正常）。
-   因此所有按钮统一用「普通按钮 + line-height 居中」，不依赖 flex：
-   全局 text-align:center 负责水平居中，固定高度按钮用 line-height=高度 负责垂直居中。
+   因此所有按钮统一用「普通按钮 + 原生垂直居中」，不依赖 flex、也不设固定 line-height：
+   全局 text-align:center 负责水平居中，垂直居中交给 <button> 的 UA 原生行为。
+   注意：固定高度按钮不要再写 line-height=高度——一旦内部含 emoji/图标，其字形盒子会高出 strut，
+   在旧 WebView 等环境下基线对齐会使文字相对光学中心偏下；移除 line-height 由原生居中即可避免。
    appearance 仅去掉原生外观，无法修复上述 flex 缺陷。 */
 button {
     -webkit-appearance: none;
@@ -197,7 +199,7 @@ button {
 
 .v-sep {
     width: 1px;
-    height: 20px;
+    height: 28px;
     background: var(--border-primary);
     margin: 0 4px;
     flex-shrink: 0;
@@ -214,7 +216,9 @@ button {
 }
 
 .v-btn {
-    padding: 4px 10px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 10px;
     border: 1px solid var(--btn-border);
     border-radius: 6px;
     cursor: pointer;
@@ -224,7 +228,6 @@ button {
     transition: background 0.12s;
     white-space: nowrap;
     flex-shrink: 0;
-    line-height: 1.4;
 }
 
 .v-btn:hover:not(:disabled) {
@@ -237,14 +240,17 @@ button {
 }
 
 .v-btn-icon {
-    padding: 4px 8px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 8px;
     font-size: 16px;
     font-weight: 700;
-    line-height: 1;
 }
 
 .v-btn-sm {
-    padding: 4px 8px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 8px;
     font-size: 12px;
 }
 
@@ -352,9 +358,6 @@ h1:focus {
         content: "An error has occurred."
     }
 
-.darker-border-checkbox.form-check-input {
-    border-color: #929292;
-}
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);
@@ -457,7 +460,6 @@ h1:focus {
     border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
-    line-height: 34px;
     color: var(--btn-text);
     white-space: nowrap;
     flex-shrink: 0;
@@ -473,25 +475,6 @@ h1:focus {
     cursor: not-allowed;
 }
 
-/* 低调的次要操作按钮（如“私有目录”入口），不抢“返回上级”的视觉权重 */
-.btn-ghost {
-    height: 30px;
-    padding: 0 12px;
-    margin-right: 8px;
-    background: transparent;
-    border: 1px solid var(--btn-bg);
-    border-radius: 6px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 30px;
-    cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
-}
-.btn-ghost:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-    border-color: var(--text-secondary);
-}
 
 .path-short {
     display: none;
@@ -549,7 +532,6 @@ h1:focus {
     border: none;
     background: none;
     font-size: 16px;
-    line-height: 28px;
     cursor: pointer;
     color: var(--text-secondary);
     border-radius: 4px;
@@ -637,7 +619,6 @@ h1:focus {
     border: none;
     background: none;
     font-size: 16px;
-    line-height: 28px;
     cursor: pointer;
     color: var(--text-secondary);
     border-radius: 4px;
@@ -792,7 +773,6 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     cursor: pointer;
     font-size: 20px;
     color: var(--btn-text);
-    line-height: 34px;
     padding: 0;
     flex-shrink: 0;
     transition: background 0.15s;
@@ -842,7 +822,6 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     color: var(--text-tertiary);
     white-space: nowrap;
     transition: background 0.1s, color 0.1s;
-    line-height: 18px;
     min-height: 0;
 }
 
@@ -873,15 +852,26 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
 .btn-sort-icon {
     width: 26px;
     height: 26px;
+    padding: 0;
     background: none;
     border: 1px solid transparent;
     border-radius: 6px;
     cursor: pointer;
     font-size: 15px;
     color: var(--text-secondary);
-    line-height: 26px;
     flex-shrink: 0;
     transition: background 0.15s;
+    text-align: center;
+}
+/* 图标用内层 flex 精确居中：按钮本体保持非 flex，以兼容 Android 9 / Chromium<84 旧 WebView
+   单字符 emoji/符号的字体内联盒子相对基线不对称，按钮原生居中压不住，需由内层 flex 居中 */
+.btn-sort-icon .ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    line-height: 1;
 }
 .btn-sort-icon:hover {
     background: var(--btn-hover-bg);
@@ -1004,10 +994,11 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 /* --- Theme dropdown --- */
 .theme-dropdown {
     position: relative;
+    z-index: 901; /* 高于 .theme-overlay(900)，使切换按钮与菜单在展开时仍位于遮罩之上、可被点击 */
 }
 .theme-menu {
     position: absolute;
-    top: calc(100% - 4px);
+    top: 100%; /* 与按钮底部贴边，0 距离（原 calc(100% - 4px) 为 4px 重叠） */
     right: 0;
     min-width: 130px;
     background: var(--bg-primary);
@@ -1018,7 +1009,12 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     overflow: hidden;
     display: none;
 }
-.theme-dropdown:hover .theme-menu,
+/* 桌面（精确指针+可悬停）才用 hover 打开；触屏不激活，避免移动端 tap 卡住 :hover 导致菜单关不掉 */
+@media (hover: hover) and (pointer: fine) {
+    .theme-dropdown:hover .theme-menu {
+        display: block;
+    }
+}
 .theme-menu.open {
     display: block;
 }
@@ -1039,21 +1035,16 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     background: var(--btn-hover-bg);
     font-weight: 600;
 }
-.btn-theme {
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    background: var(--theme-btn-bg);
-    border: 1px solid var(--btn-border);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 34px;
-    transition: background 0.15s, transform 0.2s;
-}
 
-.btn-theme:hover {
-    transform: scale(1.1);
+/* 全屏透明遮罩：菜单展开时覆盖页面，点击其它任意位置即关闭（与右键菜单 .ctx-overlay 同思路） */
+.theme-overlay {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 900; /* 与右键菜单 .ctx-overlay(900) 对齐：压在页面所有内容之上，点外部才能命中关闭 */
+    background: transparent;
 }
 
 /* --- Loading --- */
@@ -1152,18 +1143,15 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 .item-row.type-doc::before    { background: #97c459; }
 .item-row.type-other::before  { background: #888; }
 
-/* 每个 type 类携带其颜色变量，供文件容器淡底复用（与上方色点同值） */
-.item-row.type-folder { --type-color: #efc675; }
-.item-row.type-image  { --type-color: #8ab4f8; }
-.item-row.type-video  { --type-color: #f09595; }
-.item-row.type-audio  { --type-color: #5dcaa5; }
-.item-row.type-model  { --type-color: #afa9ec; }
-.item-row.type-html   { --type-color: #6fd0e0; }
-.item-row.type-doc    { --type-color: #97c459; }
-.item-row.type-other  { --type-color: #888; }
-
 /* 文件容器：按类型铺一层极淡底色，与文件夹暖黄底呼应，统一「容器有类别色」语言 */
-.item-row:not(.folder) { background: rgba(128,128,128,0.06); background: color-mix(in srgb, var(--type-color, #888) 7%, transparent); }
+.item-row:not(.folder) { background: rgba(128,128,128,0.06); }  /* neutral fallback for items without a type class */
+.item-row.type-image  { background: #8ab4f812; }
+.item-row.type-video  { background: #f0959512; }
+.item-row.type-audio  { background: #5dcaa512; }
+.item-row.type-model  { background: #afa9ec12; }
+.item-row.type-html   { background: #6fd0e012; }
+.item-row.type-doc    { background: #97c45912; }
+.item-row.type-other  { background: #88888812; }
 
 .item-row:hover {
     background: var(--bg-hover);
@@ -1381,23 +1369,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 
 /* --- View Toggle Button --- */
 
-.btn-view {
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    background: var(--theme-btn-bg);
-    border: 1px solid var(--btn-border);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 34px;
-    transition: background 0.15s, transform 0.2s;
-    color: var(--btn-text);
-}
 
-.btn-view:hover {
-    transform: scale(1.1);
-}
 
 /* --- Grid View --- */
 
@@ -1408,7 +1380,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     column-gap: 14px; /* 回退：Chrome < 79 不支持 clamp()，用固定值 */
     column-gap: clamp(14px, 1.6vw, 48px);
     row-gap: 14px;
-    padding-top: 12px; /* 第一行与吸顶栏之间留足间距：需覆盖浮起 translateY(-2px) 及 box-shadow 向上扩散(~8px)，避免悬停浮起时顶部被吸顶栏裁切 */
+    padding-top: 2px; /* 第一行与吸顶栏之间留足间距：需覆盖浮起 translateY(-2px) 及 box-shadow 向上扩散(~8px)，避免悬停浮起时顶部被吸顶栏裁切 */
     background: var(--bg-primary);
 }
 
@@ -1465,18 +1437,15 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 .grid-item.type-doc::after    { background: #97c459; }
 .grid-item.type-other::after  { background: #888; }
 
-/* 每个 type 类携带其颜色变量，供文件容器淡底复用（与上方色点同值） */
-.grid-item.type-folder { --type-color: #efc675; }
-.grid-item.type-image  { --type-color: #8ab4f8; }
-.grid-item.type-video  { --type-color: #f09595; }
-.grid-item.type-audio  { --type-color: #5dcaa5; }
-.grid-item.type-model  { --type-color: #afa9ec; }
-.grid-item.type-html   { --type-color: #6fd0e0; }
-.grid-item.type-doc    { --type-color: #97c459; }
-.grid-item.type-other  { --type-color: #888; }
-
 /* 文件容器：按类型铺一层极淡底色，与文件夹暖黄底呼应，统一「容器有类别色」语言 */
-.grid-item:not(.folder) { background: rgba(128,128,128,0.07); background: color-mix(in srgb, var(--type-color, #888) 9%, transparent); }
+.grid-item:not(.folder) { background: rgba(128,128,128,0.07); }
+.grid-item.type-image  { background: #8ab4f817; }
+.grid-item.type-video  { background: #f0959517; }
+.grid-item.type-audio  { background: #5dcaa517; }
+.grid-item.type-model  { background: #afa9ec17; }
+.grid-item.type-html   { background: #6fd0e017; }
+.grid-item.type-doc    { background: #97c45917; }
+.grid-item.type-other  { background: #88888817; }
 
 .grid-item:hover {
     background: var(--bg-hover);
@@ -1563,7 +1532,6 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
-    max-height: 2.6em; /* 安全网：2 × 行高(1.3) = 2 行；个别 WebView 失效时仍硬裁 2 行 */
     overflow: hidden;
     white-space: normal;
     word-break: break-all;
@@ -1577,7 +1545,6 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
-    max-height: 2.6em; /* 安全网：个别 WebView 的 line-clamp 失效时仍严格限制 2 行 */
     overflow: hidden;
     white-space: normal;
     line-height: 1.3;
@@ -1593,7 +1560,6 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
    文件夹仍 2 行（下方有「N 项」项目数，空间有限）。 */
 .grid-item.no-thumb:not(.folder) .grid-name {
     -webkit-line-clamp: 3;
-    max-height: 3.9em; /* 安全网：3 × 行高(1.3) = 3 行 */
 }
 /* 无快照文件本无子项，隐藏「···」占位，避免与 3 行名争空间（文件夹照常显示项目数） */
 .grid-item.no-thumb:not(.folder) .grid-count {
@@ -1645,9 +1611,9 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     .col-size { margin-left: -10px; padding-left: 0; }
 
     .browser-grid {
-        /* 不再写死 3 列：随设备宽度自适应列数（手机约 3 列，平板/横屏自动更多、瓦片更小），
-           直接消除「受分辨率影响 / 瓦片太大」的根因；与桌面 auto-fill 策略一致 */
-        grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+        /* 移动端固定 3 列：手机/竖屏恒为 3 列，瓦片随屏宽等比例缩放；
+           桌面（>480px）仍走基础 auto-fill 按宽度自适应多列 */
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 12px;
     }
     .grid-icon { font-size: 24px; }
@@ -1671,7 +1637,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     .sort-sep { margin: 0 2px; }
 
     .browser-grid {
-        grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
     }
     .grid-icon { font-size: 20px; }
@@ -1694,7 +1660,6 @@ html.no-flex-gap .scan-header > * + *   { margin-inline-start: 8px; }
 html.no-flex-gap .btn-sort > * + *      { margin-inline-start: 3px; }
 html.no-flex-gap .sidebar-item > * + *  { margin-inline-start: 8px; }
 html.no-flex-gap .theme-option > * + *  { margin-inline-start: 6px; }
-html.no-flex-gap .btn-ghost > * + *      { margin-inline-start: 4px; }
 html.no-flex-gap .ctx-item > * + *        { margin-inline-start: 10px; }
 html.no-flex-gap .picker-actions > * + *  { margin-inline-start: 8px; }
 

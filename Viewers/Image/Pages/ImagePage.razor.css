@@ -161,7 +161,6 @@
     background: rgba(0, 0, 0, 0.35);
     color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
-    line-height: 72px;
     opacity: 0;
     transition: opacity 0.25s ease, background 0.15s;
     pointer-events: none;
@@ -440,14 +439,16 @@
 
 ::deep .toolbar-sep {
     width: 1px;
-    height: 20px;
+    height: 28px;
     background: rgba(255,255,255,0.12);
     margin: 0 4px;
     flex-shrink: 0;
 }
 
 ::deep .tbar-btn {
-    padding: 4px 9px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 9px;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 6px;
     cursor: pointer;
@@ -457,7 +458,6 @@
     transition: background 0.12s, color 0.12s;
     white-space: nowrap;
     flex-shrink: 0;
-    line-height: 18px;
     min-width: 32px;
 }
 
@@ -478,7 +478,9 @@
 }
 
 ::deep .tbar-btn-icon {
-    padding: 4px 6px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 6px;
     font-size: 15px;
     font-weight: 600;
 }
@@ -494,15 +496,17 @@
 }
 
 ::deep .tbar-btn-toggle {
-    padding: 4px 8px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 8px;
     font-size: 11px;
 }
 
 ::deep .tbar-btn-circle {
     width: 28px;
     height: 28px;
+    box-sizing: border-box;
     padding: 0;
-    line-height: 28px;
     border-radius: 50%;
     min-width: 0;
 }
@@ -559,7 +563,6 @@
     border: none;
     background: none;
     font-size: 16px;
-    line-height: 28px;
     cursor: pointer;
     border-radius: 50%;
     color: var(--text-primary);

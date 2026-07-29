@@ -17,7 +17,6 @@
     color: var(--text-secondary, #d3d1c7);
     cursor: pointer;
     font-size: 12px;
-    line-height: 1.4;
     white-space: nowrap;
     min-width: 0;
     width: 100%;

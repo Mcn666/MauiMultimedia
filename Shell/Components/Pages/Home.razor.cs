@@ -605,6 +605,10 @@ public partial class Home
         // 同步写入 Preferences：原生侧(MainPage/ViewerPageFactory 启动背景、状态栏)以 Preferences 为唯一主题来源，
         // 必须与前端 localStorage 保持同一"应用主题"，否则会被 App 启动时的系统主题覆盖而冲突。
         Preferences.Set("filebrowser-theme", mode);
+
+        // 选中后收起主题下拉菜单（此前仅切换 showThemeMenu 开关、点击选项并不会关闭，需显式复位）
+        showThemeMenu = false;
+        StateHasChanged();
     }
 
     private Task SetThemeLight() => SetTheme("light");

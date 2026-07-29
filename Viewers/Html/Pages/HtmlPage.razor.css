@@ -21,7 +21,9 @@
 }
 
 .v-btn {
-    padding: 4px 10px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 10px;
     border: 1px solid var(--btn-border);
     border-radius: 6px;
     cursor: pointer;
