@@ -14,14 +14,15 @@ html.allow-transition.theme-switching *::after {
                 box-shadow 0.5s ease;
 }
 
-/* Android 9 系统 WebView (Chromium < 84) 兼容：
-   原生 <button> 带 appearance:button，会干扰 flex 的 align/justify-content 居中，
-   导致按钮内文本偏上/不对齐（仅 <button> 受影响，<div> 类组件正常）。
-   重置 appearance 后按钮即按普通 flex 容器渲染，与现代浏览器行为一致。 */
+/* Android 9 系统 WebView (Chromium < 84) 兼容说明：
+   原生 <button> 一旦设 display:flex，内部匿名文本不会生成 flex item，
+   align/justify-content 对文本完全失效，按钮内文字偏上/不居中（仅 <button> 受影响，<div> 类组件正常）。
+   因此所有按钮统一用「普通按钮 + line-height 居中」，不依赖 flex：
+   全局 text-align:center 负责水平居中，固定高度按钮用 line-height=高度 负责垂直居中。
+   appearance 仅去掉原生外观，无法修复上述 flex 缺陷。 */
 button {
     -webkit-appearance: none;
     appearance: none;
-    line-height: normal;
     text-align: center;
 }
 
@@ -448,8 +449,6 @@ h1:focus {
 }
 
 .btn-back {
-    display: inline-flex;
-    align-items: center;
     height: 34px;
     padding: 0 16px;
     margin-right: 8px;
@@ -458,7 +457,7 @@ h1:focus {
     border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
-    line-height: 1;
+    line-height: 34px;
     color: var(--btn-text);
     white-space: nowrap;
     flex-shrink: 0;
@@ -476,9 +475,6 @@ h1:focus {
 
 /* 低调的次要操作按钮（如“私有目录”入口），不抢“返回上级”的视觉权重 */
 .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
     height: 30px;
     padding: 0 12px;
     margin-right: 8px;
@@ -487,6 +483,7 @@ h1:focus {
     border-radius: 6px;
     color: var(--text-secondary);
     font-size: 13px;
+    line-height: 30px;
     cursor: pointer;
     transition: background .15s, color .15s, border-color .15s;
 }
@@ -549,12 +546,10 @@ h1:focus {
 .picker-close {
     width: 28px;
     height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     border: none;
     background: none;
     font-size: 16px;
+    line-height: 28px;
     cursor: pointer;
     color: var(--text-secondary);
     border-radius: 4px;
@@ -639,12 +634,10 @@ h1:focus {
 .scan-panel-close {
     width: 28px;
     height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     border: none;
     background: none;
     font-size: 16px;
+    line-height: 28px;
     cursor: pointer;
     color: var(--text-secondary);
     border-radius: 4px;
@@ -793,15 +786,13 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     display: none;
     width: 34px;
     height: 34px;
-    align-items: center;
-    justify-content: center;
     background: var(--btn-bg);
     border: 1px solid var(--btn-border);
     border-radius: 6px;
     cursor: pointer;
     font-size: 20px;
     color: var(--btn-text);
-    line-height: 1;
+    line-height: 34px;
     padding: 0;
     flex-shrink: 0;
     transition: background 0.15s;
@@ -834,7 +825,7 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     display: flex;
     align-items: center;
     gap: 0;
-    padding: 6px 12px;
+    padding: 4px 12px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
     border-radius: 8px;
@@ -842,7 +833,7 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
 }
 
 .btn-sort {
-    padding: 4px 10px;
+    padding: 2px 8px;
     background: transparent;
     border: none;
     border-radius: 5px;
@@ -851,10 +842,8 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
     color: var(--text-tertiary);
     white-space: nowrap;
     transition: background 0.1s, color 0.1s;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    height: 26px;
+    line-height: 18px;
+    min-height: 0;
 }
 
 .btn-sort:hover {
@@ -882,17 +871,15 @@ html.color-mix .scan-type-btn:hover .scan-type-icon {
 }
 
 .btn-sort-icon {
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 26px;
+    height: 26px;
     background: none;
     border: 1px solid transparent;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 15px;
     color: var(--text-secondary);
+    line-height: 26px;
     flex-shrink: 0;
     transition: background 0.15s;
 }
@@ -996,9 +983,6 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 }
 
 .sidebar-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
     width: 100%;
     padding: 7px 14px;
     background: transparent;
@@ -1039,9 +1023,6 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     display: block;
 }
 .theme-option {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     width: 100%;
     padding: 8px 12px;
     border: none;
@@ -1062,15 +1043,12 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     width: 34px;
     height: 34px;
     padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     background: var(--theme-btn-bg);
     border: 1px solid var(--btn-border);
     border-radius: 8px;
     cursor: pointer;
     font-size: 18px;
-    line-height: 1;
+    line-height: 34px;
     transition: background 0.15s, transform 0.2s;
 }
 
@@ -1185,7 +1163,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 .item-row.type-other  { --type-color: #888; }
 
 /* 文件容器：按类型铺一层极淡底色，与文件夹暖黄底呼应，统一「容器有类别色」语言 */
-.item-row:not(.folder) { background: color-mix(in srgb, var(--type-color, #888) 7%, transparent); }
+.item-row:not(.folder) { background: rgba(128,128,128,0.06); background: color-mix(in srgb, var(--type-color, #888) 7%, transparent); }
 
 .item-row:hover {
     background: var(--bg-hover);
@@ -1272,7 +1250,10 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 
 .ctx-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 900;
     background: transparent;
 }
@@ -1288,6 +1269,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     padding: 6px;
     overflow: hidden;
     user-select: none;
+    -webkit-touch-callout: none; /* 压制 Android 原生选择 callout 抢走触摸事件 */
     animation: ctxMenuIn .12s ease;
 }
 @keyframes ctxMenuIn {
@@ -1349,6 +1331,17 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     border-color: var(--text-link);
 }
 
+/* 对话框底部「确认 / 取消」按钮组：等宽、文字居中、与输入框等宽对齐。
+   需覆盖 .btn-back 工具栏默认的 margin-right:8px（否则右按钮内缩、与输入框右缘错位）。 */
+.picker-actions {
+    display: flex;
+    gap: 8px;
+}
+.picker-actions .btn-back {
+    flex: 1;
+    margin-right: 0;
+}
+
 /* ── 移动端：列表视图文件名换行（网格项已在所有 viewport 统一多行显示） ── */
 @media (max-width: 600px) {
     .item-name {
@@ -1392,15 +1385,12 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     width: 34px;
     height: 34px;
     padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     background: var(--theme-btn-bg);
     border: 1px solid var(--btn-border);
     border-radius: 8px;
     cursor: pointer;
     font-size: 16px;
-    line-height: 1;
+    line-height: 34px;
     transition: background 0.15s, transform 0.2s;
     color: var(--btn-text);
 }
@@ -1415,6 +1405,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     /* 横向间距随窗口宽度增大而拉开（column-gap 用 vw 计算，resize 即时响应；row-gap 固定） */
+    column-gap: 14px; /* 回退：Chrome < 79 不支持 clamp()，用固定值 */
     column-gap: clamp(14px, 1.6vw, 48px);
     row-gap: 14px;
     padding-top: 12px; /* 第一行与吸顶栏之间留足间距：需覆盖浮起 translateY(-2px) 及 box-shadow 向上扩散(~8px)，避免悬停浮起时顶部被吸顶栏裁切 */
@@ -1423,10 +1414,10 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 
 /* 更宽窗口：进一步拉开网格横向间距 */
 @media (min-width: 1100px) {
-    .browser-grid { column-gap: clamp(20px, 1.8vw, 64px); }
+    .browser-grid { column-gap: 14px; column-gap: clamp(20px, 1.8vw, 64px); }
 }
 @media (min-width: 1600px) {
-    .browser-grid { column-gap: clamp(28px, 2.4vw, 96px); }
+    .browser-grid { column-gap: 14px; column-gap: clamp(28px, 2.4vw, 96px); }
 }
 
 .grid-item {
@@ -1442,14 +1433,13 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     transition: background 0.12s, border-color 0.12s, transform 0.12s, box-shadow 0.12s;
     text-align: center;
     min-width: 0;
-    aspect-ratio: 1;
-    height: 128px; /* 容纳 2 行文件名 + 图标 + 项目数，保持方块瓦片 */
-    min-height: 100px;
+    aspect-ratio: 1;            /* 方块瓦片：高度由列宽(1fr)驱动，随设备分辨率自适应，不再写死 128px（旧写法 height:128px 会抵消 aspect-ratio，导致永远是 128px 高的长方形） */
+    min-height: 96px;           /* 仅作极小列兜底，保证文件名可读 */
     position: relative;
     overflow: hidden;
     box-sizing: border-box;
     content-visibility: auto;
-    contain-intrinsic-size: 128px;
+    contain-intrinsic-size: auto 128px;  /* auto：记住真实渲染尺寸，避免滚动进入视口时尺寸跳变；128px 仅作首屏/未渲染兜底 */
 }
 
 /* 分类色点：左上角小圆点，按类型着色，悬停/缩略图之上都可见 */
@@ -1486,7 +1476,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 .grid-item.type-other  { --type-color: #888; }
 
 /* 文件容器：按类型铺一层极淡底色，与文件夹暖黄底呼应，统一「容器有类别色」语言 */
-.grid-item:not(.folder) { background: color-mix(in srgb, var(--type-color, #888) 9%, transparent); }
+.grid-item:not(.folder) { background: rgba(128,128,128,0.07); background: color-mix(in srgb, var(--type-color, #888) 9%, transparent); }
 
 .grid-item:hover {
     background: var(--bg-hover);
@@ -1634,7 +1624,7 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 @media (max-width: 768px) {
     .file-browser { padding: 12px 16px; }
     .browser-header { padding: 10px 12px; }
-    .btn-scan-panel { display: flex; }
+    .btn-scan-panel { display: inline-block; }
     .path-label { display: none; }
     .path-text { display: none; }
     .path-short { display: block; flex: 1; font-size: 14px; }
@@ -1655,8 +1645,10 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     .col-size { margin-left: -10px; padding-left: 0; }
 
     .browser-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
+        /* 不再写死 3 列：随设备宽度自适应列数（手机约 3 列，平板/横屏自动更多、瓦片更小），
+           直接消除「受分辨率影响 / 瓦片太大」的根因；与桌面 auto-fill 策略一致 */
+        grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+        gap: 12px;
     }
     .grid-icon { font-size: 24px; }
     .grid-item { padding: 10px 4px 8px; gap: 4px; }
@@ -1672,15 +1664,15 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
     .browser-header { padding: 8px; gap: 4px; }
     .path-short { font-size: 12px; }
     .btn-back { padding: 4px 8px; font-size: 12px; }
-    .btn-scan-panel { display: flex; }
+    .btn-scan-panel { display: inline-block; }
 
     .sort-bar { padding: 4px 6px; gap: 0; }
     .btn-sort { padding: 3px 5px; font-size: 10px; }
     .sort-sep { margin: 0 2px; }
 
     .browser-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
+        grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+        gap: 10px;
     }
     .grid-icon { font-size: 20px; }
 }
@@ -1702,6 +1694,9 @@ html.no-flex-gap .scan-header > * + *   { margin-inline-start: 8px; }
 html.no-flex-gap .btn-sort > * + *      { margin-inline-start: 3px; }
 html.no-flex-gap .sidebar-item > * + *  { margin-inline-start: 8px; }
 html.no-flex-gap .theme-option > * + *  { margin-inline-start: 6px; }
+html.no-flex-gap .btn-ghost > * + *      { margin-inline-start: 4px; }
+html.no-flex-gap .ctx-item > * + *        { margin-inline-start: 10px; }
+html.no-flex-gap .picker-actions > * + *  { margin-inline-start: 8px; }
 
 html.no-flex-gap .picker-body > * + *    { margin-block-start: 8px; }
 html.no-flex-gap .picker-list > * + *    { margin-block-start: 4px; }

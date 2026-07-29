@@ -9,6 +9,7 @@
 @inject FileBrowserStateService BrowserState
 @inject AliasService Alias
 @inject ViewerPageFactory PageFactory
+@implements System.IDisposable
 
 <div class="file-browser">
     <div class="browser-layout">
@@ -205,7 +206,8 @@
         <div class="browser-grid" style="display:@(viewMode == "grid" ? "" : "none")">
             @foreach (var item in items)
             {
-                <div class="grid-item @GetItemRowClass(item) @(HasNoThumb(item) ? "no-thumb" : "")"
+                var _isImageTile = GetItemSnapshot(item) != null || CanProvideSnapshot(item);
+                <div class="grid-item @GetItemRowClass(item) @(_isImageTile ? "is-image-file" : "") @(HasNoThumb(item) ? "no-thumb" : "")"
                      @onclick="() => OnItemClick(item)"
                      @onkeydown="() => {}"
                      @oncontextmenu="(e) => OnItemContextMenu(e, item)"
@@ -344,7 +346,10 @@ else if (showViewerPicker && pendingItem != null)
          @onpointerdown="CloseContextMenu"
          @oncontextmenu:preventDefault="true"
          @oncontextmenu="CloseContextMenu"></div>
-    <div class="ctx-menu" style="left:@(_ctxX)px;top:@(_ctxY)px;">
+    <div class="ctx-menu" style="left:@(_ctxX)px;top:@(_ctxY)px;"
+         @ref="_ctxMenuRef" tabindex="-1"
+         @onkeydown="OnContextMenuKeyDown"
+         @onclick="CloseContextMenu">
         <div class="ctx-menu-title" title="@_contextMenuTarget.Name">@GetDisplayName(_contextMenuTarget)</div>
         <button class="ctx-item" @onclick="OnCtxOpen">
             <span class="ctx-item-icon">@GetItemIcon(_contextMenuTarget)</span>
@@ -371,11 +376,9 @@ else if (showViewerPicker && pendingItem != null)
                        @onkeydown="OnAliasKeyDown"
                        placeholder="@_aliasTarget.Name"
                        autofocus />
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="btn btn-back" style="flex:1;justify-content:center;"
-                            @onclick="ConfirmAlias">确认</button>
-                    <button class="btn btn-back" style="flex:1;justify-content:center;"
-                            @onclick="CloseAliasDialog">取消</button>
+                <div class="picker-actions">
+                    <button class="btn btn-back" @onclick="ConfirmAlias">确认</button>
+                    <button class="btn btn-back" @onclick="CloseAliasDialog">取消</button>
                 </div>
             </div>
         </div>

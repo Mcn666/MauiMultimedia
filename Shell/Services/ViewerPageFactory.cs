@@ -42,7 +42,7 @@ public class ViewerPageFactory
 #if ANDROID
     private static void SetupAndroid(BlazorWebView bwv, ContentPage page, bool isDark)
     {
-        // 状态栏 + 导航栏 inset（dp）。非三键导航忽略导航栏高度。
+        // 初始 inset（兜底）。实时值由 AttachInsets 的 inset 监听同步，避免一次性读取时机过早拿到 0。
         var (top, bottom) = NavigationInsets.GetSystemBarInsetsDp();
         if (top > 0 || bottom > 0)
             page.Padding = new Thickness(0, top, 0, bottom);
@@ -52,6 +52,9 @@ public class ViewerPageFactory
             // 主题色背景
             nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor(
                 isDark ? "#1e1e1e" : "#ffffff"));
+
+            // 实时监听系统栏 inset，同步到页面 Padding（修复 Android 16 双键导航底部留白丢失）
+            NavigationInsets.AttachInsets(nativeWv, page);
 
             // 允许混合内容（HTTP 视频从 HTTPS 页面加载）
             if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.Lollipop)

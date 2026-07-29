@@ -35,6 +35,8 @@ public partial class Home
     private FileSystemItem? _contextMenuTarget;
     private int _ctxX, _ctxY;
     private bool _ctxJustShown;
+    private ElementReference _ctxMenuRef;
+    private DotNetObjectReference<Home>? _ctxRef;
     // 长按检测：桌面左键长按与移动端触摸长按统一走 pointer 事件
     private CancellationTokenSource? _longPressCts;
     private bool _longPressFired;
@@ -221,11 +223,28 @@ public partial class Home
         StateHasChanged();
     }
 
-    private void CloseContextMenu()
+    [JSInvokable]
+    public void CloseContextMenu()
     {
+        if (!_showContextMenu && _contextMenuTarget == null) return; // 幂等：未打开时提前返回
         _showContextMenu = false;
         _contextMenuTarget = null;
+        // 注销窗口 scroll/resize 关闭监听（若从未 attach 则 no-op）
+        _ = JS.InvokeVoidAsync("ctxMenuDismiss.detach");
         StateHasChanged();
+    }
+
+    /// <summary>菜单聚焦时的键盘处理：Esc 关闭（Windows 键盘用户的直觉取消方式）。</summary>
+    private void OnContextMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CloseContextMenu();
+    }
+
+    public void Dispose()
+    {
+        _ctxRef?.Dispose();
+        _ = JS.InvokeVoidAsync("ctxMenuDismiss.detach");
     }
 
     /// <summary>菜单项「打开」：等价于单击该项。</summary>
@@ -434,6 +453,10 @@ public partial class Home
                 "if(r.right>vw-6)l=Math.max(6,vw-r.width-6);" +
                 "if(r.bottom>vh-6)t=Math.max(6,vh-r.height-6);" +
                 "m.style.left=l+'px';m.style.top=t+'px';})();");
+            // 聚焦菜单以接收 Esc；注册窗口 scroll/resize 监听，使滚动/缩放即关闭
+            _ = _ctxMenuRef.FocusAsync();
+            _ctxRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("ctxMenuDismiss.attach", _ctxRef);
         }
     }
 

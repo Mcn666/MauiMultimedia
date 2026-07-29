@@ -36,6 +36,8 @@ public partial class MainPage : ContentPage
         if (blazorWebView.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
         {
             nativeWv.SetBackgroundColor(Android.Graphics.Color.ParseColor(_bg));
+            // 实时监听系统栏 inset，同步到页面 Padding（修复 Android 16 双键导航底部留白丢失）
+            NavigationInsets.AttachInsets(nativeWv, this);
         }
 #elif WINDOWS
         if (blazorWebView.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.WebView2 wv2)

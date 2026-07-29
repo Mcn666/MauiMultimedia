@@ -42,6 +42,26 @@
         window.revokeBlobUrl = function (url) {
             URL.revokeObjectURL(url);
         };
+
+        // 上下文菜单：注册 window 级 scroll/resize 监听，触发即通知 Blazor 关闭。
+        // 用于修复「菜单打开后滚动列表，菜单 fixed 钉在原坐标不走」的问题。
+        window.ctxMenuDismiss = (function () {
+            var h = null;
+            return {
+                attach: function (ref) {
+                    h = function () { ref.invokeMethodAsync('CloseContextMenu'); };
+                    window.addEventListener('scroll', h, true);
+                    window.addEventListener('resize', h, true);
+                },
+                detach: function () {
+                    if (h) {
+                        window.removeEventListener('scroll', h, true);
+                        window.removeEventListener('resize', h, true);
+                        h = null;
+                    }
+                }
+            };
+        })();
     </script>
 </head>
 

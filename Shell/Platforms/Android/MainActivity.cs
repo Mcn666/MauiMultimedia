@@ -73,14 +73,12 @@ public class MainActivity : MauiAppCompatActivity
 
         private static int GetSystemBarHeightPx()
         {
-            var resources = Android.App.Application.Context?.Resources;
-            if (resources == null) return 0;
-            int h = 0;
-            int rid = resources.GetIdentifier("status_bar_height", "dimen", "android");
-            if (rid > 0) h += resources.GetDimensionPixelSize(rid);
-            int navRid = resources.GetIdentifier("navigation_bar_height", "dimen", "android");
-            if (navRid > 0) h += resources.GetDimensionPixelSize(navRid);
-            return h;
+            // 仅底部系统栏参与「rootH - rect.Bottom」差值：
+            // getWindowVisibleDisplayFrame 的 Bottom 不含顶部状态栏，故不能用 status_bar_height。
+            // 直接用实时 WindowInsets 的真实底部 inset（自动按导航模式：三键=导航栏高，手势=0），
+            // 与 NavigationInsets 同一数据源，避免「非三键导航多算导航栏」及「多减状态栏」。
+            var (_, bottom, _, _) = NavigationInsets.GetSystemBarInsetsPx();
+            return bottom;
         }
     }
 
