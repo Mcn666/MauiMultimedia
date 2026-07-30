@@ -159,7 +159,13 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             "document.documentElement.style.overflowY = 'hidden'");
 
         fileList = NavState.CurrentDirectoryFiles?
-            .Where(f => Exts.Contains(Path.GetExtension(f))).ToList() ?? new();
+            .Where(f => Exts.Contains(Path.GetExtension(f)))
+            .Select(f =>
+            {
+                try { return Path.GetFullPath(f); }
+                catch { return f; }
+            })
+            .ToList() ?? new();
 
         _dotNetRef = DotNetObjectReference.Create(this);
         await LoadAsync();
@@ -722,6 +728,9 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 .Where(kv => kv.Length == 2 && kv[0] == "path")
                 .Select(kv => Uri.UnescapeDataString(kv[1]))
                 .FirstOrDefault() ?? "";
+
+        // 归一化路径，确保与 fileList（也已归一化）的匹配
+        try { path = Path.GetFullPath(path); } catch { }
 
         if (string.IsNullOrEmpty(path))
         {

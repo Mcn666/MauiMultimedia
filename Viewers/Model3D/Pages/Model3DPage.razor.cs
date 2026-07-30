@@ -45,7 +45,9 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
     protected override async Task OnInitializedAsync()
     {
         fileList = NavState.CurrentDirectoryFiles?
-            .Where(f => Exts.Contains(Path.GetExtension(f))).ToList() ?? new();
+            .Where(f => Exts.Contains(Path.GetExtension(f)))
+            .Select(f => { try { return Path.GetFullPath(f); } catch { return f; } })
+            .ToList() ?? new();
         await LoadAsync();
     }
 

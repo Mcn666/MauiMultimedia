@@ -1,35 +1,27 @@
-<div class="filmstrip-container @(Hidden ? "hidden" : "")">
-    <div class="filmstrip-track" @onscroll="OnScroll" @ref="_trackRef">
-        @* Leading spacer for virtualized items before the visible window *@
-        <div style="flex-shrink:0; width:@(_leadSpacerWidth)px; min-width:@(_leadSpacerWidth)px;"></div>
+@using System.Diagnostics
 
-        @for (int i = _visStart; i <= _visEnd && i < Items.Count; i++)
+<div class="filmstrip-container @(Hidden ? "hidden" : "")">
+    <div class="filmstrip-track" @ref="_trackRef">
+        @for (int i = 0; i < Items.Count; i++)
         {
             var idx = i;
-            var item = Items[i];
-            <div class="filmstrip-item @(idx == CurrentIndex ? "active" : "")"
-                 data-index="@idx"
-                 @onclick="() => OnItemClick.InvokeAsync(idx)"
+            var src = Items[i];
+            <div class="filmstrip-item @(i == CurrentIndex ? "active" : "")"
+                 data-index="@i"
+                 @onclick="() => OnItemClick.InvokeAsync(i)"
                  @onclick:preventDefault>
-                @if (!string.IsNullOrEmpty(item))
+                @if (!string.IsNullOrEmpty(src))
                 {
-                    <img src="@item" alt="" loading="lazy" />
+                    <img src="@src" alt="" loading="lazy" />
                 }
                 else
                 {
-                    <div style="width:100%;height:100%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;">
-                        <span style="font-size:10px;color:rgba(255,255,255,0.2);">@(idx + 1)</span>
-                    </div>
+                    <div class="fs-placeholder">@(i + 1)</div>
                 }
             </div>
         }
-
-        @* Trailing spacer *@
-        <div style="flex-shrink:0; width:@(_trailSpacerWidth)px; min-width:@(_trailSpacerWidth)px;"></div>
     </div>
 </div>
-
-@using System.Diagnostics
 
 @code {
     [Inject] private IJSRuntime JS { get; set; } = null!;
@@ -42,178 +34,44 @@
 
     private ElementReference _trackRef;
     private IJSObjectReference? _jsModule;
-    private int _visStart;
-    private int _visEnd;
-    private bool _scrollPending;
-    private bool _initialized;
-    private bool _suppressScroll;
+    private int _lastIndex = -1;
+    private int _lastItemCount;
     private float _lastVpWidth;
-    // Set when a genuine viewport resize re-laid the window; the actual scroll
-    // to center is deferred to OnAfterRenderAsync so it runs AFTER Blazor has
-    // painted the re-laid cards — never racing the re-window computation.
-    private bool _pendingResizeScroll;
-    // Equal "centering slack" added to BOTH lead/trailing spacers so the first
-    // and last thumbnails can scroll to the dead-center of the track (there is
-    // no content beyond them to fill the other side). Derived from ViewportWidth
-    // (a parameter), so it is stable and does NOT create the clientWidth read-
-    // back feedback loop that JS-applied padding caused on desktop window resize.
-    private double _centeringPad;
+    private bool _scrolling;
 
-    private const int ItemWidth = 52;
-    private const int ItemGap = 4;
-    // Must match the CSS: desktop items are 52px wide, the mobile media query
-    // (max-width:600px) shrinks them to 44px, gap stays 4px -> stride 48.
-    // The leading/trailing spacer widths are derived from this, so it MUST equal
-    // the actually-rendered stride or the virtualization coordinate system drifts
-    // (8px per index on phones) and centering/snap go wrong.
-    private int Stride => (ViewportWidth > 0 && ViewportWidth <= 600) ? 48 : 56;
-
-    private double _leadSpacerWidth => _visStart * Stride + _centeringPad;
-    private double _trailSpacerWidth => Math.Max(0, (Items.Count - _visEnd - 1) * Stride) + _centeringPad;
-
-    /// <summary>
-    /// Dynamically computed from ViewportWidth so the virtual window always
-    /// fills the filmstrip track — at the first/last image, there's no gap.
-    /// </summary>
-    private int WindowPad => Math.Max(5,
-        (int)Math.Ceiling(Math.Max(ViewportWidth, 800) / Stride / 2));
-
-    protected override void OnParametersSet()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_initialized && Items.Count > 0)
+        // 首次填充 Items（首帧时可能为空）或 CurrentIndex/ViewportWidth 变化 → 居中滚动
+        if (!_scrolling && Items.Count > 0 && CurrentIndex >= 0 &&
+            (firstRender || _lastIndex != CurrentIndex ||
+             _lastItemCount != Items.Count ||
+             (_lastVpWidth > 0 && Math.Abs(_lastVpWidth - ViewportWidth) > 1)))
         {
-            _initialized = true;
-            CenterWindow(CurrentIndex >= 0 ? CurrentIndex : 0);
+            await ScrollToIndexAsync(CurrentIndex, !firstRender);
+            _lastIndex = CurrentIndex;
+            _lastItemCount = Items.Count;
+            _lastVpWidth = ViewportWidth;
         }
-        else if (_initialized && Items.Count > 0 &&
-                 (_lastVpWidth <= 0 ||
-                  Math.Abs(_lastVpWidth - ViewportWidth) > 1))
-        {
-            CenterWindow(CurrentIndex >= 0 ? CurrentIndex : 0);
-            // A genuine viewport resize (not the initial population): schedule a
-            // single recenter in OnAfterRenderAsync. The capacity/window is already
-            // recomputed above; deferring the scroll avoids a second, competing
-            // re-window and the thumbnail churn it caused during a shrink.
-            if (_lastVpWidth > 0 && Math.Abs(_lastVpWidth - ViewportWidth) > 1)
-            {
-                _pendingResizeScroll = true;
-                Debug.WriteLine($"[Filmstrip] resize relayout scheduled vpW={ViewportWidth:F0} (was {_lastVpWidth:F0})");
-            }
-        }
-        _lastVpWidth = ViewportWidth;
     }
 
-    private void CenterWindow(int center)
-    {
-        if (Items.Count == 0) return;
-        // ViewportWidth may be 0 when the parameter hasn't propagated yet
-        // (e.g., after exiting stitch mode before the next render cycle).
-        // Fall back to a reasonable default so the window is never just 1 item.
-        float vw = ViewportWidth > 0 ? ViewportWidth : 1200;
-        center = Math.Clamp(center, 0, Items.Count - 1);
-        int pad = Math.Max(5, (int)Math.Ceiling(Math.Max(vw, 800) / Stride / 2));
-        int minFill = (int)Math.Ceiling(Math.Max(vw, 800) / Stride);
-        // Centering slack = half the empty space beside one thumbnail so the
-        // first/last item can reach the center. itemW = Stride - ItemGap.
-        _centeringPad = Math.Max(0, (vw - (Stride - ItemGap)) / 2);
-
-        _visStart = Math.Max(0, center - pad);
-        _visEnd = Math.Min(Items.Count - 1, _visStart + minFill - 1);
-        if (_visEnd - _visStart + 1 < minFill)
-            _visStart = Math.Max(0, _visEnd - minFill + 1);
-
-        Debug.WriteLine($"[Filmstrip] idx={center} vpW={ViewportWidth:F0} vw={vw:F0} pad={pad} minFill={minFill} centerPad={_centeringPad:F1} visStart={_visStart} visEnd={_visEnd} cnt={_visEnd - _visStart + 1} total={Items.Count}");
-    }
-
-    /// <summary>
-    /// Programmatic jump used for open / prev / next / item-click. Sets the
-    /// virtual window straight to the target range and snaps the scroll
-    /// position (instant by default, smooth when explicitly requested),
-    /// suppressing scroll-driven window recompute for the whole move so no
-    /// off-screen items are ever created or loaded along the way.
-    /// </summary>
     public async Task ScrollToIndexAsync(int index, bool smooth = false)
     {
-        if (Items.Count == 0) return;
-
-        CenterWindow(index);
-        _initialized = true;  // OnParametersSet will skip its own CenterWindow
-        _suppressScroll = true;
-        StateHasChanged();
-
-        // Let Blazor paint the new window + spacers before we measure/scroll.
-        await Task.Delay(0);
-
+        if (Items.Count == 0 || index < 0 || index >= Items.Count) return;
+        if (_scrolling) return;
+        _scrolling = true;
         try
         {
-            // The function lives in the page's JS module (export function), so it
-            // must be invoked via the module reference — NOT via the global
-            // IJSRuntime `JS.InvokeVoidAsync(string)`, which would look for
-            // window.scrollFilmstripToElement (undefined) and silently fail,
-            // leaving scrollLeft = 0 and the filmstrip showing only the empty
-            // leading spacer. Lazily import the module (cached by URL) so this
-            // works regardless of when the parent calls us.
             if (_jsModule == null)
             {
                 var asm = typeof(ImageFilmstrip).Assembly.GetName().Name!;
                 _jsModule = await JS.InvokeAsync<IJSObjectReference>("import",
                     $"./_content/{asm}/Pages/ImagePage.razor.js");
             }
+            // 等一帧确保 DOM 已更新（首次加载或缩略图列表变化后）
+            await JS.InvokeVoidAsync("eval", "new Promise(r => requestAnimationFrame(r))");
             await _jsModule.InvokeVoidAsync("scrollFilmstripToElement", _trackRef, index, smooth);
         }
         catch { /* noop */ }
-
-        // Keep suppression up until the scroll (and any smooth animation)
-        // has settled, then release so manual scrolling works again.
-        await Task.Delay(smooth ? 360 : 40);
-        _suppressScroll = false;
-    }
-
-    private async Task OnScroll()
-    {
-        if (_suppressScroll) return;
-        if (_scrollPending) return;
-        _scrollPending = true;
-
-        await Task.Delay(32);
-        _scrollPending = false;
-
-        double scrollLeft = 0;
-        try
-        {
-            scrollLeft = await JS.InvokeAsync<double>("eval",
-                $"document.querySelector('.filmstrip-track')?.scrollLeft || 0");
-        }
-        catch { return; }
-
-        double trackWidth = Stride;
-        int newStart = Math.Max(0, (int)(scrollLeft / trackWidth) - WindowPad);
-        int newEnd = Math.Min(Items.Count - 1, newStart + WindowPad * 2 + 15);
-
-        if (newStart != _visStart || newEnd != _visEnd)
-        {
-            _visStart = newStart;
-            _visEnd = newEnd;
-            StateHasChanged();
-        }
-    }
-
-    /// <summary>
-    /// After a viewport resize, the window was re-laid in OnParametersSet; this
-    /// runs once (driven by _pendingResizeScroll) to recenter the active
-    /// thumbnail. Deferring to here guarantees the re-laid cards are already in
-    /// the DOM when scrollFilmstripToElement measures them, so resize produces a
-    /// single coherent re-layout instead of overlapping passes that churn cards.
-    /// </summary>
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_pendingResizeScroll)
-        {
-            _pendingResizeScroll = false;
-            if (!Hidden && Items.Count > 0 && CurrentIndex >= 0)
-            {
-                await ScrollToIndexAsync(CurrentIndex, false);
-            }
-        }
+        finally { _scrolling = false; }
     }
 }

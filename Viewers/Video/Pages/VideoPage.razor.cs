@@ -40,7 +40,9 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
             "document.documentElement.style.overflowY = 'hidden'");
 
         fileList = NavState.CurrentDirectoryFiles?
-            .Where(f => Exts.Contains(Path.GetExtension(f))).ToList() ?? new();
+            .Where(f => Exts.Contains(Path.GetExtension(f)))
+            .Select(f => { try { return Path.GetFullPath(f); } catch { return f; } })
+            .ToList() ?? new();
         ResolveFilePath();
 
         if (string.IsNullOrEmpty(filePath))
