@@ -1095,8 +1095,11 @@ html.no-flex-gap .browser-sidebar-rail > * + * { margin-block-start: 16px; }
 .browser-items {
     border: 1px solid var(--border-primary);
     border-radius: 8px;
-    overflow: hidden;
     background: var(--bg-primary);
+    /* 不用 overflow: hidden——它会被 Blazor Virtualize 的 scroll container 检测误判，
+       导致虚拟化只渲染容器高度内的前几十项。用 clip-path 替代实现圆角裁剪，
+       不干扰 overflow 属性的 scroll 检测语义。 */
+    clip-path: inset(0 round 8px);
 }
 
 .items-header {

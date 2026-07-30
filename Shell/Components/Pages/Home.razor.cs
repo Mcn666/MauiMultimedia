@@ -77,7 +77,6 @@ public partial class Home
 
     // 多级父目录滚动位置栈：进入子文件夹时入栈，返回时出栈恢复
     private readonly Stack<double> _parentScrollStack = new();
-    private bool _skipRender;
     // 导航重入锁：防止快速连点导致多个 LoadItemsAsync 并发改写共享 items 列表（状态撕裂）。
     private readonly SemaphoreSlim _navLock = new(1, 1);
 
@@ -409,12 +408,6 @@ public partial class Home
         await RestoreViewModeAsync();
 
         await LoadItemsAsync();
-    }
-
-    protected override bool ShouldRender()
-    {
-        if (_skipRender) { _skipRender = false; return false; }
-        return true;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -917,17 +910,17 @@ public partial class Home
         }
     }
 
+    /// <summary>
+    /// 切换网格/列表视图。仅翻转 viewMode 并持久化到 localStorage，
+    /// 由 Blazor 的 @if(viewMode) 条件渲染自动重渲染对应视图。
+    /// 注意：不要再用 _skipRender 跳过 ShouldRender、也不要用 JS 切 display——
+    /// 因为标记是 @if 条件渲染，任一时刻只有一个视图 div 在 DOM 中，
+    /// JS 切不到另一个 div，且 _skipRender 会阻止 @if 重渲染，导致切换后空白。
+    /// </summary>
     private async Task ToggleViewMode()
     {
-        _skipRender = true;
         viewMode = (viewMode == "list") ? "grid" : "list";
-        await JS.InvokeVoidAsync("eval", $@"
-            var g = document.querySelector('.browser-grid');
-            var l = document.querySelector('.browser-items');
-            if (g) g.style.display = {(viewMode == "grid" ? "''" : "'none'")};
-            if (l) l.style.display = {(viewMode == "list" ? "''" : "'none'")};
-            localStorage.setItem('filebrowser-view', '{(viewMode == "grid" ? "grid" : "list")}');
-        ");
+        await JS.InvokeVoidAsync("eval", $"localStorage.setItem('filebrowser-view','{viewMode}');");
     }
 
     // ────────── 运行时系统主题变更 ──────────

@@ -207,8 +207,9 @@
                 <span class="scan-info">@scanTypeLabel (@items.Count 个文件)</span>
             </div>
         }
-        @* 网格和列表视图共存于 DOM，通过 display:none 切换，避免切换时全部重建 *@
-        <div class="browser-grid" style="display:@(viewMode == "grid" ? "" : "none")">
+        @if (viewMode == "grid")
+        {
+            <div class="browser-grid">
             @foreach (var item in items)
             {
                 var _isImageTile = GetItemSnapshot(item) != null || CanProvideSnapshot(item);
@@ -257,7 +258,10 @@
                 </div>
             }
         </div>
-        <div class="browser-items" style="display:@(viewMode == "list" ? "" : "none")">
+        }
+        else
+        {
+            <div class="browser-items">
             <div class="items-header">
                 <span class="col-icon"></span>
                 <span class="col-name sortable" @onclick="OnSortByName">
@@ -273,7 +277,7 @@
                     修改时间 @GetSortArrow("date")
                 </span>
             </div>
-            <Virtualize Items="items" Context="item" ItemSize="44" OverscanCount="20">
+            <Virtualize Items="items" Context="item" ItemSize="40" OverscanCount="20">
                 <div class="item-row @GetItemRowClass(item)"
                      @onclick="() => OnItemClick(item)"
                      @onkeydown="() => {}"
@@ -295,6 +299,7 @@
                 </div>
             </Virtualize>
         </div>
+        }
     }
     </div>
 </div>
