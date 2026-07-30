@@ -8,8 +8,7 @@
             var src = Items[i];
             <div class="filmstrip-item @(i == CurrentIndex ? "active" : "")"
                  data-index="@i"
-                 @onclick="() => OnItemClick.InvokeAsync(i)"
-                 @onclick:preventDefault>
+                 @onclick="() => OnItemClick.InvokeAsync(idx)">
                 @if (!string.IsNullOrEmpty(src))
                 {
                     <img src="@src" alt="" loading="lazy" />

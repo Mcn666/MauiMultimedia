@@ -570,13 +570,23 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
     // ═══════════ Filmstrip ═══════════
 
-    private static readonly Dictionary<string, string> s_thumbCache = new();
+    private static readonly Dictionary<string, (string thumb, DateTime lastWrite)> s_thumbCache = new();
     private bool _filmstripBuilt;
     private ImageFilmstrip? filmstripRef;
 
     private async Task BuildFilmstripAsync()
     {
         if (_filmstripBuilt) return;
+
+        // 清理 stale 缓存：移除 s_thumbCache 中不属于当前 fileList 的条目。
+        // 跨压缩包导航时，不同压缩包的同一内部路径会解压到相同绝对路径，
+        // 导致 s_thumbCache（static）命中旧缩略图，显示错误的预览。
+        var currentPaths = new HashSet<string>(fileList, StringComparer.OrdinalIgnoreCase);
+        lock (s_thumbCache)
+        {
+            var stale = s_thumbCache.Keys.Where(k => !currentPaths.Contains(k)).ToList();
+            foreach (var k in stale) s_thumbCache.Remove(k);
+        }
 
         _filmstripThumbnails = new List<string>(fileList.Count);
         for (int i = 0; i < fileList.Count; i++)
@@ -586,9 +596,12 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
         for (int i = 0; i < fileList.Count; i++)
         {
             var path = fileList[i];
-            if (s_thumbCache.TryGetValue(path, out var cachedThumb))
+            if (s_thumbCache.TryGetValue(path, out var cached))
             {
-                _filmstripThumbnails[i] = cachedThumb;
+                // 验证文件修改时间：压缩包重新解压同名文件时内容已变，必须丢弃旧缓存
+                var lastWrite = File.GetLastWriteTimeUtc(path);
+                if (cached.lastWrite == lastWrite)
+                    _filmstripThumbnails[i] = cached.thumb;
             }
             else
             {
@@ -596,9 +609,9 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
                 // thumbnail-sized data:URI. P1 may cache a full-res FileServer
                 // URL here; using it for a 120px strip would fetch the whole
                 // image, so skip and let GenerateThumbnail populate it instead.
-                var cached = DecodeCache.Get(path);
-                if (cached.HasValue && cached.Value.DataUri.StartsWith("data:"))
-                    _filmstripThumbnails[i] = cached.Value.DataUri;
+                var dc = DecodeCache.Get(path);
+                if (dc.HasValue && dc.Value.DataUri.StartsWith("data:"))
+                    _filmstripThumbnails[i] = dc.Value.DataUri;
             }
         }
         _filmstripBuilt = true;
@@ -630,7 +643,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
                     var thumb = ImageProcessingService.GenerateThumbnail(path, 120);
                     lock (s_thumbCache)
-                        s_thumbCache[path] = thumb;
+                        s_thumbCache[path] = (thumb, File.GetLastWriteTimeUtc(path));
 
                     _filmstripThumbnails[i] = thumb;
                     await InvokeAsync(StateHasChanged);
@@ -842,8 +855,8 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     private void SetPlaceholderFor(string path)
     {
         if (DecodeCache.Get(path).HasValue) { placeholderSource = null; return; }
-        if (s_thumbCache.TryGetValue(path, out var t) && !string.IsNullOrEmpty(t))
-            placeholderSource = t;
+        if (s_thumbCache.TryGetValue(path, out var t) && !string.IsNullOrEmpty(t.thumb))
+            placeholderSource = t.thumb;
         else
             placeholderSource = null;
     }
