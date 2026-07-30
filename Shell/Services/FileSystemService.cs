@@ -1,6 +1,7 @@
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Core.IO;
 using MauiMultimedia.Core.Models;
+using System.Text;
 using System.Threading;
 
 namespace MauiMultimedia.Shell.Services;
@@ -507,4 +508,125 @@ public class FileSystemService : IFileSystemService
             ScanDir(d, extensions, results, ct);
         }
     }
+
+    public async Task<bool> TryWriteTextAsync(string path, string content, Encoding? encoding = null)
+    {
+        encoding ??= Encoding.UTF8;
+        // Phase 1: 直接尝试 File.WriteAllText（沙盒内、有 MANAGE_EXTERNAL_STORAGE 时成功）
+        try
+        {
+            await File.WriteAllTextAsync(path, content, encoding);
+            return true;
+        }
+        catch (UnauthorizedAccessException) { /* 外部存储无权限，进入 Phase 2 */ }
+        catch (IOException) { return false; }
+
+#if ANDROID
+        // Phase 2: Android 10+ Scoped Storage → 通过 MediaStore 查询+覆盖
+        if (!OperatingSystem.IsAndroidVersionAtLeast(29)) return false;
+        return TryWriteViaMediaStore(path, content, encoding);
+#else
+        return false;
+#endif
+    }
+
+#if ANDROID
+    private static bool TryWriteViaMediaStore(string path, string content, Encoding encoding)
+    {
+        try
+        {
+            // 获取外部存储挂载点（/storage/emulated/0）
+            var mountPoint = Android.OS.Environment.ExternalStorageDirectory?.AbsolutePath;
+            if (string.IsNullOrEmpty(mountPoint) || !path.StartsWith(mountPoint, StringComparison.Ordinal))
+                return false;
+
+            // 解析相对路径：去掉挂载点 + 开头的 /
+            var relative = path.Substring(mountPoint.Length).TrimStart('/');
+            var dir = Path.GetDirectoryName(relative)?.Replace('\\', '/') ?? "";
+            var fileName = Path.GetFileName(relative);
+            if (string.IsNullOrEmpty(fileName)) return false;
+
+            var context = Android.App.Application.Context;
+            var resolver = context.ContentResolver!;
+            var collectionUri = Android.Provider.MediaStore.Files.GetContentUri("external");
+            if (collectionUri == null) return false;
+
+            // 查询 MediaStore 中是否已存在此文件
+            string? existingId = null;
+            string? existingUri = null;
+            string selection;
+            string[] selectionArgs;
+
+            if (!string.IsNullOrEmpty(dir))
+            {
+                // 有子目录：按 DISPLAY_NAME + RELATIVE_PATH 查询
+                // RELATIVE_PATH 必须以 / 结尾
+                var relPath = dir.EndsWith("/") ? dir : dir + "/";
+                selection = "_display_name = ? AND relative_path = ?";
+                selectionArgs = new[] { fileName, relPath };
+            }
+            else
+            {
+                // 根目录：只按 DISPLAY_NAME 查询
+                selection = "_display_name = ?";
+                selectionArgs = new[] { fileName };
+            }
+
+            using (var cursor = resolver.Query(collectionUri, new[] { "_id" }, selection, selectionArgs, null))
+            {
+                if (cursor != null && cursor.MoveToFirst())
+                {
+                    var idIdx = cursor.GetColumnIndex("_id");
+                    if (idIdx >= 0)
+                    {
+                        existingId = cursor.GetLong(idIdx).ToString();
+                        existingUri = Android.Content.ContentUris.WithAppendedId(collectionUri!, cursor.GetLong(idIdx)).ToString();
+                    }
+                    cursor.Close();
+                }
+            }
+
+            Android.Net.Uri? uri;
+            if (existingUri != null)
+            {
+                // 已有文件 → 直接覆盖
+                uri = Android.Net.Uri.Parse(existingUri);
+            }
+            else
+            {
+                // 新文件 → Insert
+                var values = new Android.Content.ContentValues();
+                values.Put("_display_name", fileName);
+                values.Put("mime_type", "text/plain");
+                if (!string.IsNullOrEmpty(dir))
+                    values.Put("relative_path", dir.EndsWith("/") ? dir : dir + "/");
+                // 标记为 pending 防止其他 app 在写入过程中读取
+                values.Put("is_pending", true);
+                uri = resolver.Insert(collectionUri!, values);
+                if (uri == null) return false;
+            }
+
+            // 写入内容
+            if (uri == null) return false;
+            using (var os = resolver.OpenOutputStream(uri, "wt"))
+            {
+                if (os == null) return false;
+                var bytes = encoding.GetBytes(content);
+                os.Write(bytes, 0, bytes.Length);
+                os.Flush();
+            }
+
+            // 清除 pending 标记
+            if (existingUri == null)
+            {
+                var doneValues = new Android.Content.ContentValues();
+                doneValues.Put("is_pending", false);
+                resolver.Update(uri, doneValues, null, null);
+            }
+
+            return true;
+        }
+        catch { return false; }
+    }
+#endif
 }

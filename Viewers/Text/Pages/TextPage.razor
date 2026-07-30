@@ -5,11 +5,41 @@
 @inject NavigationManager Navigation
 @inject IFileNavigationState NavState
 @inject IMauiNavigation MauiNav
+@inject IFileSystemService FileSystem
 
-<div class="viewer-page">
+<div class="viewer-page" @onkeydown="OnKeyDown" @onkeydown:preventDefault="false">
     <div class="v-toolbar">
         <button class="v-btn" @onclick="GoBack">← 返回</button>
         <FileNavDropdown FileList="fileList" CurrentIndex="currentIndex" OnFileSelected="OnFileSelected" />
+        @if (!_editMode)
+        {
+            <button class="v-btn v-btn-edit" @onclick="ToggleEdit" title="编辑文件 (E)">✏️ 编辑</button>
+        }
+        else
+        {
+            <span class="v-edit-indicator @(_dirty ? "dirty" : "")">
+                @(_dirty ? "✏️ 已修改" : "📝 编辑中")
+            </span>
+            <div class="v-save-wrap">
+                <button class="v-btn v-btn-save" @onclick="ToggleSaveMenu" disabled="@(!_dirty)" title="保存 (Ctrl+S)">💾 保存 ▾</button>
+                @if (_showSaveMenu)
+                {
+                    <div class="v-save-backdrop" @onclick="CloseSaveMenu"></div>
+                    <div class="v-save-menu">
+                        <button class="v-save-opt" @onclick="SaveOverwriteAsync" disabled="@(!_dirty)">
+                            <span class="v-save-opt-title">💾 覆盖原文件</span>
+                            <span class="v-save-opt-desc">直接写入当前路径</span>
+                        </button>
+                        <div class="v-save-sep"></div>
+                        <button class="v-save-opt" @onclick="SaveAsNewAsync" disabled="@(!_dirty)">
+                            <span class="v-save-opt-title">📁 另存新文件</span>
+                            <span class="v-save-opt-desc">保存到应用私有目录</span>
+                        </button>
+                    </div>
+                }
+            </div>
+            <button class="v-btn" @onclick="CancelEdit" title="取消编辑">✕ 取消</button>
+        }
     </div>
 
     @if (isLoading)
@@ -20,9 +50,27 @@
     {
         <div class="viewer-error">⚠️ @errorMessage</div>
     }
+    else if (_editMode)
+    {
+        <textarea class="viewer-editor"
+                  value="@_editingContent"
+                  @oninput="OnEditInput"
+                  spellcheck="false"></textarea>
+    }
     else
     {
         <pre class="viewer-content"><code>@fileContent</code></pre>
+    }
+
+    @if (!string.IsNullOrEmpty(_saveMessage))
+    {
+        <div class="v-toast">
+            <div class="v-toast-title">@_saveMessage</div>
+            @if (!string.IsNullOrEmpty(_saveDetail))
+            {
+                <div class="v-toast-detail">@_saveDetail</div>
+            }
+        </div>
     }
 </div>
 
@@ -45,16 +93,30 @@
     private List<string> fileList = new();
     private int currentIndex = -1;
 
+    // ── 编辑功能状态 ──
+    private bool _editMode;
+    private bool _dirty;
+    private string _editingContent = "";
+    private string? _saveMessage;
+    private string? _saveDetail;
+    private int _saveMsgSeq;
+    private bool _showSaveMenu;
+
     protected override async Task OnInitializedAsync()
     {
         fileList = NavState.CurrentDirectoryFiles?
             .Where(f => Exts.Contains(Path.GetExtension(f)))
             .Select(f => { try { return Path.GetFullPath(f); } catch { return f; } })
             .ToList() ?? new();
-        await LoadAsync();
+        await ResolveInitialPathAsync();
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            await ReadFileContentAsync();
+        }
     }
 
-    private async Task LoadAsync()
+    /// <summary>首次从 NavState 或 URL 查询参数解析文件路径。</summary>
+    private Task ResolveInitialPathAsync()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
         filePath = NavState.CurrentFilePath
@@ -63,6 +125,7 @@
                 .Where(kv => kv.Length == 2 && kv[0] == "path")
                 .Select(kv => Uri.UnescapeDataString(kv[1]))
                 .FirstOrDefault() ?? "";
+        try { filePath = Path.GetFullPath(filePath); } catch { }
         fileName = Path.GetFileName(filePath);
         currentIndex = fileList.FindIndex(f => string.Equals(f, filePath, StringComparison.OrdinalIgnoreCase));
 
@@ -70,11 +133,25 @@
         {
             errorMessage = "未指定文件路径";
             isLoading = false;
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>读取 filePath 指向的文件内容。不修改 filePath/currentIndex。</summary>
+    private async Task ReadFileContentAsync()
+    {
+        if (string.IsNullOrEmpty(filePath))
+        {
+            if (string.IsNullOrEmpty(errorMessage))
+                errorMessage = "未指定文件路径";
+            isLoading = false;
             return;
         }
 
         isLoading = true;
         errorMessage = null;
+        _editMode = false;
+        _dirty = false;
         try
         {
             fileContent = await Task.Run(async () =>
@@ -91,34 +168,121 @@
         finally { isLoading = false; StateHasChanged(); }
     }
 
-    private void GoBack()
-    {
-        _ = MauiNav.GoBackAsync();
-    }
+    // ── 工具栏操作 ──
+
+    private void GoBack() => _ = MauiNav.GoBackAsync();
+
     private async Task OnFileSelected(int index)
     {
         if (index < 0 || index >= fileList.Count || index == currentIndex) return;
+        // 切换文件时退出编辑模式（丢弃未保存修改）
+        _editMode = false;
+        _dirty = false;
         currentIndex = index;
         filePath = fileList[currentIndex];
         fileName = Path.GetFileName(filePath);
-        await LoadFileContentAsync();
+        await ReadFileContentAsync();
     }
-    private async Task LoadFileContentAsync()
+
+    // ── 编辑功能 ──
+
+    private void ToggleEdit()
     {
-        isLoading = true; errorMessage = null;
+        _editMode = true;
+        _editingContent = fileContent;
+        _dirty = false;
+    }
+
+    private void OnEditInput(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _editingContent = e.Value?.ToString() ?? "";
+        _dirty = _editingContent != fileContent;
+    }
+
+    private void CancelEdit()
+    {
+        _editMode = false;
+        _dirty = false;
+        _editingContent = "";
+    }
+
+    private void ToggleSaveMenu()
+    {
+        _showSaveMenu = !_showSaveMenu;
+    }
+    private void CloseSaveMenu() => _showSaveMenu = false;
+
+    private async Task SaveOverwriteAsync()
+    {
+        _showSaveMenu = false;
+        if (!_dirty || string.IsNullOrEmpty(filePath)) return;
+        // 通过 IFileSystemService 写入（平台层处理权限，Android 上沙盒外文件尝试 SAF）
+        var ok = await FileSystem.TryWriteTextAsync(filePath, _editingContent, Encoding.UTF8);
+        if (ok)
+        {
+            fileContent = _editingContent;
+            _dirty = false;
+            ShowToast("✅ 已覆盖原文件");
+        }
+        else
+        {
+            ShowToast("⚠️ 当前平台无写入权限，请使用「另存新文件」");
+        }
+    }
+
+    private async Task SaveAsNewAsync()
+    {
+        _showSaveMenu = false;
+        if (!_dirty || string.IsNullOrEmpty(filePath)) return;
         try
         {
-            fileContent = await Task.Run(async () =>
-            {
-                var bytes = await File.ReadAllBytesAsync(filePath);
-                return Encoding.UTF8.GetString(bytes);
-            });
+            // 保存到应用数据目录（通过 IFileSystemService，在 MAUI Shell 中解析为真实的 AppDataDirectory）
+            var dir = FileSystem.GetAppDataDirectory();
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+            var ts = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            var newName = string.IsNullOrEmpty(ext) ? $"{name}_{ts}" : $"{name}_{ts}{ext}";
+            var newPath = Path.Combine(dir, newName);
+            await File.WriteAllTextAsync(newPath, _editingContent, Encoding.UTF8);
+            fileContent = _editingContent;
+            _dirty = false;
+            ShowToast($"✅ 已保存：{newName}", newPath);
         }
         catch (Exception ex)
         {
-            errorMessage = $"读取文件失败：{ex.Message}";
-            fileContent = "";
+            ShowToast($"⚠️ 保存失败：{ex.Message}");
         }
-        finally { isLoading = false; StateHasChanged(); }
+    }
+
+    private async Task OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        // Ctrl+S → 快速覆盖原文件
+        if (_editMode && e.Key == "s" && e.CtrlKey)
+        {
+            await SaveOverwriteAsync();
+        }
+        // Esc 取消编辑
+        if (_editMode && e.Key == "Escape")
+        {
+            CancelEdit();
+            StateHasChanged();
+        }
+    }
+
+    private void ShowToast(string msg, string? detail = null)
+    {
+        _saveMessage = msg;
+        _saveDetail = detail;
+        var seq = ++_saveMsgSeq;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000);
+            if (_saveMsgSeq == seq)
+            {
+                _saveMessage = null;
+                _saveDetail = null;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
     }
 }

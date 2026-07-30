@@ -117,6 +117,8 @@ public partial class Home
     {
         if (FileSystemService.IsAppPrivateDirectory(currentPath))
             return "\U0001F512 私有目录";
+        if (isRoot)
+            return "设备存储";
         return Path.GetFileName(currentPath.TrimEnd('\\', '/'));
     }
 

@@ -1,4 +1,5 @@
 using MauiMultimedia.Core.Models;
+using System.Text;
 
 namespace MauiMultimedia.Core.Abstractions;
 
@@ -102,4 +103,11 @@ public interface IFileSystemService
     /// 比多次调用 ScanFilesByTypeAsync 高效得多（只遍历一次目录树）。
     /// </summary>
     Task<int[]> CountFilesByTypesAsync(string rootPath, IReadOnlyList<string[]> extensionGroups, CancellationToken ct = default);
+
+    /// <summary>
+    /// 尝试以文本形式写入文件。Windows 上直接写入；Android 上优先尝试直接 IO，
+    /// 若外部存储无权限则通过 MediaStore / SAF 写入公共目录；iOS 仅沙盒内可写。
+    /// 返回 true 表示写入成功，false 表示因权限不足无法写入。
+    /// </summary>
+    Task<bool> TryWriteTextAsync(string path, string content, Encoding? encoding = null);
 }

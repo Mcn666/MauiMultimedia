@@ -69,3 +69,125 @@
 
 /* JS 检测到不支持 flex-gap 时回退（@supports 无法区分 grid-gap vs flex-gap） */
 html.no-flex-gap .viewer-loading > * + * { margin-inline-start: 8px; }
+
+/* ── 编辑器 ── */
+.viewer-editor {
+    flex: 1;
+    margin: 6px 8px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--text-link);
+    border-radius: 8px;
+    font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    resize: none;
+    outline: none;
+    tab-size: 4;
+    -moz-tab-size: 4;
+}
+.viewer-editor:focus {
+    border-color: #378add;
+    box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.2);
+}
+.viewer-editor::-webkit-scrollbar { width: 7px; }
+.viewer-editor::-webkit-scrollbar-track { background: transparent; border-radius: 4px; }
+.viewer-editor::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+/* ── 工具栏扩展 ── */
+.v-btn-edit { color: var(--text-link); }
+.v-btn-save {
+    background: #378add;
+    color: #fff;
+    border-color: #378add;
+}
+.v-btn-save:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.v-edit-indicator {
+    font-size: 13px;
+    padding: 0 8px;
+    color: var(--text-secondary);
+}
+.v-edit-indicator.dirty {
+    color: #f0ad4e;
+    font-weight: 600;
+}
+
+/* ── 保存菜单 ── */
+.v-save-wrap { position: relative; }
+
+.v-save-backdrop {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99;
+}
+.v-save-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 100;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    padding: 4px;
+    min-width: 200px;
+}
+.v-save-opt {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+}
+.v-save-opt:hover { background: var(--bg-hover); }
+.v-save-opt:disabled { opacity: 0.35; cursor: not-allowed; }
+.v-save-opt-title { font-size: 13px; color: var(--text-primary); }
+.v-save-opt-desc { font-size: 11px; color: var(--text-tertiary); }
+.v-save-sep { height: 1px; background: var(--border-primary); margin: 2px 8px; }
+
+/* ── Toast ── */
+.v-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(500px, calc(100vw - 24px));
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    padding: 10px 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 100;
+    animation: v-toast-in .2s ease;
+}
+.v-toast-title {
+    font-size: 14px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.v-toast-detail {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    word-break: break-all;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+@keyframes v-toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
