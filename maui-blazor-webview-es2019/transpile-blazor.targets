@@ -9,11 +9,22 @@
   可覆盖的属性：
     BlazorWebViewEs2019Script  : 转译脚本路径（默认本文件同目录的 transpile-blazor.mjs）
     BlazorWebViewEs2019Output  : 输出 js 路径（默认 $(MSBuildProjectDirectory)\wwwroot\scripts\blazor.webview.improved.js）
-    NodeToolPath               : node 可执行文件（默认 node，需位于 PATH；CI 可显式指定）
+    NodeToolPath               : 显式指定 node 可执行文件（绝对路径）；留空则自动探测（见下方）。
+
+  node 自动探测顺序（仅在“确实找到可执行文件”时才尝试调用，避免无 node 时 MSB3073 告警）：
+    1) 显式 NodeToolPath
+    2) PATH 上的 node
+    3) C:\Program Files\nodejs\node.exe
+    4) C:\Program Files (x86)\nodejs\node.exe
+    5) $(LOCALAPPDATA)\Programs\node\node.exe
+    6) $(APPDATA)\nvm\node.exe
+    7) Visual Studio 自带 node： <VS>\MSBuild\Microsoft\VisualStudio\NodeJs\node.exe (覆盖 18/2022/2019 各版本与 Community/Pro/Ent)
+    8) WorkBuddy 自带 node： $(UserProfile)\.workbuddy\binaries\node\versions\22.22.2\node.exe
+    全都不存在 → 回退为裸 "node" 并静默跳过转译（用已提交文件兜底，不告警）。
 
   行为：
     - DesignTimeBuild 跳过（不拖慢 IDE）。
-    - 找不到 node → 跳过，使用已提交的 improved.js 兜底（不阻断构建）。
+    - 找不到 node → 跳过，使用已提交的 improved.js 兜底（不阻断构建、不告警）。
     - esbuild 未安装 → 仅首次 npm install（避免每次构建联网）。
     - 转译失败且输出不存在 → 由脚本以 exit 1 暴露（构建失败，避免发布破损文件）。
 -->
@@ -22,35 +33,80 @@
   <PropertyGroup>
     <BlazorWebViewEs2019Script Condition="'$(BlazorWebViewEs2019Script)' == ''">$(MSBuildThisFileDirectory)transpile-blazor.mjs</BlazorWebViewEs2019Script>
     <BlazorWebViewEs2019Output Condition="'$(BlazorWebViewEs2019Output)' == ''">$(MSBuildProjectDirectory)\wwwroot\scripts\blazor.webview.improved.js</BlazorWebViewEs2019Output>
-    <NodeToolPath Condition="'$(NodeToolPath)' == ''">node</NodeToolPath>
     <_EsbuildMarker>$(MSBuildThisFileDirectory)node_modules\esbuild\package.json</_EsbuildMarker>
+  </PropertyGroup>
+
+  <!-- 自动探测 node 候选项（按顺序，第一个存在的文件胜出） -->
+  <PropertyGroup>
+    <_NodeCand0 Condition="'$(NodeToolPath)' != ''">$(NodeToolPath)</_NodeCand0>
+    <_NodeCand1>C:\Program Files\nodejs\node.exe</_NodeCand1>
+    <_NodeCand2>C:\Program Files (x86)\nodejs\node.exe</_NodeCand2>
+    <_NodeCand3>$(LOCALAPPDATA)\Programs\node\node.exe</_NodeCand3>
+    <_NodeCand4>$(APPDATA)\nvm\node.exe</_NodeCand4>
+    <!-- Visual Studio bundled node (MSBuild\Microsoft\VisualStudio\NodeJs\node.exe) -->
+    <_NodeCand5>C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VisualStudio\NodeJs\node.exe</_NodeCand5>
+    <_NodeCand6>C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VisualStudio\NodeJs\node.exe</_NodeCand6>
+    <_NodeCand7>C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Microsoft\VisualStudio\NodeJs\node.exe</_NodeCand7>
+    <_NodeCand8>C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\NodeJs\node.exe</_NodeCand8>
+    <_NodeCand9>C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Microsoft\VisualStudio\NodeJs\node.exe</_NodeCand9>
+    <_NodeCand10>C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Microsoft\VisualStudio\NodeJs\node.exe</_NodeCand10>
+    <!-- WorkBuddy bundled node (final fallback) -->
+    <_NodeCand11>$(UserProfile)\.workbuddy\binaries\node\versions\22.22.2\node.exe</_NodeCand11>
+  </PropertyGroup>
+  <PropertyGroup>
+    <_ResolvedNode Condition="'$(_NodeCand0)' != '' AND Exists('$(_NodeCand0)')">$(_NodeCand0)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand1)')">$(_NodeCand1)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand2)')">$(_NodeCand2)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand3)')">$(_NodeCand3)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand4)')">$(_NodeCand4)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand5)')">$(_NodeCand5)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand6)')">$(_NodeCand6)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand7)')">$(_NodeCand7)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand8)')">$(_NodeCand8)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand9)')">$(_NodeCand9)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand10)')">$(_NodeCand10)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == '' AND Exists('$(_NodeCand11)')">$(_NodeCand11)</_ResolvedNode>
+    <_ResolvedNode Condition="'$(_ResolvedNode)' == ''">node</_ResolvedNode>
+    <!-- 仅当解析到真实文件时才标记为可用，避免在“仅 PATH 有 node / 完全无 node”时调用失败抛 MSB3073 -->
+    <_NodeIsRealFile Condition="'$(_ResolvedNode)' != 'node' AND Exists('$(_ResolvedNode)')">true</_NodeIsRealFile>
   </PropertyGroup>
 
   <Target Name="TranspileBlazorWebViewJs"
           BeforeTargets="BeforeBuild;BeforeRebuild"
           Condition="'$(DesignTimeBuild)' != 'true' AND Exists('$(BlazorWebViewEs2019Script)')">
 
-    <!-- 探测 node 是否可用 -->
-    <Exec Command="&quot;$(NodeToolPath)&quot; --version"
+    <!-- PATH 上若仅有裸 node（无候选文件路径），用 where 探测；where 是 cmd 内建，不会触发 MSB3073 -->
+    <Exec Command="where node"
+          Condition="'$(_NodeIsRealFile)' != 'true'"
           ContinueOnError="true"
+          IgnoreExitCode="true"
           ConsoleToMSBuild="false"
           StandardOutputImportance="low">
-      <Output TaskParameter="ExitCode" PropertyName="_NodeExit" />
+      <Output TaskParameter="ExitCode" PropertyName="_WhereExit" />
     </Exec>
-    <Message Condition="'$(_NodeExit)' != '0'"
-             Text="[transpile-blazor] 未找到 node（NodeToolPath=$(NodeToolPath)），跳过转译，使用已提交的 improved.js 兜底。如需启用请安装 Node.js 或设置 NodeToolPath。"
+    <PropertyGroup>
+      <_NodeAvailable Condition="'$(_NodeIsRealFile)' == 'true' OR '$(_WhereExit)' == '0'">true</_NodeAvailable>
+    </PropertyGroup>
+
+    <Message Condition="'$(_NodeAvailable)' != 'true'"
+             Text="[transpile-blazor] 未找到 node（已探测 PATH 及常见安装位置），跳过转译，使用已提交的 improved.js 兜底。如需启用请安装 Node.js 或设置 NodeToolPath。"
              Importance="high" />
 
     <!-- 仅当 esbuild 缺失时 npm install（避免每次构建联网） -->
     <Exec Command="npm install --prefix &quot;$(MSBuildThisFileDirectory)&quot; --no-audit --no-fund"
           WorkingDirectory="$(MSBuildThisFileDirectory)"
-          Condition="'$(_NodeExit)' == '0' AND !Exists('$(_EsbuildMarker)')"
+          Condition="'$(_NodeAvailable)' == 'true' AND !Exists('$(_EsbuildMarker)')"
           ContinueOnError="true" />
 
+    <!-- 打印实际选用的 node（便于确认命中了哪个候选：VS 自带 / WorkBuddy / PATH 裸 node） -->
+    <Message Condition="'$(_NodeAvailable)' == 'true'"
+             Text="[transpile-blazor] using node: $(_ResolvedNode)"
+             Importance="high" />
+
     <!-- 转译：把官方文件降级到 es2018 -->
-    <Exec Command="&quot;$(NodeToolPath)&quot; &quot;$(BlazorWebViewEs2019Script)&quot; --out &quot;$(BlazorWebViewEs2019Output)&quot;"
+    <Exec Command="&quot;$(_ResolvedNode)&quot; &quot;$(BlazorWebViewEs2019Script)&quot; --out &quot;$(BlazorWebViewEs2019Output)&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)"
-          Condition="'$(_NodeExit)' == '0'"
+          Condition="'$(_NodeAvailable)' == 'true'"
           ContinueOnError="true" />
   </Target>
 

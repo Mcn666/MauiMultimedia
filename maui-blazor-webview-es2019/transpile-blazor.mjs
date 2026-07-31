@@ -50,7 +50,7 @@ function findOfficialFile() {
     }
   }
   if (candidates.length === 0) {
-    throw new Error('找不到官方 blazor.webview.js（NuGet 缓存无 microsoft.aspnetcore.components.webview 包，请先 restore）');
+    throw new Error('Official blazor.webview.js not found (no microsoft.aspnetcore.components.webview package in NuGet cache; run restore first)');
   }
   candidates.sort((a, b) => cmpVer(a.ver, b.ver));
   return candidates[candidates.length - 1].f;
@@ -81,7 +81,7 @@ const polyfillBanner = `(function(){
 async function main() {
   const { out, input } = parseArgs(process.argv.slice(2));
   const src = input && existsSync(input) ? input : findOfficialFile();
-  console.log('[transpile-blazor] 源文件: ' + src);
+  console.log('[transpile-blazor] source: ' + src);
   const code = readFileSync(src, 'utf8');
 
   let transform;
@@ -89,10 +89,10 @@ async function main() {
     ({ transform } = await import('esbuild'));
   } catch (e) {
     if (existsSync(out)) {
-      console.warn('[transpile-blazor] esbuild 未安装，跳过（使用已存在的输出文件作兜底）：' + out);
+      console.warn('[transpile-blazor] esbuild not installed, skipping (falling back to existing output): ' + out);
       process.exit(0);
     }
-    console.error('[transpile-blazor] esbuild 未安装且输出文件不存在。请在工具包目录执行：npm install');
+    console.error('[transpile-blazor] esbuild not installed and no output file present. Run "npm install" in the toolkit dir.');
     process.exit(1);
   }
 
@@ -109,14 +109,14 @@ async function main() {
   // 自检：确认降级后不再含现代语法
   const optionalChaining = (outCode.match(/\?\./g) || []).length;
   const nullish = (outCode.match(/[^=?]\?\?[^=?=]/g) || []).length;
-  console.log(`[transpile-blazor] 已写出 ${out} (${(outCode.length / 1024).toFixed(1)} KB)`);
-  console.log(`[transpile-blazor] 自检: 可选链剩余 ${optionalChaining}, 空值合并剩余 ${nullish}`);
+  console.log(`[transpile-blazor] written ${out} (${(outCode.length / 1024).toFixed(1)} KB)`);
+  console.log(`[transpile-blazor] self-check: optional chaining left ${optionalChaining}, nullish coalescing left ${nullish}`);
   if (optionalChaining > 0 || nullish > 0) {
-    console.warn('[transpile-blazor] 警告: 产物仍含 ES2020 语法，请检查 esbuild 版本/目标。');
+    console.warn('[transpile-blazor] WARNING: output still contains ES2020 syntax; check esbuild version/target.');
   }
 }
 
 main().catch((e) => {
-  console.error('[transpile-blazor] 失败: ' + e.message);
+  console.error('[transpile-blazor] failed: ' + e.message);
   process.exit(1);
 });

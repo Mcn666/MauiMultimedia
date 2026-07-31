@@ -23,24 +23,65 @@ public static class DdsDecoder
         /// BC4, BC5, BC7 (via DX10 header), DXT2/DXT4 (as DXT3/5), and uncompressed
         /// 32-bit RGBA/BGRA. Returns null on failure.
         /// </summary>
+        /// <summary>
+        /// Decodes a DDS file to a PNG data URI. Handles DXT1/BC1, DXT3/BC2, DXT5/BC3,
+        /// BC4, BC5, BC7 (via DX10 header), DXT2/DXT4 (as DXT3/5), and uncompressed
+        /// 32-bit RGBA/BGRA. Returns null on failure.
+        /// </summary>
         public static (string? dataUri, int width, int height) DecodeDds(string filePath)
         {
+            if (!TryDecodeToRgba(filePath, out int w, out int h, out byte[] rgba))
+                return (null, 0, 0);
+
+            using var bitmap = new SKBitmap(w, h, SKColorType.Rgba8888, SKAlphaType.Premul);
+            System.Runtime.InteropServices.Marshal.Copy(rgba, 0, bitmap.GetPixels(), rgba.Length);
+            using var image = SKImage.FromBitmap(bitmap);
+            using var pngData = image.Encode(SKEncodedImageFormat.Png, 100);
+            var dataUri = "data:image/png;base64," + Convert.ToBase64String(pngData.ToArray());
+            return (dataUri, w, h);
+        }
+
+        /// <summary>
+        /// Decodes a DDS file and writes the result directly to a PNG file on disk
+        /// (no base64 round-trip). Prefer this over <see cref="DecodeDds"/> when the
+        /// caller only needs the decoded bytes written out — avoids building a multi-MB
+        /// base64 string that would otherwise be bridged across JS interop and parsed on
+        /// the WebView main thread (which freezes the UI when switching models).
+        /// Returns false on failure.
+        /// </summary>
+        public static bool DecodeDdsToFile(string filePath, string outPngPath)
+        {
+            if (!TryDecodeToRgba(filePath, out int w, out int h, out byte[] rgba))
+                return false;
+
+            using var bitmap = new SKBitmap(w, h, SKColorType.Rgba8888, SKAlphaType.Premul);
+            System.Runtime.InteropServices.Marshal.Copy(rgba, 0, bitmap.GetPixels(), rgba.Length);
+            using var image = SKImage.FromBitmap(bitmap);
+            using var pngData = image.Encode(SKEncodedImageFormat.Png, 100);
+            using var fs = File.Create(outPngPath);
+            pngData.SaveTo(fs);
+            return true;
+        }
+
+        private static bool TryDecodeToRgba(string filePath, out int width, out int height, out byte[] rgba)
+        {
+            width = 0; height = 0; rgba = Array.Empty<byte>();
             try
             {
                 var data = File.ReadAllBytes(filePath);
-                if (data.Length < 128) return (null, 0, 0);
-                if (BitConverter.ToUInt32(data, 0) != DdsMagic) return (null, 0, 0);
+                if (data.Length < 128) return false;
+                if (BitConverter.ToUInt32(data, 0) != DdsMagic) return false;
 
-                int height = (int)BitConverter.ToUInt32(data, 12);
-                int width = (int)BitConverter.ToUInt32(data, 16);
+                height = (int)BitConverter.ToUInt32(data, 12);
+                width = (int)BitConverter.ToUInt32(data, 16);
                 uint pfFlags = BitConverter.ToUInt32(data, 80);
                 uint fourCC = BitConverter.ToUInt32(data, 84);
                 int bitCount = (int)BitConverter.ToUInt32(data, 88);
 
                 if (width <= 0 || height <= 0 || width > 16384 || height > 16384)
-                    return (null, 0, 0);
+                    return false;
 
-                byte[] rgba = new byte[width * height * 4];
+                rgba = new byte[width * height * 4];
 
                 if ((pfFlags & DdpfFourCC) != 0)
                 {
@@ -64,7 +105,7 @@ public static class DdsDecoder
                             case 80: DecodeBc4(data, dataOff, width, height, rgba); break;   // BC4
                             case 83: DecodeBc5(data, dataOff, width, height, rgba); break;   // BC5
                             case 98: case 99: DecodeBc7(data, dataOff, width, height, rgba); break;
-                            default: return (null, 0, 0); // BC6H etc. unsupported
+                            default: return false; // BC6H etc. unsupported
                         }
                     }
                     else
@@ -76,7 +117,7 @@ public static class DdsDecoder
                             case "DXT3": DecodeDxt3(data, dataOff, width, height, rgba); break;
                             case "DXT4": DecodeDxt5(data, dataOff, width, height, rgba); break; // DXT4 ≈ DXT5
                             case "DXT5": DecodeDxt5(data, dataOff, width, height, rgba); break;
-                            default: return (null, 0, 0);
+                            default: return false;
                         }
                     }
 
@@ -94,7 +135,7 @@ public static class DdsDecoder
                     bool isBgra = (bMask == 0x000000FF && rMask == 0x00FF0000);
                     bool isRgba = (rMask == 0x000000FF && bMask == 0x00FF0000);
 
-                    if (!isBgra && !isRgba) return (null, 0, 0);
+                    if (!isBgra && !isRgba) return false;
 
                     int srcStride = width * 4;
                     for (int y = 0; y < height; y++)
@@ -120,20 +161,14 @@ public static class DdsDecoder
                 }
                 else
                 {
-                    return (null, 0, 0); // unsupported format
+                    return false; // unsupported format
                 }
 
-                // Encode to PNG via SkiaSharp
-                using var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-                System.Runtime.InteropServices.Marshal.Copy(rgba, 0, bitmap.GetPixels(), rgba.Length);
-                using var image = SKImage.FromBitmap(bitmap);
-                using var pngData = image.Encode(SKEncodedImageFormat.Png, 100);
-                var dataUri = "data:image/png;base64," + Convert.ToBase64String(pngData.ToArray());
-                return (dataUri, width, height);
+                return true;
             }
             catch
             {
-                return (null, 0, 0);
+                return false;
             }
         }
 

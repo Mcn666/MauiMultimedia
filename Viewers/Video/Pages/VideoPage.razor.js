@@ -233,12 +233,125 @@ export function stopVideo(elementId) {
     v.load();
 }
 
-export function setupAutoNext(elementId) {
+// ── 自定义控件条驱动 ──
+// 统一操作同一个 <video> 元素：无论原生 <video src> 还是 mpegts.js 经 MSE 喂入，
+// 最终都落到该元素，因此音量/进度/倍速/全屏在两条路径下行为一致。
+
+export function playPause(elementId) {
     const v = document.getElementById(elementId);
-    if (!v) return 'no-element';
-    v.addEventListener('ended', function () {
-        const nextBtn = document.querySelector('button[title="下一个"]');
-        if (nextBtn && !nextBtn.disabled) nextBtn.click();
+    if (!v) return;
+    if (v.paused) v.play().catch(() => { /* 自动播放策略可能拒绝，忽略 */ });
+    else v.pause();
+}
+
+export function setVolume(elementId, vol) {
+    const v = document.getElementById(elementId);
+    if (!v) return;
+    v.volume = Math.max(0, Math.min(1, vol));
+    if (v.volume > 0) v.muted = false;
+}
+
+export function setMuted(elementId, muted) {
+    const v = document.getElementById(elementId);
+    if (v) v.muted = !!muted;
+}
+
+export function setCurrentTime(elementId, t) {
+    const v = document.getElementById(elementId);
+    if (v) v.currentTime = t;
+}
+
+export function setPlaybackRate(elementId, r) {
+    const v = document.getElementById(elementId);
+    if (v) v.playbackRate = r;
+}
+
+export function setLoop(elementId, loop) {
+    const v = document.getElementById(elementId);
+    if (v) v.loop = !!loop;
+}
+
+// 绑定 <video> 事件 → 回传 C#（dotNetRef.invokeMethodAsync）。
+// 用 _vpBound 守卫避免重复绑定（切换视频源时元素复用，不应二次监听）。
+export function initControls(elementId, dotNetRef) {
+    const v = document.getElementById(elementId);
+    if (!v || v._vpBound) return;
+    v._vpBound = true;
+
+    const cb = (name, arg) => {
+        try { dotNetRef.invokeMethodAsync(name, arg); } catch (e) { /* ignore */ }
+    };
+
+    v.addEventListener('play', () => cb('OnPlayingChanged', true));
+    v.addEventListener('pause', () => cb('OnPlayingChanged', false));
+    v.addEventListener('timeupdate', () => cb('OnTimeUpdate', v.currentTime));
+    v.addEventListener('durationchange', () => cb('OnDurationChanged', isFinite(v.duration) ? v.duration : 0));
+    v.addEventListener('loadedmetadata', () => cb('OnDurationChanged', isFinite(v.duration) ? v.duration : 0));
+    v.addEventListener('volumechange', () => cb('OnVolumeChanged', v.volume, v.muted));
+    v.addEventListener('ended', () => cb('OnEnded', null));
+
+    // ── 手势：点按=播放/暂停（立即）；横向滑动=拖动进度（scrub） ──
+    // 点按与滑动靠「位移量」区分（pointerup 时判定），无需等待第二次点击，
+    // 因此单击播放/暂停可立即响应，彻底去掉此前单/双击区分所需的 250ms 延迟。
+    const inUiArea = (el) => el && el.closest &&
+        (el.closest('.vp-controls') || el.closest('.vp-center-btn'));
+    // 监听挂在整个播放器视口（.video-container）上，而非 <video> 本身——
+    // 视频在容器里是信箱式居中的黑边矩形，若只挂 <video>，黑边与画面外视口区域
+    // 没有监听，点击/滑动就会失效。scrub 距离仍按视频自身尺寸计算。
+    const stage = v.closest('.video-container') || v.parentElement || v;
+    let pId = -1, pX = 0, pY = 0, pDown = false, pSwipe = false, pSwipeStarted = false,
+        scrubFrom = 0, rafId = 0, rafTarget = 0;
+    const SWIPE_MIN = 8;        // px，超过即判定为滑动而非点按
+    const SEEK_SPAN = 60;       // 整屏宽度对应的时间跨度(秒)：滑动仅做微调，大幅跳转请用控件条进度条
+
+    stage.addEventListener('pointerdown', (e) => {
+        if (inUiArea(e.target)) return;             // 控件条 / 中央按钮自行处理
+        pDown = true; pSwipe = false; pSwipeStarted = false;
+        pId = e.pointerId; pX = e.clientX; pY = e.clientY;
+        scrubFrom = v.currentTime;
+        try { stage.setPointerCapture(pId); } catch (_) { /* 不支持捕获时滑动离场即结束 */ }
     });
-    return 'ok';
+
+    stage.addEventListener('pointermove', (e) => {
+        if (!pDown || e.pointerId !== pId) return;
+        const dx = e.clientX - pX, dy = e.clientY - pY;
+        if (!pSwipe) {
+            // 进入滑动判定：横向位移足够大且明显大于纵向（避免竖向误触）
+            if (Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(dy) * 1.4) pSwipe = true;
+            else return;
+        }
+        e.preventDefault();                         // 阻止默认手势（文本选择 / 滚动）
+        if (!pSwipeStarted) { pSwipeStarted = true; cb('OnScrubStart', 0); }
+        const rect = v.getBoundingClientRect();
+        const dur = isFinite(v.duration) ? v.duration : 0;
+        const delta = (dx / rect.width) * SEEK_SPAN;  // 滑动仅做微调：整屏宽 ≈ 固定时间窗，与视频总时长无关
+        rafTarget = Math.max(0, Math.min(dur, scrubFrom + delta));
+        if (!rafId) {
+            rafId = requestAnimationFrame(() => {
+                rafId = 0;
+                if (isFinite(rafTarget)) v.currentTime = rafTarget;   // 直播式 scrub
+                cb('OnScrub', rafTarget);
+            });
+        }
+    }, { passive: false });
+
+    function endPointer(e) {
+        if (!pDown || (pId >= 0 && e.pointerId !== pId)) return;
+        pDown = false;
+        try { stage.releasePointerCapture(pId); } catch (_) { /* ignore */ }
+        pId = -1; pSwipeStarted = false;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        if (pSwipe) {
+            cb('OnScrubEnd', isFinite(v.currentTime) ? v.currentTime : 0);
+        } else {
+            cb('OnVideoClick', null);               // 点按：立即播放/暂停（无延迟）
+        }
+    }
+    stage.addEventListener('pointerup', endPointer);
+    stage.addEventListener('pointercancel', endPointer);
+
+    // 推送初始状态
+    cb('OnPlayingChanged', !v.paused);
+    cb('OnVolumeChanged', v.volume, v.muted);
+    if (isFinite(v.duration) && v.duration > 0) cb('OnDurationChanged', v.duration);
 }

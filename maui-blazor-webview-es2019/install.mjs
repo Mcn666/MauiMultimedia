@@ -24,8 +24,8 @@ const noBuild = args.includes('--no-build');
 const projectRoot = resolve(args.find((a) => !a.startsWith('--')) || process.cwd());
 
 function log(m) { console.log('[install] ' + m); }
-function warn(m) { console.warn('[install] ⚠ ' + m); }
-function fail(m) { console.error('[install] ✗ ' + m); process.exit(1); }
+function warn(m) { console.warn('[install] WARN: ' + m); }
+function fail(m) { console.error('[install] ERR: ' + m); process.exit(1); }
 
 // 1) 找主 csproj
 function findMainCsproj(root) {
@@ -44,7 +44,7 @@ function findMainCsproj(root) {
       }
     }
   })(root);
-  if (all.length === 0) fail('在 ' + root + ' 找不到任何 .csproj');
+  if (all.length === 0) fail('No .csproj found under ' + root);
 
   const score = (p) => {
     const txt = readFileSync(p, 'utf8');
@@ -63,26 +63,26 @@ function findMainCsproj(root) {
 
 // 2) 复制工具包（排除 node_modules / package-lock.json）
 function copyToolkit(dest) {
-  if (resolve(toolkitDir) === resolve(dest)) { log('工具包已就位（原地），跳过复制'); return; }
+  if (resolve(toolkitDir) === resolve(dest)) { log('Toolkit already in place (same dir), skipping copy'); return; }
   const exists = existsSync(dest);
   mkdirSync(dest, { recursive: true });
   for (const e of readdirSync(toolkitDir)) {
     if (e === 'node_modules' || e === 'package-lock.json') continue;
     cpSync(join(toolkitDir, e), join(dest, e), { recursive: true, force: true });
   }
-  log(exists ? '工具包已更新: ' + dest : '工具包已复制: ' + dest);
+  log(exists ? 'Toolkit updated: ' + dest : 'Toolkit copied: ' + dest);
 }
 
 // 3) 在 csproj 末尾插入 Import
 function patchCsproj(csproj, importRel) {
   let txt = readFileSync(csproj, 'utf8');
-  if (/transpile-blazor\.targets/i.test(txt)) { log('csproj 已含 Import，跳过'); return; }
+  if (/transpile-blazor\.targets/i.test(txt)) { log('csproj already has Import, skipping'); return; }
   const idx = txt.lastIndexOf('</Project>');
-  if (idx < 0) fail('csproj 结构异常，未找到 </Project>');
+  if (idx < 0) fail('csproj malformed: </Project> not found');
   const insert = '  <Import Project="' + importRel + '" />\n';
   txt = txt.slice(0, idx) + insert + txt.slice(idx);
   writeFileSync(csproj, txt, 'utf8');
-  log('已插入 Import 到 ' + basename(csproj));
+  log('Inserted Import into ' + basename(csproj));
 }
 
 // 4) 替换 host 页官方脚本
@@ -113,11 +113,11 @@ function patchHostPages(root) {
       txt = txt.replace(officialRe, '<script src="scripts/blazor.webview.improved.js" autostart="false"></script>');
       writeFileSync(h, txt, 'utf8');
       patched++;
-      log('已替换 host 页脚本: ' + h);
+      log('Patched host page script: ' + h);
     }
   }
   if (patched === 0 && !anyImproved) {
-    warn('未找到官方 blazor.webview.js 引用；若 host 页在别处，请手动加入：');
+    warn('No official blazor.webview.js reference found; if the host page is elsewhere, add manually:');
     warn('  <script src="scripts/blazor.webview.improved.js" autostart="false"></script>');
   }
 }
@@ -128,9 +128,9 @@ function run(cmd, cwd) {
 }
 
 (async () => {
-  log('目标项目: ' + projectRoot);
+  log('Target project: ' + projectRoot);
   const csproj = findMainCsproj(projectRoot);
-  log('主项目: ' + csproj + '  (若不对，请直接编辑 .csproj 的 Import 路径)');
+  log('Main project: ' + csproj + '  (if wrong, edit the csproj Import path directly)');
   const projectDir = dirname(csproj);
   const destToolkit = join(projectRoot, 'maui-blazor-webview-es2019');
   copyToolkit(destToolkit);
@@ -140,20 +140,20 @@ function run(cmd, cwd) {
   patchHostPages(projectRoot);
 
   if (noBuild) {
-    log('（--no-build）已跳过依赖安装与转译。需要时运行：');
+    log('(--no-build) skipped dependency install and transpile. To run later:');
     log('  cd ' + destToolkit + ' && npm install');
     log('  node ' + join(destToolkit, 'transpile-blazor.mjs') + ' --out ' + join(projectDir, 'wwwroot', 'scripts', 'blazor.webview.improved.js'));
     return;
   }
 
-  log('安装 esbuild 依赖（首次）...');
+  log('Installing esbuild deps (first time)...');
   const st = run(['npm', 'install', '--no-audit', '--no-fund'], destToolkit);
-  if (st !== 0) fail('npm install 失败，请在 ' + destToolkit + ' 手动运行 npm install');
+  if (st !== 0) fail('npm install failed; run "npm install" manually in ' + destToolkit);
 
   const out = join(projectDir, 'wwwroot', 'scripts', 'blazor.webview.improved.js');
-  log('生成兼容脚本: ' + out);
+  log('Generating compatible script: ' + out);
   const st2 = run(['node', join(destToolkit, 'transpile-blazor.mjs'), '--out', out], destToolkit);
-  if (st2 !== 0) fail('转译失败');
+  if (st2 !== 0) fail('Transpile failed');
 
-  log('✅ 完成！现在用 dotnet build 构建即可。每次升级 .NET 后重建会自动重新生成。');
+  log('Done! Now build with "dotnet build". It regenerates automatically after each .NET upgrade.');
 })();

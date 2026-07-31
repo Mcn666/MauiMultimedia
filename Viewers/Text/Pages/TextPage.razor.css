@@ -164,6 +164,7 @@ html.no-flex-gap .viewer-loading > * + * { margin-inline-start: 8px; }
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
+    max-width: calc(100vw - 24px);                      /* 旧 WebView(不支持 min()) 回退 */
     max-width: min(500px, calc(100vw - 24px));
     background: var(--bg-primary);
     border: 1px solid var(--border-primary);

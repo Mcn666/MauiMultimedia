@@ -22,6 +22,7 @@ namespace MauiMultimedia.Shell
             builder.Services.AddSingleton<IFileNavigationState>(sp => sp.GetRequiredService<FileBrowserStateService>());
             builder.Services.AddSingleton<AliasService>();
             builder.Services.AddSingleton<IMauiNavigation, MauiNavigationService>();
+            builder.Services.AddSingleton<IMauiOrientation, MauiOrientationService>();
             builder.Services.AddSingleton<ViewerPageFactory>();
             builder.Services.AddSingleton<IFileServerService>(sp =>
             {

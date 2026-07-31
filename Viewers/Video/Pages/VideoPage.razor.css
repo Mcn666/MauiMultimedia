@@ -19,6 +19,7 @@
     border-radius: 8px;
     overflow: hidden;
     position: relative;
+    touch-action: none;   /* 黑边（容器背景区）也要禁用浏览器默认手势：否则垂直滑动会被当成页面滚动而取消 pointer 事件（上下黑边断触）；横屏锁定后黑边恰在上下，控件条靠滑动/点击黑边唤出也会被一并吞掉 */
 }
 
 .video-player {
@@ -28,6 +29,7 @@
     height: auto;
     display: block;
     outline: none;
+    touch-action: none;   /* 让横向滑动手势交给我们处理，不被浏览器默认手势（选择/滚动）拦截 */
 }
 
 /* ── 错误状态 ── */
@@ -58,5 +60,297 @@
 
 /* Android 10 WebView (Chrome < 84) flex-gap fallback */
 html.no-flex-gap .v-status > * + * { margin-inline-start: 8px; }
+html.no-flex-gap .vp-controls > * + * { margin-block-start: 6px; }
+html.no-flex-gap .vp-bar > * + * { margin-inline-start: 8px; }
+html.no-flex-gap .vp-volume > * + * { margin-inline-start: 6px; }
+html.no-flex-gap .vp-menu-panel > * + * { margin-block-start: 2px; }
 
 /* ── 诊断面板样式已随定位期代码一并移除 ── */
+
+/* ── 自定义控件条 ── */
+.video-container { position: relative; }
+
+/* 全屏 / 横屏：铺满整个 WebView（原生锁横屏由 MAUI 层负责） */
+.video-container.fs {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 9999;
+    margin: 0;
+    border-radius: 0;
+}
+.video-container.fs .video-player {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    object-fit: contain;
+}
+
+.vp-controls {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px 12px 12px;
+    background: linear-gradient(to top, rgba(0,0,0,.78), rgba(0,0,0,0));
+    color: #fff;
+    touch-action: none;
+    transition: opacity .3s ease;
+}
+/* 闲置自动隐藏：完整控件条淡出，仅留底部细进度条 */
+.video-container.ui-hidden .vp-controls { opacity: 0; pointer-events: none; }
+
+/* ── 中央播放/暂停控件 ── */
+.vp-center {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;        /* 点击穿透到 video，仅按钮本身可点 */
+    transition: opacity .2s ease;
+}
+.vp-center.is-playing { opacity: 0; pointer-events: none; }   /* 播放时淡出，露出视频画面且不拦截点击 */
+.vp-center-btn {
+    pointer-events: auto;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,.5);
+    color: #fff;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 18px rgba(0,0,0,.45);
+    transition: transform .12s ease, background .12s ease;
+}
+.vp-center-btn:active { transform: scale(.92); background: rgba(0,0,0,.68); }
+
+/* ── 常驻细进度条：控件条隐藏时显示，仅作视觉指示、不抢视觉 ── */
+.vp-progress-rail {
+    display: none;
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 3px;
+    background: rgba(255,255,255,.18);
+    z-index: 4;
+    pointer-events: none;
+}
+.video-container.ui-hidden .vp-progress-rail { display: block; }
+.vp-progress-fill {
+    height: 100%;
+    width: 0;
+    background: var(--accent, #3a7afe);
+    transition: width .15s linear;
+}
+.vp-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vp-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+.vp-btn:active { background: rgba(255,255,255,.18); }
+.vp-btn.active { color: var(--accent, #3a7afe); }
+
+.vp-time {
+    font-size: 12px;
+    color: #ddd;
+    font-variant-numeric: tabular-nums;
+}
+.vp-spacer { flex: 1; }
+
+/* ── 进度条 / 音量条：YouTube 风格圆角细轨道 + 蓝色填充 + 圆形拖柄 ── */
+.vp-volume { display: flex; align-items: center; gap: 6px; }
+
+/* 公共：去掉原生外观，用元素背景渐变绘制「已填充 / 未填充」两段 */
+.vp-seek,
+.vp-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+    background: linear-gradient(
+        to right,
+        var(--accent, #3a7afe) 0%,
+        var(--accent, #3a7afe) var(--p, 0%),
+        rgba(255, 255, 255, .25) var(--p, 0%),
+        rgba(255, 255, 255, .25) 100%);
+}
+.vp-seek { width: 100%; height: 6px; transition: height .12s ease; }
+.vp-slider { width: 84px; height: 4px; }
+
+/* WebKit 轨道透明，露出元素背景渐变 */
+.vp-seek::-webkit-slider-runnable-track,
+.vp-slider::-webkit-slider-runnable-track { background: transparent; height: 100%; }
+
+/* 圆形拖柄：默认半透明常驻，悬停/拖动放大并高亮 */
+.vp-seek::-webkit-slider-thumb,
+.vp-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    margin-top: -4px;            /* 非 hover 居中：seek 轨道6px/thumb14px、slider 轨道4px/thumb12px，(track-thumb)/2 = -4px */
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, .55);
+    opacity: .85;
+    transition: opacity .12s ease, transform .12s ease;
+}
+.vp-slider::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; }
+/* hover 时轨道增粗（seek 6→8、slider 4→6），thumb 高度不变，须同步修正 margin-top 保持竖直居中 */
+.vp-seek:hover::-webkit-slider-thumb { margin-top: -3px; }
+.vp-slider:hover::-webkit-slider-thumb { margin-top: -3px; }
+
+/* Firefox 兼容 */
+.vp-seek::-moz-range-track,
+.vp-slider::-moz-range-track { background: transparent; height: 100%; }
+.vp-seek::-moz-range-thumb,
+.vp-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border: none; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 5px rgba(0, 0, 0, .55); opacity: .85;
+    transition: opacity .12s ease, transform .12s ease;
+}
+.vp-slider::-moz-range-thumb { width: 12px; height: 12px; }
+.vp-seek::-moz-range-progress,
+.vp-slider::-moz-range-progress { background: var(--accent, #3a7afe); height: 100%; border-radius: 999px; }
+
+/* 交互：悬停/拖动时轨道略增粗、拖柄全显并放大（scale 不影响居中计算） */
+.vp-seek:hover { height: 8px; }
+.vp-slider:hover { height: 6px; }
+.vp-seek:hover::-webkit-slider-thumb,
+.vp-seek:active::-webkit-slider-thumb,
+.vp-slider:hover::-webkit-slider-thumb,
+.vp-slider:active::-webkit-slider-thumb { opacity: 1; }
+.vp-seek:active::-webkit-slider-thumb,
+.vp-seek:active::-moz-range-thumb { transform: scale(1.3); }
+.vp-slider:active::-webkit-slider-thumb,
+.vp-slider:active::-moz-range-thumb { transform: scale(1.25); }
+
+.vp-overflow { position: relative; z-index: 2; }   /* 高于 .vp-overlay(1)，使按钮与菜单在遮罩之上、可被点击 */
+
+/* 全屏透明遮罩：菜单展开时覆盖整个视频区域，拦截「菜单以外」的点击/右键以关闭菜单。
+   参考 Home .theme-overlay：纯点击切换 + 遮罩关闭，不含任何 hover 逻辑。
+   位于 .vp-controls 堆叠上下文内（z-index:1），低于 .vp-overflow(z-index:2)，故不遮挡菜单本身。 */
+.vp-overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 1;
+    background: transparent;
+}
+/* 横向滑出浮层：固定宽度的视口 + 两条并排面板，整条轨道平移切换 */
+.vp-menu {
+    position: absolute;
+    right: 0;
+    bottom: 100%;            /* 紧贴 ⋮ 按钮上方：消除「按钮与菜单间空隙」导致 :hover 中断、菜单闪退的问题（Home 同款贴边做法） */
+    width: 168px;
+    overflow: hidden;
+    background: rgba(28,28,30,.96);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.45);
+    /* 视口高度跟随当前可见面板：默认主面板(2 项)约 88px，展开倍速时子面板(6 项)约 216px。
+       不能靠 flex stretch 自动取高度——否则主面板会被拉到和倍速面板一样高而留白。 */
+    height: 88px;
+    /* 默认隐藏：由 CSS :hover(桌面精确指针) 或 .open(点击固定) 显示。
+       用 opacity + pointer-events（非 display:none），保留 height 过渡动画。 */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, height .22s ease;
+}
+/* 桌面（精确指针 + 可悬停）才用 hover 打开；触屏不激活，避免移动端 tap 卡住 :hover 导致菜单关不掉 —— 与 Home .theme-menu 一致 */
+@media (hover: hover) and (pointer: fine) {
+    .vp-overflow:hover .vp-menu {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+/* 点击 ⋮ 固定展开（C# 状态 _showOverflow → .open），移开光标也保持 */
+.vp-menu.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+/* 视口高度跟随当前可见面板：主面板(2项)≈88px、倍速子面板(6项)≈216px、播放模式子面板(4项)≈152px */
+.vp-menu.at-rate { height: 216px; }
+.vp-menu.at-mode { height: 168px; }
+.vp-menu-track {
+    display: flex;
+    align-items: flex-start;   /* 各面板保持自身高度、顶对齐，互不拉伸 */
+    width: 300%;               /* 三个面板：主 + 倍速子 + 播放模式子 */
+    height: 100%;
+    transition: transform .22s ease;
+    transform: translateX(0);
+}
+.vp-menu.at-rate .vp-menu-track { transform: translateX(-33.3333%); }
+.vp-menu.at-mode .vp-menu-track { transform: translateX(-66.6667%); }
+.vp-menu-panel {
+    flex: 0 0 33.3333%;
+    width: 33.3333%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+}
+.vp-menu-item {
+    background: transparent;
+    border: none;
+    color: #fff;
+    text-align: left;
+    padding: 7px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    white-space: nowrap;   /* 中文选项（如「播完停止」）强制单行，避免字符间断行后被菜单 overflow:hidden 裁切；拉丁短文本本就一行，无影响 */
+}
+.vp-menu-item:active,
+.vp-menu-item.active { background: rgba(255,255,255,.14); color: var(--accent, #3a7afe); }
+.vp-menu-val { color: #bdbdbd; font-size: 12px; }
+.vp-menu-sep { height: 1px; background: rgba(255,255,255,.12); margin: 4px 2px; }
+
+@media (max-width: 600px) {
+    .vp-slider { width: 64px; }
+    .vp-btn { font-size: 20px; }
+}
+
+/* ── 横向滑动拖动进度（scrub）提示浮层 ── */
+.vp-seek-hint {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    pointer-events: none;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .6);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    white-space: nowrap;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .45);
+    font-variant-numeric: tabular-nums;
+    opacity: 0;                       /* 默认隐藏，由 .show 淡入；移除 .show 时淡出 */
+    transition: opacity .18s ease;
+}
+.vp-seek-hint.show { opacity: 1; }

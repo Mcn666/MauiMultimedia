@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using System.Timers;
 using MauiMultimedia.Core.Abstractions;
 using MauiMultimedia.Core.Utils;
 
@@ -12,6 +13,7 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     [Inject] private IFileNavigationState NavState { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
+    [Inject] private IMauiOrientation Orientation { get; set; } = null!;
     [Inject] private IFileServerService FileServer { get; set; } = null!;
 
     private static readonly HashSet<string> Exts = VideoConstants.Exts;
@@ -27,6 +29,37 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     private string? errorMessage;
     private List<string> fileList = new();
     private int currentIndex = -1;
+
+    // ── 自定义控件条状态 ──
+    private IDisposable? _dotNetRef;
+    private bool _isPlaying;
+    private double _currentTime;
+    private double _duration;
+    private float _volume = 1f;
+    private bool _isMuted;
+    private bool _isFullscreen;
+
+    // 控件条自动隐藏：播放中且用户闲置一段时间后淡出，只留细进度条
+    private bool _uiHidden;
+    private System.Timers.Timer? _hideTimer;
+    private bool _hideTimerInit;
+    private const int ControlHideDelayMs = 3000;
+
+    // 当前播放进度百分比（0–100），供常驻细进度条使用
+    private double ProgressPercent => _duration > 0 ? Math.Clamp(_currentTime / _duration * 100, 0, 100) : 0;
+    private double _playbackRate = 1.0;
+    private bool _isLooping;
+    private bool _showOverflow;
+    // 溢出菜单二级面板：null=主面板，"rate"=倍速子面板，"mode"=播放模式子面板
+    private string? _sub;
+
+    // 播放结束行为（互斥三态）：Stop=播完停止 / Loop=循环当前 / AutoNext=自动连播下一个
+    private enum PlayEndMode { Stop, Loop, AutoNext }
+    private PlayEndMode _playEndMode = PlayEndMode.AutoNext;   // 原默认即为连播，保持兼容
+
+    // 横向滑动拖动进度（scrub）时居中的时间提示（target / duration），.show 控制淡入淡出
+    private string? _seekHintText;
+    private bool _scrubHintOn;
 
     // ═══════════ 生命周期 ═══════════
 
@@ -64,10 +97,11 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
                 _jsModule = await JS.InvokeAsync<IJSObjectReference>("import",
                     "/_content/MauiMultimedia.Viewers.Video/Pages/VideoPage.razor.js");
 
-                // 自动播放下一个（失败不影响主流程）
+                // 绑定自定义控件条的事件回传（仅首次）
+                _dotNetRef ??= DotNetObjectReference.Create(this);
                 try
                 {
-                    await _jsModule.InvokeVoidAsync("setupAutoNext", _videoElementId);
+                    await _jsModule.InvokeVoidAsync("initControls", _videoElementId, _dotNetRef);
                 }
                 catch { }
             }
@@ -167,8 +201,10 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
         ReloadVideo();
     }
 
-    private void GoBack()
+    private async Task GoBack()
     {
+        _isFullscreen = false;
+        try { await Orientation.ExitLandscapeAsync(); } catch { }
         _ = StopVideoAsync();
         _ = MauiNav.GoBackAsync();
     }
@@ -188,15 +224,227 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
         fileName = Path.GetFileName(filePath);
     }
 
+    // ═══════════ 自定义控件条 ═══════════
+
+    private void TogglePlay() => _ = _jsModule?.InvokeVoidAsync("playPause", _videoElementId);
+
+    // 显示完整控件条（任意交互时调用），并重启隐藏倒计时
+    private void ShowControls()
+    {
+        bool changed = _uiHidden;
+        _uiHidden = false;
+        if (_isPlaying)
+        {
+            EnsureHideTimer();
+            _hideTimer?.Stop();
+            _hideTimer?.Start();
+        }
+        if (changed) StateHasChanged();
+    }
+
+    // 懒初始化隐藏计时器（只在播放且闲置时触发一次淡出）
+    private void EnsureHideTimer()
+    {
+        if (_hideTimerInit) return;
+        _hideTimerInit = true;
+        _hideTimer = new System.Timers.Timer(ControlHideDelayMs) { AutoReset = false };
+        _hideTimer.Elapsed += (_, _) =>
+        {
+            // 仅在仍在播放、且控件当前可见时才隐藏
+            if (_isPlaying && !_uiHidden)
+            {
+                _uiHidden = true;
+                // 控件条淡出时，若溢出菜单（含二级子菜单）仍展开，一并收起，
+                // 避免菜单悬在已隐藏的控件条之上，且下次控件条重现时菜单不会自动弹回、遮罩层随之清除
+                if (_showOverflow || _sub != null)
+                {
+                    _showOverflow = false;
+                    _sub = null;
+                }
+                InvokeAsync(StateHasChanged);
+            }
+        };
+    }
+
+    private async Task OnVolumeInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var v))
+        {
+            _volume = (float)Math.Clamp(v, 0, 1);
+            _isMuted = _volume <= 0;
+            if (_jsModule != null) await _jsModule.InvokeVoidAsync("setVolume", _videoElementId, _volume);
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleMute()
+    {
+        _isMuted = !_isMuted;
+        if (_jsModule != null) await _jsModule.InvokeVoidAsync("setMuted", _videoElementId, _isMuted);
+        StateHasChanged();
+    }
+
+    private async Task OnSeekInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var t) && _jsModule != null)
+        {
+            await _jsModule.InvokeVoidAsync("setCurrentTime", _videoElementId, t);
+            _currentTime = t;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SetRate(double r)
+    {
+        _playbackRate = r;
+        _showOverflow = false;
+        _sub = null;
+        if (_jsModule != null) await _jsModule.InvokeVoidAsync("setPlaybackRate", _videoElementId, r);
+        StateHasChanged();
+    }
+
+    // 展开/收起溢出菜单的二级面板（倍速 / 播放模式）
+    private void OpenSub(string? which) { _sub = which; StateHasChanged(); }
+
+    // 设置播放结束行为（互斥三态）。Loop 模式同步 video.loop；其余清除 loop。
+    private async Task SetMode(PlayEndMode mode)
+    {
+        _playEndMode = mode;
+        _isLooping = mode == PlayEndMode.Loop;
+        if (_jsModule != null) await _jsModule.InvokeVoidAsync("setLoop", _videoElementId, _isLooping);
+        _showOverflow = false;
+        _sub = null;
+        ShowControls();
+        StateHasChanged();
+    }
+
+    private string ModeLabel => _playEndMode switch
+    {
+        PlayEndMode.Loop => "循环",
+        PlayEndMode.AutoNext => "连播",
+        _ => "播完停止"
+    };
+
+    private void ToggleOverflow()
+    {
+        _showOverflow = !_showOverflow;
+        if (!_showOverflow) _sub = null;
+        ShowControls();          // 展开时确保控件条可见并重置隐藏倒计时
+        StateHasChanged();
+    }
+
+    // 点击菜单以外的任意位置（视频、其它控件、工具栏）关闭溢出菜单。
+    // 菜单本身通过 .vp-overflow 的 @onclick:stopPropagation 拦截冒泡，不会触发本方法。
+    private void CloseOverflow()
+    {
+        if (_showOverflow || _sub != null)
+        {
+            _showOverflow = false;
+            _sub = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        _isFullscreen = !_isFullscreen;
+        try
+        {
+            if (_isFullscreen) await Orientation.EnterLandscapeAsync();
+            else await Orientation.ExitLandscapeAsync();
+        }
+        catch { }
+        StateHasChanged();
+    }
+
+    private void GoNext()
+    {
+        if (currentIndex < fileList.Count - 1) OnFileSelected(currentIndex + 1);
+    }
+
+    private static string FormatTime(double secs)
+    {
+        if (!double.IsFinite(secs) || secs < 0) secs = 0;
+        var t = TimeSpan.FromSeconds(secs);
+        return t.Hours > 0
+            ? $"{(int)t.TotalHours}:{t.Minutes:D2}:{t.Seconds:D2}"
+            : $"{t.Minutes:D2}:{t.Seconds:D2}";
+    }
+
+    // JS 控件条事件回传
+    [JSInvokable]
+    public void OnPlayingChanged(bool playing)
+    {
+        _isPlaying = playing;
+        if (playing)
+        {
+            // 开始播放：显示控件，并在倒计时后自动隐藏
+            _uiHidden = false;
+            EnsureHideTimer();
+            _hideTimer?.Stop();
+            _hideTimer?.Start();
+        }
+        else
+        {
+            // 暂停/播完：立即显示控件，并停止隐藏倒计时
+            _uiHidden = false;
+            _hideTimer?.Stop();
+        }
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnTimeUpdate(double t) { _currentTime = t; StateHasChanged(); }
+
+    [JSInvokable]
+    public void OnDurationChanged(double d) { _duration = d; StateHasChanged(); }
+
+    [JSInvokable]
+    public void OnVolumeChanged(double v, bool muted) { _volume = (float)v; _isMuted = muted; StateHasChanged(); }
+
+    [JSInvokable]
+    public void OnEnded() { if (_playEndMode == PlayEndMode.AutoNext) GoNext(); }
+
+    // 点按视频画面（由 JS 区分于点按/滑动后回传，立即执行，无 250ms 延迟）→ 播放/暂停
+    [JSInvokable]
+    public void OnVideoClick() => TogglePlay();
+
+    // 横向滑动拖动进度开始：显示提示并唤起控件条（便于看到进度条）
+    [JSInvokable]
+    public void OnScrubStart(double _)
+    {
+        _scrubHintOn = true;
+        ShowControls();
+        StateHasChanged();
+    }
+
+    // 滑动过程中实时回传目标时间：更新居中提示（target / duration）
+    [JSInvokable]
+    public void OnScrub(double t)
+    {
+        _seekHintText = $"{FormatTime(t)} / {FormatTime(_duration)}";
+        StateHasChanged();
+    }
+
+    // 滑动结束：提交最终进度，淡出提示
+    [JSInvokable]
+    public void OnScrubEnd(double t)
+    {
+        _currentTime = t;
+        _scrubHintOn = false;
+        ShowControls();
+        StateHasChanged();
+    }
+
     // ═══════════ 键盘 ═══════════
 
     private void OnPageKeyDown(KeyboardEventArgs e)
     {
         switch (e.Key)
         {
-            case "Escape":
-                GoBack();
-                break;
+        case "Escape":
+            _ = GoBack();
+            break;
         }
     }
 
@@ -204,6 +452,12 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_hideTimer != null)
+        {
+            try { _hideTimer.Stop(); _hideTimer.Dispose(); } catch { }
+            _hideTimer = null;
+        }
+        try { await Orientation.ExitLandscapeAsync(); } catch { }
         await StopVideoAsync();
         if (_currentToken != null)
         {
@@ -214,6 +468,11 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
         {
             try { await _jsModule.DisposeAsync(); }
             catch { }
+        }
+        if (_dotNetRef != null)
+        {
+            try { _dotNetRef.Dispose(); } catch { }
+            _dotNetRef = null;
         }
     }
 

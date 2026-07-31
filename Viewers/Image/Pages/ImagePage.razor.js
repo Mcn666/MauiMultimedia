@@ -211,7 +211,39 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
   if (!el) return;
   _gestureEl = el;
 
+  // Multi-touch bookkeeping for pinch-zoom. Closed over so it persists across
+  // the pointerdown/move/up/cancel listeners below.
+  const pointers = new Map();   // pointerId -> {x, y}
+  let pinchActive = false;
+  let pinchStartDist = 0;
+
+  function distance(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  function midpoint(a, b) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
   el.addEventListener('pointerdown', (e) => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // ── Enter pinch mode when a second finger lands ──
+    if (pointers.size >= 2) {
+      const pts = [...pointers.values()];
+      pinchActive = true;
+      _gestureActive = false;          // pause any in-progress swipe/drag
+      el.classList.remove('tracking');
+      clearSlideTransform();           // undo a fit-mode swipe translate
+      _gestureCleanupPeek();
+      pinchStartDist = distance(pts[0], pts[1]);
+      const mid = midpoint(pts[0], pts[1]);
+      if (_gestureDotNetRef) {
+        _gestureDotNetRef.invokeMethodAsync('BeginPinch', mid.x, mid.y);
+      }
+      return;
+    }
+
     if (_gestureActive) return;
     // Let nav buttons handle their own clicks — don't capture
     if (e.target.closest('.nav-btn')) return;
@@ -232,6 +264,19 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
   });
 
   el.addEventListener('pointermove', (e) => {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // ── Pinch: scale by the ratio of current / start two-finger distance ──
+    if (pinchActive && pointers.size >= 2) {
+      const pts = [...pointers.values()];
+      const dist = distance(pts[0], pts[1]);
+      const mid = midpoint(pts[0], pts[1]);
+      if (pinchStartDist > 0 && _gestureDotNetRef) {
+        _gestureDotNetRef.invokeMethodAsync('OnPinchMove', dist / pinchStartDist, mid.x, mid.y);
+      }
+      return;
+    }
+
     if (!_gestureActive) return;
     const now = performance.now();
     const dt = now - _gestureLastTime;
@@ -266,7 +311,21 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
     }
   });
 
-  el.addEventListener('pointerup', (e) => {
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+
+    // ── Still pinching: only end when fewer than 2 fingers remain ──
+    if (pinchActive) {
+      if (pointers.size < 2) {
+        pinchActive = false;
+        // Leave a lone remaining finger idle (no swipe) so we don't accidentally
+        // navigate after a zoom. Single-finger pan resumes on the next press.
+        if (_gestureDotNetRef) _gestureDotNetRef.invokeMethodAsync('EndPinch');
+      }
+      return;
+    }
+
     if (!_gestureActive) return;
     const offsetX = e.clientX - _gestureStartX;
     const velocity = _gestureGetVelocity();
@@ -275,18 +334,10 @@ export function initGestureTracker(dotNetRef, elementSelector, swipeThreshold) {
     if (_gestureDotNetRef) {
       _gestureDotNetRef.invokeMethodAsync('OnGestureRelease', offsetX, velocity);
     }
-  });
+  }
 
-  el.addEventListener('pointercancel', () => {
-    if (!_gestureActive) return;
-    const offsetX = _gestureLastX - _gestureStartX;
-    const velocity = _gestureGetVelocity();
-    _gestureReset();
-
-    if (_gestureDotNetRef) {
-      _gestureDotNetRef.invokeMethodAsync('OnGestureRelease', offsetX, velocity);
-    }
-  });
+  el.addEventListener('pointerup', endPointer);
+  el.addEventListener('pointercancel', endPointer);
 }
 
 export function disposeGestureTracker() {

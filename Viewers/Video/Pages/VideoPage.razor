@@ -1,6 +1,6 @@
 @* @page "/videoviewer" — 已由 ContentPage 动态加载 *@
 
-<div class="viewer-page" @onkeydown="OnPageKeyDown" tabindex="0">
+<div class="viewer-page" @onkeydown="OnPageKeyDown" @onclick="CloseOverflow" tabindex="0">
     <div class="v-toolbar">
         <button class="v-btn" @onclick="GoBack" title="返回 (Esc)">← 返回</button>
         <FileNavDropdown FileList="fileList" CurrentIndex="currentIndex" OnFileSelected="OnFileSelected" />
@@ -12,16 +12,117 @@
     }
     else
     {
-        <div class="video-container">
+        <div class="video-container @(_isFullscreen ? "fs" : "") @(_uiHidden ? "ui-hidden" : "")"
+             @onpointermove="ShowControls" @onpointerdown="ShowControls">
             @* src 仅在原生路径下由 Blazor 绑定；FLV/TS 走 mpegts.js 经 MSE 接管，
                此时不让 Blazor 管理 src，避免原生预加载失败与 MSE attach 冲突。 *@
             <video id="@_videoElementId"
                    class="video-player"
-                   controls
                    preload="metadata"
                    src="@(_mediaType == "native" ? _videoUrl : null)">
                 您的浏览器不支持视频播放。
             </video>
+
+            @* 横向滑动拖动进度（scrub）时的居中时间提示：.show 控制淡入淡出，
+               由 JS 手势回传统一点按/滑动后驱动，单击播放/暂停不再有 250ms 延迟。 *@
+            <div class="vp-seek-hint @(_scrubHintOn ? "show" : "")">@_seekHintText</div>
+
+            @* 中央播放/暂停控件：随播放状态显隐（暂停时显示大播放键，播放时淡出）。
+               覆盖层本身 pointer-events:none 让点击穿透到 video；仅按钮可点。 *@
+            <div class="vp-center @(_isPlaying ? "is-playing" : "")">
+                <button class="vp-center-btn" @onclick="TogglePlay" @onclick:stopPropagation title="播放/暂停">
+                    @(_isPlaying ? "⏸" : "▶")
+                </button>
+            </div>
+
+            @* 自定义控件条：声音 / 进度 / 放大(横屏) / 溢出菜单 *@
+            <div class="vp-controls">
+                <input type="range" class="vp-seek"
+                       min="0" max="@(_duration > 0 ? _duration : 1)" step="0.1"
+                       value="@_currentTime" @oninput="OnSeekInput"
+                       style="--p:@(_duration > 0 ? (_currentTime / _duration * 100) : 0)%" />
+
+                <div class="vp-bar">
+                    <button class="vp-btn" @onclick="TogglePlay" title="播放/暂停">@(_isPlaying ? "⏸" : "▶")</button>
+
+                    <div class="vp-volume">
+                        <button class="vp-btn" @onclick="ToggleMute" title="静音">@(_isMuted ? "🔇" : "🔊")</button>
+                        <input type="range" class="vp-slider"
+                               min="0" max="1" step="0.01" value="@_volume"
+                               @oninput="OnVolumeInput"
+                               style="--p:@(_volume * 100)%" />
+                    </div>
+
+                    <span class="vp-time">@FormatTime(_currentTime) / @FormatTime(_duration)</span>
+
+                    <div class="vp-spacer"></div>
+
+                    <div class="vp-overflow" @onclick:stopPropagation>
+                        <button class="vp-btn" @onclick="ToggleOverflow" title="更多">⋮</button>
+                        @* 菜单常驻渲染：默认隐藏，桌面端鼠标悬浮 .vp-overflow 时由 CSS :hover 展开（纯 CSS，
+                           带 (hover:hover) and (pointer:fine) 媒体查询门槛，触屏不激活）；点击 ⋮ 则加 .open
+                           固定展开（C# 状态）。参考 Home .theme-menu 的「hover 预览 + 点击固定 + 遮罩关闭」模式。 *@
+                        <div class="vp-menu @(_showOverflow ? "open" : "") @(_sub == null ? "at-main" : _sub == "rate" ? "at-rate" : "at-mode")">
+                            <div class="vp-menu-track">
+                                @* 主面板 *@
+                                <div class="vp-menu-panel">
+                                    <button class="vp-menu-item" @onclick="@(() => OpenSub("rate"))">
+                                        <span>倍速</span>
+                                        <span class="vp-menu-val">@(_playbackRate)x ▸</span>
+                                    </button>
+                                    <div class="vp-menu-sep"></div>
+                                    <button class="vp-menu-item" @onclick="@(() => OpenSub("mode"))">
+                                        <span>播放模式</span>
+                                        <span class="vp-menu-val">@ModeLabel ▸</span>
+                                    </button>
+                                </div>
+                                @* 倍速子面板（横向滑出） *@
+                                <div class="vp-menu-panel">
+                                    <button class="vp-menu-item" @onclick="@(() => OpenSub(null))">
+                                        <span>◂ 返回</span>
+                                    </button>
+                                    <div class="vp-menu-sep"></div>
+                                    @foreach (var r in new[] { 0.5, 1.0, 1.25, 1.5, 2.0 })
+                                    {
+                                        <button class="vp-menu-item @(_playbackRate == r ? "active" : "")"
+                                                @onclick="@(() => SetRate(r))">@(r)x</button>
+                                    }
+                                </div>
+                                @* 播放模式子面板（横向滑出）：自动播放 / 循环播放 / 播完停止 三态互斥 *@
+                                <div class="vp-menu-panel">
+                                    <button class="vp-menu-item" @onclick="@(() => OpenSub(null))">
+                                        <span>◂ 返回</span>
+                                    </button>
+                                    <div class="vp-menu-sep"></div>
+                                    <button class="vp-menu-item @(_playEndMode == PlayEndMode.AutoNext ? "active" : "")"
+                                            @onclick="@(() => SetMode(PlayEndMode.AutoNext))">自动连播</button>
+                                    <button class="vp-menu-item @(_playEndMode == PlayEndMode.Loop ? "active" : "")"
+                                            @onclick="@(() => SetMode(PlayEndMode.Loop))">循环播放</button>
+                                    <button class="vp-menu-item @(_playEndMode == PlayEndMode.Stop ? "active" : "")"
+                                            @onclick="@(() => SetMode(PlayEndMode.Stop))">播完停止</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="vp-btn" @onclick="ToggleFullscreen" title="全屏/横屏">@(_isFullscreen ? "⤡" : "⛶")</button>
+                </div>
+
+                @* 全屏透明遮罩：菜单展开时覆盖整个视频区域，点击/右键任意外部位置即关闭。
+                   参考 Home 主题切换按钮的 .theme-overlay 做法——纯点击切换 + 遮罩关闭，去掉 hover 逻辑。 *@
+                @if (_showOverflow)
+                {
+                    <div class="vp-overlay"
+                         @onpointerdown="CloseOverflow"
+                         @oncontextmenu:preventDefault="true"
+                         @oncontextmenu="CloseOverflow"></div>
+                }
+            </div>
+
+            @* 常驻细进度条：控件条自动隐藏时显示，仅作视觉进度指示，不抢视觉 *@
+            <div class="vp-progress-rail">
+                <div class="vp-progress-fill" style="width:@(ProgressPercent)%"></div>
+            </div>
         </div>
     }
 </div>

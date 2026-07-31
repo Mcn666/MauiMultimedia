@@ -9,25 +9,31 @@
 .model-container {
     flex: 1;
     overflow: hidden;
+    position: relative;
     background: var(--bg-viewport, #111111);
 }
 
+/* canvas 常驻底层；loading/error 浮层绝对覆盖其上，不随状态切换增删 canvas */
 .viewer-loading {
-    flex: 1;
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     color: var(--text-secondary);
+    background: var(--bg-viewport, #111111);
 }
 
 .viewer-error {
-    flex: 1;
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #e74c3c;
     font-size: 15px;
+    background: var(--bg-viewport, #111111);
 }
 
 .spinner {
@@ -40,6 +46,13 @@
     flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 工具栏开关按钮：active 表示该功能开启（灯光/网格） */
+.v-btn.active {
+    background: var(--accent, #3a7afe);
+    border-color: var(--accent, #3a7afe);
+    color: #fff;
+}
 
 /* Android 10 WebView (Chrome < 84) flex-gap fallback */
 html.no-flex-gap .viewer-loading > * + * { margin-inline-start: 8px; }

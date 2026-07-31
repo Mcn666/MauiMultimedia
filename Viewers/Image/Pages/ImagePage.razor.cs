@@ -113,16 +113,12 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     // past the pan boundary for edge-based navigation when zoomed in.
     private float _dragDesiredPanX;
 
-    // ── Touch ──
-    private bool isTouchPan;
-    private float touchStartX, touchStartY;
-    private float touchPanStartX, touchPanStartY;
-    private float touchPanAtDragStartX, touchPanAtDragStartY;
-    private long touchId1, touchId2;
-    private float touchMidX, touchMidY;
-    private float touchStartDist;
-    private float touchStartZoom;
-    private float touchSwipeDx;
+    // 捏合缩放进行中标志：由 JS 手势跟踪器的双指事件置位/清除。
+    // 置位期间屏蔽单指平移(OnPointer*)，避免双指捏合时单指逻辑也在跑导致冲突。
+    private bool _pinching;
+    private float _pinchStartZoom;
+    private float _pinchStartPanX, _pinchStartPanY;
+    private float _pinchStartMidX, _pinchStartMidY; // 视口本地坐标(已扣 _vpOff)
 
     // ── JS ──
     private IJSObjectReference? _jsModule;
@@ -1311,6 +1307,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
     private void OnPointerDown(PointerEventArgs e)
     {
+        if (_pinching) return;
         if (zoomFitMode) return;
         isDragging = true;
         dragStartX = (float)e.ClientX;
@@ -1321,6 +1318,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
     private void OnPointerMove(PointerEventArgs e)
     {
+        if (_pinching) return;
         if (!isDragging) return;
         float desiredPanX = panAtDragStartX + (float)(e.ClientX - dragStartX);
         float desiredPanY = panAtDragStartY + (float)(e.ClientY - dragStartY);
@@ -1369,6 +1367,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
 
     private void OnPointerUp(PointerEventArgs e)
     {
+        if (_pinching) return;
         isDragging = false;
         // Overscroll visual cleanup is handled in OnGestureRelease,
         // where we know whether to animate back or navigate.
@@ -1376,88 +1375,55 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
             _ = _jsModule.InvokeVoidAsync("hideOverscrollGuide");
     }
 
-    // ═══════════ Touch ═══════════
+    // ═══════════ 捏合缩放（移动端双指，走 pointer 事件经 JS 手势跟踪器回调）═══
 
-    private void OnTouchStart(TouchEventArgs e)
+    /// <summary>
+    /// 双指按下、进入捏合模式。记录起始缩放/平移与两指中点（视口本地坐标），
+    /// 并退出 fit 模式（捏合属于自由缩放）。单指平移在此刻被停掉，由 _pinching 屏蔽。
+    /// </summary>
+    [JSInvokable]
+    public void BeginPinch(double midX, double midY)
     {
-        touchSwipeDx = 0;
-        if (e.Touches.Length == 1)
-        {
-            touchStartX = (float)e.Touches[0].ClientX;
-            touchStartY = (float)e.Touches[0].ClientY;
-            isTouchPan = true;
-            touchId1 = e.Touches[0].Identifier;
-            touchPanStartX = (float)e.Touches[0].ClientX;
-            touchPanStartY = (float)e.Touches[0].ClientY;
-            touchPanAtDragStartX = panX;
-            touchPanAtDragStartY = panY;
-        }
-        else if (e.Touches.Length == 2)
-        {
-            isTouchPan = false;
-            touchId1 = e.Touches[0].Identifier;
-            touchId2 = e.Touches[1].Identifier;
-            touchMidX = (float)((e.Touches[0].ClientX + e.Touches[1].ClientX) / 2);
-            touchMidY = (float)((e.Touches[0].ClientY + e.Touches[1].ClientY) / 2);
-            float dx = (float)(e.Touches[0].ClientX - e.Touches[1].ClientX);
-            float dy = (float)(e.Touches[0].ClientY - e.Touches[1].ClientY);
-            touchStartDist = MathF.Sqrt(dx * dx + dy * dy);
-            touchStartZoom = displayZoom;
-        }
+        _pinching = true;
+        isDragging = false;
+        if (zoomFitMode) { zoomFitMode = false; panX = 0; panY = 0; }
+        _pinchStartZoom = displayZoom;
+        _pinchStartPanX = panX;
+        _pinchStartPanY = panY;
+        _pinchStartMidX = (float)midX - _vpOffX;
+        _pinchStartMidY = (float)midY - _vpOffY;
     }
 
-    private async void OnTouchMove(TouchEventArgs e)
+    /// <summary>
+    /// 捏合进行中：ratio = 当前两指距离 / 起始距离。以起始中点为锚点做光标定位缩放，
+    /// 让“手指下的那个图像点”保持在原地，体验接近原生捏合。
+    /// </summary>
+    [JSInvokable]
+    public void OnPinchMove(double ratio, double midX, double midY)
     {
-        if (e.Touches.Length == 2)
+        if (!_pinching) return;
+        float oldZoom = _pinchStartZoom;
+        displayZoom = Math.Clamp((float)(_pinchStartZoom * ratio), MinZoom, MaxZoom);
+        float mx = (float)midX - _vpOffX;
+        float my = (float)midY - _vpOffY;
+        if (vpWidth > 0 && vpHeight > 0 && oldZoom > 0.001f)
         {
-            isTouchPan = false;
-            float dx = (float)(e.Touches[0].ClientX - e.Touches[1].ClientX);
-            float dy = (float)(e.Touches[0].ClientY - e.Touches[1].ClientY);
-            float dist = MathF.Sqrt(dx * dx + dy * dy);
-            if (touchStartDist > 0)
-            {
-                float oldZoom = displayZoom;
-                displayZoom = Math.Clamp(touchStartZoom * (dist / touchStartDist), MinZoom, MaxZoom);
-                float mx = (float)((e.Touches[0].ClientX + e.Touches[1].ClientX) / 2) - _vpOffX;
-                float my = (float)((e.Touches[0].ClientY + e.Touches[1].ClientY) / 2) - _vpOffY;
-                if (vpWidth > 0 && vpHeight > 0 && oldZoom > 0.001f)
-                {
-                    float localX = (mx - vpWidth / 2f - panX) / oldZoom;
-                    float localY = (my - vpHeight / 2f - panY) / oldZoom;
-                    panX = mx - vpWidth / 2f - localX * displayZoom;
-                    panY = my - vpHeight / 2f - localY * displayZoom;
-                }
-                ClampPan();
-                StateHasChanged();
-                await MaybeUpgradeDecode();
-            }
-            return;
+            float localX = (_pinchStartMidX - vpWidth / 2f - _pinchStartPanX) / oldZoom;
+            float localY = (_pinchStartMidY - vpHeight / 2f - _pinchStartPanY) / oldZoom;
+            panX = mx - vpWidth / 2f - localX * displayZoom;
+            panY = my - vpHeight / 2f - localY * displayZoom;
         }
-
-        if (e.Touches.Length == 1 && isTouchPan)
-        {
-            float cx = (float)e.Touches[0].ClientX;
-            if (zoomFitMode)
-            {
-                touchSwipeDx = cx - touchStartX;
-            }
-            else
-            {
-                panX = touchPanAtDragStartX + (float)(e.Touches[0].ClientX - touchPanStartX);
-                panY = touchPanAtDragStartY + (float)(e.Touches[0].ClientY - touchPanStartY);
-                ClampPan();
-                StateHasChanged();
-            }
-        }
+        ClampPan();
+        StateHasChanged();
+        _ = MaybeUpgradeDecode();
     }
 
-    private void OnTouchEnd(TouchEventArgs e)
+    /// <summary>双指抬起、退出捏合模式。保留当前缩放/平移。</summary>
+    [JSInvokable]
+    public void EndPinch()
     {
-        isTouchPan = false;
-        if (zoomFitMode && Math.Abs(touchSwipeDx) > 60)
-        {
-            _ = touchSwipeDx > 0 ? GoPrev() : GoNext();
-        }
+        _pinching = false;
+        ClampPan();
     }
 
     // ═══════════ Keyboard ═══════════
