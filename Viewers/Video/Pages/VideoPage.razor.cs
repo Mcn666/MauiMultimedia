@@ -14,11 +14,7 @@ public partial class VideoPage : ComponentBase, IAsyncDisposable
     [Inject] private IMauiNavigation MauiNav { get; set; } = null!;
     [Inject] private IFileServerService FileServer { get; set; } = null!;
 
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp4", ".webm", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".m4v",
-        ".3gp", ".ogv", ".mpg", ".mpeg", ".ts", ".mts", ".m2ts"
-    };
+    private static readonly HashSet<string> Exts = VideoConstants.Exts;
 
     private readonly string _videoElementId = "video-player";
     private IJSObjectReference? _jsModule;

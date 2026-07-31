@@ -33,10 +33,7 @@
 </div>
 
 @code {
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".html", ".htm", ".mht", ".mhtml"
-    };
+    private static readonly HashSet<string> Exts = HtmlConstants.Exts;
 
     private string filePath = "";
     private string fileName = "";

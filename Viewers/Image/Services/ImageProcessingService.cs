@@ -125,10 +125,7 @@ public static class ImageProcessingService
     /// 省去 base64 膨胀、C#→JS 序列化开销，以及一次额外 Skia 解码。
     /// 注意：TIFF 浏览器不原生渲染，排除；SVG 走文本通道，单独处理。
     /// </summary>
-    private static readonly HashSet<string> BrowserNativeFormats = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".ico", ".avif"
-    };
+    private static readonly HashSet<string> BrowserNativeFormats = ImageConstants.BrowserNative;
 
     /// <summary>
     /// 判断图片能否直接以原始文件经 FileServer 提供给浏览器（零 Skia 开销）。

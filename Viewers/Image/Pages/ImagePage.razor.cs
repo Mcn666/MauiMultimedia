@@ -19,11 +19,7 @@ public partial class ImagePage : ComponentBase, IAsyncDisposable
     [Inject] private IFileServerService FileServer { get; set; } = null!;
     [Inject] private IFileSystemService FileSystem { get; set; } = null!;
 
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-        ".ico", ".tiff", ".tif", ".svg", ".avif", ".dds"
-    };
+    private static readonly HashSet<string> Exts = ImageConstants.AllExts;
 
     // ── File state ──
     private string filePath = "";

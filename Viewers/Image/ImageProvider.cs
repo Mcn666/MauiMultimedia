@@ -5,12 +5,6 @@ namespace MauiMultimedia.Viewers.Image;
 
 public class ImageProvider : IItemPresenter, ISnapshotProvider
 {
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-        ".ico", ".tiff", ".tif", ".svg", ".avif", ".dds"
-    };
-
     /// <summary>
     /// SVG 不参与 SkiaSharp 缩略图生成
     /// </summary>
@@ -19,10 +13,10 @@ public class ImageProvider : IItemPresenter, ISnapshotProvider
         ".svg"
     };
 
-    private static readonly FileScanCategory _scanCategory = new("图片", Exts.ToArray(), "\U0001F5BC");
+    private static readonly FileScanCategory _scanCategory = new("图片", ImageConstants.AllExts.ToArray(), "\U0001F5BC");
 
     public bool CanHandle(FileSystemItem item) =>
-        !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
+        !item.IsFolder && ImageConstants.AllExts.Contains(Path.GetExtension(item.Name));
 
     public string? GetItemCssClass(FileSystemItem item) => "is-image-file";
     public string? GetIcon(FileSystemItem item) => "\U0001F5BC";

@@ -5,16 +5,10 @@ namespace MauiMultimedia.Viewers.Video;
 
 public class VideoProvider : IItemPresenter, ISnapshotProvider
 {
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp4", ".webm", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".m4v",
-        ".3gp", ".ogv", ".mpg", ".mpeg", ".ts", ".mts"
-    };
-
-    private static readonly FileScanCategory _scanCategory = new("视频", Exts.ToArray(), "\U0001F3AC");
+    private static readonly FileScanCategory _scanCategory = new("视频", VideoConstants.Exts.ToArray(), "\U0001F3AC");
 
     public bool CanHandle(FileSystemItem item) =>
-        !item.IsFolder && Exts.Contains(Path.GetExtension(item.Name));
+        !item.IsFolder && VideoConstants.Exts.Contains(Path.GetExtension(item.Name));
 
     public string? GetItemCssClass(FileSystemItem item) => "is-video-file";
     public string? GetIcon(FileSystemItem item) => "\U0001F3AC";

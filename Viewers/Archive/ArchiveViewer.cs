@@ -6,12 +6,6 @@ namespace MauiMultimedia.Viewers.Archive;
 
 public class ArchiveViewer : IFileViewer
 {
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".zip", ".tar", ".gz", ".tgz",
-        ".rar", ".7z", ".bz2"
-    };
-
     public string DisplayName => "压缩文件查看器";
     public Type ComponentType => typeof(ArchivePage);
 
@@ -19,6 +13,8 @@ public class ArchiveViewer : IFileViewer
     {
         if (item == null || item.IsFolder) return false;
         var ext = Path.GetExtension(item.Name);
-        return Exts.Contains(ext) || item.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
+        // ArchiveConstants.Exts 包含 .tar.gz，但 Path.GetExtension(".tar.gz") 返回 .gz，
+        // 所以额外用 EndsWith 检查 .tar.gz
+        return ArchiveConstants.Exts.Contains(ext) || item.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
     }
 }

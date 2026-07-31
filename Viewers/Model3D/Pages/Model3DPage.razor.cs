@@ -18,10 +18,7 @@ public partial class Model3DPage : ComponentBase, IAsyncDisposable
     [Inject] private IFileServerService FileServer { get; set; } = null!;
     [Inject] private IFileSystemService FileSystem { get; set; } = null!;
 
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".glb", ".gltf", ".stl", ".obj", ".fbx", ".pmx", ".vrm"
-    };
+    private static readonly HashSet<string> Exts = Model3DConstants.Exts;
 
     private IJSObjectReference? _jsModule;
     private string filePath = "";

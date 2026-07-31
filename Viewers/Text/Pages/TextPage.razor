@@ -1,5 +1,6 @@
 @* @page "/textviewer" — 已由 ContentPage 动态加载 *@
 @using MauiMultimedia.Core.Abstractions
+@using MauiMultimedia.Viewers.Text
 @using System.Linq
 @using System.Text
 @inject NavigationManager Navigation
@@ -75,15 +76,7 @@
 </div>
 
 @code {
-    private static readonly HashSet<string> Exts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".txt", ".log", ".md", ".csv",
-        ".xml", ".json", ".yaml", ".yml",
-        ".html", ".htm", ".css", ".js",
-        ".py", ".cs",
-        ".sh", ".bat", ".ps1",
-        ".ini", ".cfg", ".conf", ".env", ".gitignore"
-    };
+    private static readonly HashSet<string> Exts = TextConstants.Exts;
 
     private string filePath = "";
     private string fileName = "";
