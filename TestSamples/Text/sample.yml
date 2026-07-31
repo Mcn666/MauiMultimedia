@@ -1,0 +1,12 @@
+# YAML 别名测试样本
+defaults: &defaults
+  adapter: postgres
+  host: localhost
+
+development:
+  <<: *defaults
+  database: dev_db
+
+test:
+  <<: *defaults
+  database: test_db

@@ -1,0 +1,15 @@
+From: <saved by MauiMultimedia>
+Snapshot-Content-Location: https://example.com/page2
+Subject: MHTML 测试样本
+MIME-Version: 1.0
+Content-Type: multipart/related;
+	boundary="----=_NextPart_000_0002_01D9A1B1.00000000"
+
+------=_NextPart_000_0002_01D9A1B1.00000000
+Content-Type: text/html;
+	charset="utf-8"
+
+<html><head><title>MHTML 测试样本</title></head>
+<body><h1>MHTML 归档页面</h1><p>与 .mht 相同的格式，不同扩展名。</p></body></html>
+
+------=_NextPart_000_0002_01D9A1B1.00000000--

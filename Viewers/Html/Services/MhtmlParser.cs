@@ -61,7 +61,8 @@ public static partial class MhtmlParser
                     var nxt = PeekLine(text, hdrEnd);
                     if (nxt.Length > 0 && (nxt[0] == ' ' || nxt[0] == '\t'))
                     {
-                        hdrEnd = text.IndexOf('\n', hdrEnd) + 1;
+                        // 续行（折叠头）：ReadLine 读的就是当前 tab/空格行，
+                        // 不能先手动跳过——否则会多跳一行，把空行/正文吞进头部
                         line += " " + ReadLine(text, ref hdrEnd).TrimStart();
                     }
                     else break;

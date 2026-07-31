@@ -1,0 +1,13 @@
+MauiMultimedia 文本查看器测试样本
+
+这是一段用于验证文本查看器显示功能的中文内容。
+包含：
+- 中文 UTF-8 编码
+- 多行文本
+- 特殊字符：@#$%^&*()_+-=[]{}|;:'",.<>?/\
+- Tab 缩进：	示例
+
+The quick brown fox jumps over the lazy dog.
+Line 1
+Line 2
+Line 3

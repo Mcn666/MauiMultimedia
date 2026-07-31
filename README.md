@@ -15,16 +15,26 @@ MauiMultimedia 将「文件浏览器」与「多种格式查看器」整合为�
 
 | 查看器模块 | 负责类型 | 扩展名 |
 | --- | --- | --- |
-| `Image` | 图片 | `.jpg .jpeg .png .gif .bmp .webp .ico .tiff .tif .svg .avif .dds` |
+| `Image` | 图片 | `.jpg .jpeg .jfif .png .gif .bmp .webp .ico .svg .avif .dds` |
 | `Video` | 视频（WebView 渲染） | `.mp4 .webm .mkv .mov .avi .wmv .flv .m4v .3gp .ogv .mpg .mpeg .ts .mts .m2ts` |
 | `Video.Native` | 视频（平台原生控件） | 同 `Video` 主流容器 |
-| `Text` | 文本 / 代码 | `.txt .log .md .csv .xml .json .yaml .yml` |
+| `Text` | 文本 / 代码 | `.txt .log .md .csv .xml .json .yaml .yml .html .htm .css .js .py .cs .sh .bat .ps1 .ini .cfg .conf .env .gitignore` |
 | `Html` | 网页 | `.html .htm .mht .mhtml` |
 | `Model3D` | 3D 模型 | `.glb .gltf .stl .obj .fbx .pmx .vrm`（`fbx` 等经转换后加载） |
-| `Archive` | 压缩包 | `.zip .tar .gz .tgz .rar .7z .zst .xz .bz2` |
+| `Archive` | 压缩包 | `.zip .tar .gz .tgz .tar.gz .rar .7z` |
 | `Shared` | 共享基础设施（非查看器） | — |
 
-> 路由（扩展名 → 哪个查看器）由各查看器的 `IFileViewer.CanHandle` / `Exts` 拥有；MIME（扩展名 → HTTP Content-Type）由 `Core/MimeTypes.cs` 标准表统一提供。
+> 各查看器的扩展名由 `Viewers/*/XxxConstants.cs`（如 `ImageConstants.cs`、`ArchiveConstants.cs`）集中维护，Provider / Viewer / Page 三处共用同一列表，新增格式只需改一个文件。
+
+### 视频播放能力（WebView 实际行为）
+
+| 能力 | 格式 | 机制 |
+| --- | --- | --- |
+| ✅ 原生播放 | `.mp4 .webm .mov .m4v .3gp` | WebView 内建解码器 |
+| ✅ 软解播放 | `.ts .mts .m2ts .flv` | `mpegts.js`（MSE）软解，H.264 编码 |
+| ⚠️ 提示转码 | `.mkv .avi .wmv .mpg .mpeg .ogv` | 浏览器不支持该容器/编码，显示转码提示而非黑屏 |
+
+> 路由（扩展名 → 哪个查看器）由各查看器的 `IFileViewer.CanHandle` 拥有（内部基于 `XxxConstants.Exts`）；MIME（扩展名 → HTTP Content-Type）由 `Core/MimeTypes.cs` 标准表统一提供。
 
 ## 架构
 

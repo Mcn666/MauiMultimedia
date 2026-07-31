@@ -23,8 +23,8 @@ public partial class ArchivePage : ComponentBase, IDisposable
     [Inject] private IFileSystemService FileSystem { get; set; } = null!;
     [Inject] private IEnumerable<IItemPresenter> Presenters { get; set; } = null!;
 
-    private static readonly HashSet<string> Arc = new(StringComparer.OrdinalIgnoreCase)
-    { ".zip", ".tar", ".gz", ".tgz", ".rar", ".7z", ".bz2" };
+    // 嵌套档案检测（档案内的条目本身是否可再次打开）；与查看器注册共用常量
+    private static readonly HashSet<string> Arc = ArchiveConstants.Exts;
 
     private string filePath = "", fileName = "";
     // 改为实例字段：static 会导致跨实例共享密码（打开档案 A 的密码被复用到加密档案 B），

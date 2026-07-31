@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="MauiMultimedia" version="1.0">
+  <description>多媒体文件浏览器测试样本</description>
+  <viewers>
+    <viewer id="image" display="图片查看器" enabled="true"/>
+    <viewer id="video" display="视频播放器" enabled="true"/>
+    <viewer id="text" display="文本查看器" enabled="true"/>
+  </viewers>
+  <config>
+    <theme>dark</theme>
+    <cacheSize>384</cacheSize>
+  </config>
+</project>

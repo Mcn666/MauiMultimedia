@@ -53,7 +53,7 @@ public class ProviderBehaviorTests
         var provider = new ImageProvider();
         ISnapshotProvider s = provider;
         Assert.True(s.CanProvideSnapshot(Item("a.png")));
-        Assert.False(s.CanProvideSnapshot(Item("a.svg"))); // SVG 不生成缩略图
+        Assert.True(s.CanProvideSnapshot(Item("a.svg"))); // SVG 已支持浏览器原生缩略图（data URI）
         Assert.Null(s.GetItemSnapshot(Item("a.png")));
         Assert.Equal("MauiMultimedia.Viewers.Image", s.SnapshotAssembly);
         Assert.Equal("generateSnapshot", s.SnapshotMethod);
@@ -123,7 +123,7 @@ public class ProviderBehaviorTests
         Assert.False(p.CanHandle(Item("a.txt")));
         Assert.Equal("is-html-file", p.GetItemCssClass(Item("a.html")));
         Assert.Equal("\U0001F310", p.GetIcon(Item("a.html")));
-        Assert.Equal("文档", p.ScanCategory!.Label);
+        Assert.Equal("网页", p.ScanCategory!.Label);
         Assert.False(s.CanProvideSnapshot(Item("a.html")));
         Assert.Equal(string.Empty, s.SnapshotAssembly);
     }

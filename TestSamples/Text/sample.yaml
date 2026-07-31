@@ -1,0 +1,14 @@
+app: MauiMultimedia
+version: 1.0.0
+viewers:
+  - Image
+  - Video
+  - Text
+settings:
+  theme: dark
+  showHiddenFiles: false
+  cacheBytes: 402653184
+items:
+  - name: sample.png
+    size: 12345
+    type: image

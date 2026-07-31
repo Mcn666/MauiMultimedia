@@ -1,0 +1,22 @@
+# gitignore 测试样本
+# 构建产物
+bin/
+obj/
+dist/
+build/
+
+# 日志与缓存
+*.log
+*.tmp
+.cache/
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.user
+
+# 敏感文件
+*.key
+*.pem
+.env.local

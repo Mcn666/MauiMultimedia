@@ -1,0 +1,14 @@
+{
+  "app": "MauiMultimedia",
+  "version": "1.0.0",
+  "viewers": ["Image", "Video", "Text", "Html", "Model3D", "Archive"],
+  "settings": {
+    "theme": "dark",
+    "showHiddenFiles": false,
+    "cacheBytes": 402653184
+  },
+  "items": [
+    { "name": "sample.png", "size": 12345, "type": "image" },
+    { "name": "sample.mp4", "size": 2345678, "type": "video" }
+  ]
+}

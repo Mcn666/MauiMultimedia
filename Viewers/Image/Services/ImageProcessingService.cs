@@ -2,6 +2,7 @@ using SkiaSharp;
 using MauiMultimedia.Viewers.Shared.Services;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using MauiMultimedia.Core.Utils;
 
 namespace MauiMultimedia.Viewers.Image.Services;
@@ -41,7 +42,7 @@ public static class ImageProcessingService
 
         using var codec = SKCodec.Create(filePath);
         if (codec == null)
-            throw new InvalidOperationException("无法解码图片");
+            throw new InvalidOperationException($"无法解码图片: {Path.GetFileName(filePath)} (SKCodec 无法识别, 文件 {fileInfo.Length} 字节)");
 
         var origin = codec.EncodedOrigin;
         bool needsDownscale = codec.Info.Width > maxDimension || codec.Info.Height > maxDimension;
@@ -138,15 +139,57 @@ public static class ImageProcessingService
         if (!BrowserNativeFormats.Contains(ext))
             return (false, 0, 0);
 
+        // canServe 的决定权在「浏览器能否渲染该格式」，不在 SKCodec——
+        // SKCodec 只是读尺寸的工具。浏览器原生支持的格式（如 AVIF）即使
+        // SkiaSharp 解不了，也应当 direct-serve（浏览器自己渲染）。
+        // 之前用 SKCodec == null 直接判 canServe=false，导致 AVIF 被错误地
+        // 降级到 DecodeImage → 抛「无法解码图片」（SKCodec 不支持 AVIF）。
         using var codec = SKCodec.Create(filePath);
-        if (codec == null)
-            return (false, 0, 0);
+        if (codec != null)
+        {
+            var origin = codec.EncodedOrigin;
+            bool swap = origin is SKEncodedOrigin.LeftBottom or SKEncodedOrigin.RightTop;
+            int w = swap ? codec.Info.Height : codec.Info.Width;
+            int h = swap ? codec.Info.Width : codec.Info.Height;
+            return (true, w, h);
+        }
 
-        var origin = codec.EncodedOrigin;
-        bool swap = origin is SKEncodedOrigin.LeftBottom or SKEncodedOrigin.RightTop;
-        int w = swap ? codec.Info.Height : codec.Info.Width;
-        int h = swap ? codec.Info.Width : codec.Info.Height;
-        return (true, w, h);
+        // SKCodec 不认识的浏览器原生格式：尝试轻量解析尺寸（AVIF 等 ISO BMFF）
+        try
+        {
+            var bytes = File.ReadAllBytes(filePath);
+            if (TryGetAvifDimensions(bytes, out int aw, out int ah))
+                return (true, aw, ah);
+        }
+        catch { }
+
+        return (true, 0, 0); // 尺寸未知，仍可 direct-serve（调用方需容忍 0 尺寸）
+    }
+
+    /// <summary>
+    /// 轻量解析 AVIF/HEIF 尺寸（ISO BMFF 的 ispe property box），不依赖 SKCodec。
+    /// ispe 是 fullbox：'ispe'(4) + version/flags(4) + image_width(4) + image_height(4)，全大端。
+    /// 宽松实现：扫描全文件找 'ispe'，向后 8/12 字节读宽高并做合理性校验。
+    /// </summary>
+    private static bool TryGetAvifDimensions(byte[] data, out int width, out int height)
+    {
+        width = height = 0;
+        for (int i = 0; i + 16 <= data.Length; i++)
+        {
+            if (data[i] == (byte)'i' && data[i + 1] == (byte)'s' &&
+                data[i + 2] == (byte)'p' && data[i + 3] == (byte)'e')
+            {
+                int w = (data[i + 8] << 24) | (data[i + 9] << 16) | (data[i + 10] << 8) | data[i + 11];
+                int h = (data[i + 12] << 24) | (data[i + 13] << 16) | (data[i + 14] << 8) | data[i + 15];
+                if (w is > 0 and <= 16384 && h is > 0 and <= 16384)
+                {
+                    width = w;
+                    height = h;
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -165,9 +208,16 @@ public static class ImageProcessingService
         using var codec = SKCodec.Create(filePath);
         if (codec == null)
         {
+            var ext = Path.GetExtension(filePath);
             // DDS: SKCodec doesn't support it — decode full then downscale
-            if (Path.GetExtension(filePath).Equals(".dds", StringComparison.OrdinalIgnoreCase))
+            if (ext.Equals(".dds", StringComparison.OrdinalIgnoreCase))
                 return GenerateDdsThumbnail(filePath, maxSize);
+            // SVG/AVIF：SkiaSharp 无编解码器，但浏览器原生渲染 → 缩略图直接
+            // 用原始字节 data URI，<img> 由浏览器解码显示（与 direct-serve 同理）。
+            if (ext.Equals(".svg", StringComparison.OrdinalIgnoreCase))
+                return GenerateBrowserNativeThumbnail(filePath, "image/svg+xml", 1 * 1024 * 1024);
+            if (ext.Equals(".avif", StringComparison.OrdinalIgnoreCase))
+                return GenerateBrowserNativeThumbnail(filePath, "image/avif", 512 * 1024);
             return "";
         }
         var origin = codec.EncodedOrigin;
@@ -239,6 +289,23 @@ public static class ImageProcessingService
     }
 
     /// <summary>
+    /// 浏览器原生渲染格式（SVG/AVIF 等，SkiaSharp 无编解码器）的缩略图：
+    /// 直接把原始字节作为 data URI 返回，由 &lt;img&gt; 交给浏览器解码显示。
+    /// maxBytes 限制体积——base64 膨胀 ~1.33 倍，网格 LRU 缓存会放大内存占用。
+    /// </summary>
+    private static string GenerateBrowserNativeThumbnail(string filePath, string mime, int maxBytes)
+    {
+        try
+        {
+            var fi = new FileInfo(filePath);
+            if (fi.Length <= 0 || fi.Length > maxBytes) return "";
+            var b64 = Convert.ToBase64String(File.ReadAllBytes(filePath));
+            return $"data:{mime};base64,{b64}";
+        }
+        catch { return ""; }
+    }
+
+    /// <summary>
     /// 按 <paramref name="maxSize"/>（输出最长边，不放大）下采样解码，返回 JPEG/PNG 字节。
     /// 供查看器把“显示尺寸缩略图”注册到 FileServer（served URL），实现“不全解码”。
     /// 内部复用 <see cref="GenerateThumbnail(string, int)"/> 的下采样核心（含 safeCap 中间解码上限与 DDS 回退）。
@@ -298,7 +365,7 @@ public static class ImageProcessingService
         using var stream = new MemoryStream(fileData);
         using var codec = SKCodec.Create(stream);
         if (codec == null)
-            throw new InvalidOperationException("无法解码图片");
+            throw new InvalidOperationException($"无法解码图片: {Path.GetFileName(fileName)} (SKCodec 无法识别, 数据 {fileData.Length} 字节)");
 
         var origin = codec.EncodedOrigin;
         bool needsDownscale = codec.Info.Width > maxDimension || codec.Info.Height > maxDimension;
@@ -356,7 +423,13 @@ public static class ImageProcessingService
     {
         using var stream = new MemoryStream(fileData);
         using var codec = SKCodec.Create(stream);
-        if (codec == null) return (0, 0);
+        if (codec == null)
+        {
+            // SKCodec 不支持的浏览器原生格式（如 AVIF）→ 轻量解析尺寸
+            if (TryGetAvifDimensions(fileData, out int aw, out int ah))
+                return (aw, ah);
+            return (0, 0);
+        }
 
         var origin = codec.EncodedOrigin;
         bool swap = origin == SKEncodedOrigin.LeftBottom ||
@@ -511,17 +584,56 @@ public static class ImageProcessingService
         var svgContent = File.ReadAllText(filePath);
         var base64 = Convert.ToBase64String(
             System.Text.Encoding.UTF8.GetBytes(svgContent));
+        var (w, h) = ParseSvgDimensions(svgContent);
         return new ImageResult(
             $"data:image/svg+xml;base64,{base64}",
-            0, 0, fileSize, "SVG");
+            w, h, fileSize, "SVG");
     }
 
     private static ImageResult DecodeSvg(byte[] fileData)
     {
         var base64 = Convert.ToBase64String(fileData);
+        var (w, h) = ParseSvgDimensions(
+            System.Text.Encoding.UTF8.GetString(fileData));
         return new ImageResult(
             $"data:image/svg+xml;base64,{base64}",
-            0, 0, fileData.Length, "SVG");
+            w, h, fileData.Length, "SVG");
+    }
+
+    /// <summary>
+    /// 从 SVG 根元素解析宽高：优先 width/height 属性，回退 viewBox（第 3/4 个值）。
+    /// 解析失败返回 0×0（浏览器仍可正常渲染）。
+    /// </summary>
+    private static (int width, int height) ParseSvgDimensions(string content)
+    {
+        try
+        {
+            var size = Regex.Match(content,
+                @"<svg[^>]*\bwidth\s*=\s*[""']([\d.]+)[""'][^>]*\bheight\s*=\s*[""']([\d.]+)[""']",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (!size.Success)
+                size = Regex.Match(content,
+                    @"<svg[^>]*\bheight\s*=\s*[""']([\d.]+)[""'][^>]*\bwidth\s*=\s*[""']([\d.]+)[""']",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (size.Success)
+            {
+                var w = (int)Math.Round(double.Parse(size.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+                var h = (int)Math.Round(double.Parse(size.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+                if (w > 0 && h > 0) return (w, h);
+            }
+
+            var vb = Regex.Match(content,
+                @"viewBox\s*=\s*[""']\s*[\d.-]+\s+[\d.-]+\s+([\d.-]+)\s+([\d.-]+)[""']",
+                RegexOptions.IgnoreCase);
+            if (vb.Success)
+            {
+                var w = (int)Math.Round(double.Parse(vb.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+                var h = (int)Math.Round(double.Parse(vb.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+                if (w > 0 && h > 0) return (w, h);
+            }
+        }
+        catch { }
+        return (0, 0);
     }
 
     /// <summary>

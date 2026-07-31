@@ -1,0 +1,18 @@
+From: <saved by MauiMultimedia>
+Snapshot-Content-Location: https://example.com/page
+Subject: MHT 测试样本
+MIME-Version: 1.0
+Content-Type: multipart/related;
+	boundary="----=_NextPart_000_0001_01D9A1B0.00000000"
+
+This is a multi-part message in MIME format.
+
+------=_NextPart_000_0001_01D9A1B0.00000000
+Content-Type: text/html;
+	charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<html><head><title>MHT 测试样本</title></head>
+<body><h1>MIME HTML 归档</h1><p>单文件网页归档格式。</p></body></html>
+
+------=_NextPart_000_0001_01D9A1B0.00000000--

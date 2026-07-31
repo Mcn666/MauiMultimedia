@@ -7,11 +7,13 @@ public static class ImageConstants
 {
     /// <summary>
     /// 所有支持的图片格式（用于文件列表过滤、查看器注册）。
+    /// 注意：TIFF 已被移除——SkiaSharp 不包含 TIFF 编解码器，浏览器也不原生支持，
+    /// 声明了也打不开（经 TestSamples 解码测试确认）。
     /// </summary>
     public static readonly HashSet<string> AllExts = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".jfif", ".png", ".gif", ".bmp", ".webp",
-        ".ico", ".tiff", ".tif", ".svg", ".avif", ".dds"
+        ".ico", ".svg", ".avif", ".dds"
     };
 
     /// <summary>

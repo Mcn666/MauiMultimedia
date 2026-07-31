@@ -37,14 +37,21 @@ function sniffMagic(head) {
     if (!head || head.length < 12) return 'unknown';
     // FLV: 'F''L''V'
     if (head[0] === 0x46 && head[1] === 0x4C && head[2] === 0x56) return 'flv';
-    // MPEG-TS: 同步字节 0x47（每包首字节）
-    if (head[0] === 0x47) return 'ts';
+    // MPEG-TS: 同步字节 0x47——标准 188 字节包在偏移 0，M2TS 192 字节包（4 字节
+    // TP_extra_header + 188 字节 TS 包）同步字节在偏移 4
+    if (head[0] === 0x47 || head[4] === 0x47) return 'ts';
     // MP4 / MOV / 3GP / M4V: 'ftyp' 出现在偏移 4（前 4 字节是 box size）
     if (head[4] === 0x66 && head[5] === 0x74 && head[6] === 0x79 && head[7] === 0x70) return 'mp4';
     // AVI: 'RIFF'....'AVI '
     if (head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46) return 'avi';
-    // MKV / WebM: EBML 头 0x1A 0x45 0xDF 0xA3
-    if (head[0] === 0x1A && head[1] === 0x45 && head[2] === 0xDF && head[3] === 0xA3) return 'mkv';
+    // ASF/WMV: 30 26 B2 75 8E 66 CF 11 A6 D9 00 AA 00 62 CE 6C
+    if (head[0] === 0x30 && head[1] === 0x26 && head[2] === 0xB2 && head[3] === 0x75) return 'wmv';
+    // EBML 家族：MKV / WebM 同用 0x1A 0x45 0xDF 0xA3 头，用 DocType 区分——
+    // WebM 浏览器原生支持（走原生 <video>），MKV 不支持
+    if (head[0] === 0x1A && head[1] === 0x45 && head[2] === 0xDF && head[3] === 0xA3) {
+        const ascii = String.fromCharCode(...head.slice(0, 64));
+        return ascii.includes('webm') ? 'webm' : 'mkv';
+    }
     // 真 MPEG program stream: 00 00 01 BA（pack start）或 00 00 01 B3（sequence header）
     if (head[0] === 0x00 && head[1] === 0x00 && head[2] === 0x01 &&
         (head[3] === 0xBA || head[3] === 0xB3)) return 'mpegps';
@@ -171,8 +178,9 @@ export async function setVideoSource(elementId, url, mediaType) {
     const magic = sniffMagic(head);
 
     // 浏览器无法解码的容器：明确提示转码，避免静默黑屏
-    if (magic === 'avi' || magic === 'mkv' || magic === 'mpegps') {
-        const name = magic === 'avi' ? 'AVI' : magic === 'mkv' ? 'MKV' : 'MPEG-PS';
+    if (magic === 'avi' || magic === 'mkv' || magic === 'mpegps' || magic === 'wmv') {
+        const name = magic === 'avi' ? 'AVI' : magic === 'mkv' ? 'MKV'
+            : magic === 'mpegps' ? 'MPEG-PS' : 'WMV/ASF';
         return 'error:该视频容器格式（' + name + '）当前浏览器不支持播放，请转码为 H.264 编码的 MP4 后再查看。';
     }
 
@@ -190,11 +198,27 @@ export async function setVideoSource(elementId, url, mediaType) {
         catch (e) { return 'error:' + e.message; }
     }
 
-    // 原生路径（非 flv/mpegts mediaType，例如 mp4/webm/ogg/mov/3gp/m4v 扩展名）
+    // 原生路径（非 flv/mpegts mediaType，例如 mp4/webm/ogg/mov/3gp/m4v 扩展名）。
+    // 同步 set src 不会报错，解码失败发生在异步 error 事件——监听它返回友好提示，
+    // 否则 wmv/ogv 等无法解码的编码会静默黑屏。
     try {
         v.src = url;
         v.load();
-        return 'ok';
+        if (v.readyState >= 1) return 'ok';
+        return await new Promise((resolve) => {
+            let settled = false;
+            const done = (r) => { if (!settled) { settled = true; cleanup(); resolve(r); } };
+            const onErr = () => done('error:该视频无法解码，可能编码不受当前浏览器支持，请转码为 H.264 编码的 MP4 后再查看。');
+            const onMeta = () => done('ok');
+            const cleanup = () => {
+                v.removeEventListener('error', onErr);
+                v.removeEventListener('loadedmetadata', onMeta);
+            };
+            v.addEventListener('error', onErr);
+            v.addEventListener('loadedmetadata', onMeta);
+            // 超时兜底：5 秒无信号按成功处理（避免大文件/慢加载卡死提示）
+            setTimeout(() => done('ok'), 5000);
+        });
     } catch (e) {
         return 'error:' + e.message;
     }

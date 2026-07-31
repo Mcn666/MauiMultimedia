@@ -5,14 +5,6 @@ namespace MauiMultimedia.Viewers.Image;
 
 public class ImageProvider : IItemPresenter, ISnapshotProvider
 {
-    /// <summary>
-    /// SVG 不参与 SkiaSharp 缩略图生成
-    /// </summary>
-    private static readonly HashSet<string> NoSnapshotExts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".svg"
-    };
-
     private static readonly FileScanCategory _scanCategory = new("图片", ImageConstants.AllExts.ToArray(), "\U0001F5BC");
 
     public bool CanHandle(FileSystemItem item) =>
@@ -23,10 +15,11 @@ public class ImageProvider : IItemPresenter, ISnapshotProvider
     public string? GetItemSnapshot(FileSystemItem item) => null;
 
     /// <summary>
-    /// 图片文件可以生成缩略图快照（SVG 除外）
+    /// 图片文件均可生成缩略图快照。SVG 曾因 SKCodec 无编解码器被排除，
+    /// 现在 GenerateThumbnail 对 SVG 返回浏览器原生 data URI（见
+    /// GenerateBrowserNativeThumbnail），不再需要排除。
     /// </summary>
-    public bool CanProvideSnapshot(FileSystemItem item) =>
-        CanHandle(item) && !NoSnapshotExts.Contains(Path.GetExtension(item.Name));
+    public bool CanProvideSnapshot(FileSystemItem item) => CanHandle(item);
 
     public void RequestItemSnapshot(FileSystemItem item) { }
     public event Action? SnapshotsUpdated { add { } remove { } }
